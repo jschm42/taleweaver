@@ -138,7 +138,23 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 
 ### Recent Feature Highlights
 
-#### 🌟 What's New in v0.7.0-beta
+#### 🌟 What's New in v0.8.0-beta
+Full notes: [RELEASE_NOTES_v0.8.0-beta.md](RELEASE_NOTES_v0.8.0-beta.md)
+* **Companions & Party**: Recruitable sidekicks who follow the protagonist, take orders ("stay here", "follow me"), carry and equip items, and fight at the hero's side with their own tactics. Quest items can't be given away, and scripts steer the party with `tw.party`.
+* **Dynamic Scenes & Zones**: Exits that generate whole mini-adventures on the fly (story arc, antagonist, key item, climax, up to 11 rooms), with spawn rules, danger levels, pre-mapped dynamic scenes and `tw.scene.teleport_dynamic`.
+* **Living NPCs**: NPC memory of the protagonist, world memories, NPC conversations with relations, overheard topics and gossip, a listening mode, speech rules per NPC type, and handovers inside dialogue.
+* **Respawn**: Adventures can revive the protagonist at the last revival point instead of ending the game at 0 HP.
+* **Play-Agent for Players**: Auto-Play with instructions, quest-log objectives, a known map with travel, and its own memory.
+* **Workbench Editor & Admin**: One design system with grouped navigation, one save bar, and detail pages for characters and items.
+* **Voices & Model Selection**: Free browser voice for TTS, a story feed that follows the voice, per-pass model guidance and a capability test with speed rating.
+* **Adventure Format v1.4.0**: Dynamic scenes, companions and respawning; versioned `.twe` entity bundles.
+
+#### Previous Highlights
+* **Adventure Library, UI Themes & Tactical Combat (v0.7.0-beta)**: In-game adventure catalog, 12 UI skins, turn-based combat arena, ComfyUI image and audio generation, OpenAI-compatible endpoints, ElevenLabs voice mapping, World-Builder Blueprints, adventure format v1.3.1 and the showcase adventures Test-Lab and Suburban Sabotage ([release notes](RELEASE_NOTES_v0.7.0-beta.md)).
+
+<details>
+<summary>Full v0.7.0-beta highlights</summary>
+
 * **In-Game Adventure Library (`/library`)**: Direct catalog browser connected to [`jschm42/taleweaver-adventures`](https://github.com/jschm42/taleweaver-adventures). One-click download and automated verification of community adventures, plus automatic **Update** badges for installed adventures when newer upstream versions are detected without losing player session progress.
 * **Atmospheric UI Themes & Dialog Skins**: 12 distinct game UI themes (Classic, Chronicle, Noir, Terminal, Grimoire, Eldritch, Toon, Ancient, Starship, Pixel, Thriller, Sitcom) customizing speech bubble styles, typography, tab treatments, dice designs, scene tinting, and animated NPC entrances. Includes live editor preview, author accent color selection, auto-mood matching, and player settings override with WCAG contrast verification.
 * **ComfyUI Local Audio & Image Generation**: Connect local [ComfyUI](docs/comfyui/README.md) instances for completely offline generation of visual scenes (SD 1.5 & SDXL workflows, checkpoint discovery, custom diffusion params) and procedural background music (text-to-audio API workflows like ACE-Step with dynamic prompt/duration templates and in-game cross-fading).
@@ -151,7 +167,8 @@ Guided by an adaptive AI Game Master, players explore living worlds that react d
 * **Showcase Adventures**: Ships with the engine-testing sandbox **Test-Lab** (exercising image generation, combat, switches, choice dialogs, and crafting across 11 chambers) and **Suburban Sabotage**, a full-length 90s LucasArts-style comedy adventure featuring clock-driven deadline puzzles and dynamic family antics.
 * **Docker & Production Infrastructure**: Containerized deployment script (`scripts/docker_setup.sh`), production Nginx reverse proxy config, real-time backend health monitoring (`/api/health`), and migration to Poetry for dependency management.
 
-#### Previous Highlights
+</details>
+
 * **Immersive In-Game & Comic Turn Engine (v0.6.0-beta)**: Reimagined interactive gameplay UI with comic-style turn panels, speech bubbles, interactive scene hotspots, dynamic character stage, in-game clock widget, and sandboxed Python scripting engine.
 * **Whisper Speech-to-Text & Push-to-Talk** (`1f14273`, `6c3f1c2`, `52e7312`): OpenAI Whisper integration featuring background model preloading, hands-free recording overlays, automatic transcription submission, and a Shift/hotkey (B/T) shortcut to speak in-character (`/say `) to NPCs.
 * **Interactive World Map with Pathfinding** (`3e66a99`): Fully interactive world map visualization with pathfinding, panning, and zooming capabilities for navigating adventure scenes.
@@ -440,7 +457,21 @@ Inspect the internal engine workflows through Mermaid diagrams in the repository
 </details>
 
 <details>
-<summary><b>🌟 What's New in v0.7.0-beta</b></summary>
+<summary><b>🌟 What's New in v0.8.0-beta</b></summary>
+
+- **Companions & Party**: Recruitable sidekicks who follow, take orders, carry and equip items, and fight at the protagonist's side.
+- **Dynamic Scenes & Zones**: Procedural mini-adventures behind dynamic exits, generated on the fly.
+- **Living NPCs**: NPC memory, world memories, NPC conversations, gossip and a listening mode.
+- **Respawn**: Revival points instead of game over, opt-in per adventure.
+- **Play-Agent for Players**: Auto-Play with instructions, objectives and travel to known places.
+- **Workbench Editor & Admin**: One design system, one save bar, detail pages for characters and items.
+- **Voices & Model Selection**: Free browser voice, per-pass model guidance and capability tests.
+- **Adventure Format v1.4.0**: Dynamic scenes, companions and respawning.
+
+</details>
+
+<details>
+<summary>What's New in v0.7.0-beta</summary>
 
 - **In-Game Adventure Library**: Direct catalog browser for one-click downloading and updating of adventures from the official community repository.
 - **Atmospheric UI Themes**: 12 custom dialog skins (Classic, Chronicle, Noir, Terminal, Grimoire, Eldritch, Toon, Ancient, Starship, Pixel, Thriller, Sitcom) with WCAG-tested typography, bubble styles, and live editor preview.
