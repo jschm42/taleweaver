@@ -18,6 +18,12 @@ from backend.utils.path_security import ensure_within_data_dir, safe_data_path
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+def _server_debug_enabled(monkeypatch):
+    """Monkey mode and free walkthroughs are debug-only; don't depend on the local .env."""
+    monkeypatch.setattr(settings, "TALEWEAVER_DEBUG_ENABLED", True)
+
+
 async def test_agent_toggle_commands(auth_client, setup_test_db):
     """Verifies /playagent on and /agent off toggle the state correctly via process_turn."""
     from tests.conftest import TestSessionLocal
