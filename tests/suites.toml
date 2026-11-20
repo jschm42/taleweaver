@@ -5,7 +5,7 @@
 #
 # `tests` are file-name globs inside tests/. A file may sit in several suites.
 # `sources` are repo-relative path globs (`*` also matches `/`): a change to a matching
-# file makes `affected` and the pre-push hook run the whole suite.
+# file makes `affected` run the whole suite.
 # New test files: add them to a suite (`list` shows the ones that are in none).
 
 [suites.core]
