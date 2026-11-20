@@ -32,6 +32,7 @@ Welcome to the TaleWeaver workspace! This file is the entry point for every codi
    - Never suppress complexity (`C901`, `PLR0912`, `PLR0915`) or security (`S`) warnings with `# noqa`; refactor the code instead.
    - Full check / fix command: `poetry run python scripts/lint.py --fix`. Staged files only: `poetry run python scripts/lint.py --staged`.
    - A Git pre-commit hook (`.githooks/pre-commit`) runs Ruff on all staged Python files before each commit.
+   - A Git pre-push hook (`.githooks/pre-push`) runs the tests the pushed commits can affect and blocks the push on failures. Run suites or the affected tests yourself with `poetry run python scripts/run_tests.py` (see [docs/testing.md](docs/testing.md)); new test files must be added to a suite in `tests/suites.toml`.
 
 4. **Documentation Stays in Sync (Mandatory)**:
    - Every change to user-facing behavior, syntax, settings, APIs, scripting functions or file formats **must update the affected documentation in the same task**. A task is not finished while its docs are outdated.

@@ -1,0 +1,467 @@
+# Named test suites for scripts/run_tests.py.
+#
+#   poetry run python scripts/run_tests.py list          # suites + files in no suite
+#   poetry run python scripts/run_tests.py run turn npc  # run suites
+#
+# `tests` are file-name globs inside tests/. A file may sit in several suites.
+# `sources` are repo-relative path globs (`*` also matches `/`): a change to a matching
+# file makes `affected` and the pre-push hook run the whole suite.
+# New test files: add them to a suite (`list` shows the ones that are in none).
+
+[suites.core]
+description = "Quick smoke check of the critical paths"
+tests = [
+    "test_game_loop.py",
+    "test_guardrails_behaviour.py",
+    "test_security_hardening.py",
+    "test_session_ownership.py",
+    "test_adventure_lifecycle.py",
+    "test_manifest_round_trip.py",
+    "test_world_manifesto.py",
+    "test_script_sandbox.py",
+]
+sources = [
+    "backend/init_db.py",
+    "backend/api/routes/data.py",
+    "backend/api/routes/adventures/schemas.py",
+    "backend/utils/text_utils.py",
+    "backend/main.py",
+    "backend/models/*",
+    "backend/core/database.py",
+    "backend/schemas/*",
+    "backend/crud/*",
+    "alembic/*",
+]
+
+[suites.security]
+description = "Path security, session ownership, auth, keys, script sandbox"
+tests = [
+    "test_security_hardening.py",
+    "test_session_ownership.py",
+    "test_account_security.py",
+    "test_password_policy.py",
+    "test_personal_api_keys.py",
+    "test_users_api.py",
+    "test_sandbox_*.py",
+    "test_script_sandbox.py",
+    "test_unicode_*.py",
+]
+sources = [
+    "backend/utils/path_security.py",
+    "backend/core/auth.py",
+    "backend/core/security.py",
+    "backend/core/api_keys.py",
+    "backend/core/login_throttle.py",
+    "backend/core/account_recovery.py",
+    "backend/api/routes/auth_api.py",
+    "backend/api/routes/account_api.py",
+    "backend/api/routes/api_keys_api.py",
+    "backend/api/routes/users_api.py",
+    "backend/engine/scripting/sandbox*.py",
+]
+
+[suites.turn]
+description = "Turn pipeline: Pass 1/1.5/2, guardrails, narration, quests, clock"
+tests = [
+    "test_game_loop.py",
+    "test_guardrails_behaviour.py",
+    "test_prompts_guardrails.py",
+    "test_turn_*.py",
+    "test_item_handovers.py",
+    "test_inventory_removal_guard.py",
+    "test_hidden_entity_reveal.py",
+    "test_interaction_targets.py",
+    "test_interact_dialog_turn.py",
+    "test_narration_*.py",
+    "test_narrator_voices.py",
+    "test_prose_craft.py",
+    "test_gm_directions.py",
+    "test_story_continuation.py",
+    "test_skip_narration.py",
+    "test_after_narration_callbacks.py",
+    "test_chat_*.py",
+    "test_command_parser.py",
+    "test_stream_timeout.py",
+    "test_soft_rules.py",
+    "test_quest_*.py",
+    "test_award_*.py",
+    "test_win_loss_guards.py",
+    "test_last_sequence_ending.py",
+    "test_sequence_*.py",
+    "test_key_item_mention.py",
+    "test_language_independent_ids.py",
+    "test_note_coercion.py",
+    "test_location_context_appearance.py",
+    "test_history_compression.py",
+    "test_consequences_and_rumors.py",
+    "test_message_deletion.py",
+    "test_world_memory_bounds.py",
+    "test_game_clock.py",
+    "test_time_systems.py",
+    "test_respawn.py",
+    "test_dice_command.py",
+    "test_skill_check.py",
+    "test_dialog_tree.py",
+    "test_text_log_read_hooks.py",
+    "test_readable_line_breaks.py",
+    "test_interlude_quote_voice.py",
+    "test_frontend_payload.py",
+    "test_heartbeat.py",
+    "test_scene_helpers.py",
+]
+sources = [
+    "backend/api/routes/adventures/dice_routes.py",
+    "backend/api/routes/adventures/debug_arrival.py",
+    "backend/api/routes/adventures/entity_state_merge.py",
+    "backend/api/routes/adventures/sheet_snapshot.py",
+    "backend/api/routes/adventures/gameplay*.py",
+    "backend/api/routes/adventures/turn_*.py",
+    "backend/api/routes/adventures/guardrails/*",
+    "backend/api/routes/adventures/*_flow.py",
+    "backend/api/routes/adventures/dialog_*.py",
+    "backend/api/routes/adventures/story_continuation.py",
+    "backend/api/routes/adventures/after_narration.py",
+    "backend/api/routes/adventures/chat_*.py",
+    "backend/api/routes/adventures/post_turn_hooks.py",
+    "backend/api/routes/adventures/out_of_turn_progress.py",
+    "backend/api/routes/adventures/quest_completion.py",
+    "backend/api/routes/adventures/award_granting.py",
+    "backend/api/routes/adventures/interaction_hooks.py",
+    "backend/api/routes/adventures/logic.py",
+    "backend/api/routes/adventures/sequence_*.py",
+    "backend/api/routes/adventures/scene_scripts.py",
+    "backend/api/routes/adventures/unlock_service.py",
+    "backend/api/routes/adventures/history_compression_window.py",
+    "backend/api/routes/adventures/listen_mode_command.py",
+    "backend/engine/rules/*",
+    "backend/engine/interaction/*",
+    "backend/engine/sessions/memory*",
+    "backend/engine/debug_commands/*",
+    "backend/core/prompts.py",
+    "backend/core/narration_*.py",
+    "backend/core/narrator_voices.py",
+    "backend/core/prose_craft.py",
+    "backend/core/llm_stream_filters.py",
+    "backend/core/voice_tags.py",
+    "backend/core/awards.py",
+]
+
+[suites.items]
+description = "Items, containers, switches, exits, crafting"
+tests = [
+    "test_container_*.py",
+    "test_item_*.py",
+    "test_constructable.py",
+    "test_craft_command.py",
+    "test_used_up_ingredients.py",
+    "test_take_direct.py",
+    "test_pickup_trigger.py",
+    "test_quest_items.py",
+    "test_switch_*.py",
+    "test_portable_switches.py",
+    "test_exit_*.py",
+    "test_loot_scene_exit.py",
+    "test_entity_transfer.py",
+    "test_decorative_items_parsing.py",
+    "test_weapon_config.py",
+    "test_protagonist_loadout.py",
+    "test_recipe_images.py",
+    "test_trigger_movements.py",
+]
+sources = [
+    "backend/api/routes/adventures/guardrails/containers.py",
+    "backend/api/routes/adventures/guardrails/crafting.py",
+    "backend/api/routes/adventures/guardrails/items.py",
+    "backend/api/routes/adventures/guardrails/locks.py",
+    "backend/api/routes/adventures/guardrails/exits.py",
+    "backend/api/routes/adventures/container_*.py",
+    "backend/api/routes/adventures/entity_transfer_service.py",
+    "backend/api/routes/adventures/session_items.py",
+    "backend/api/routes/adventures/unlock_service.py",
+    "backend/engine/rules/item_logic.py",
+    "backend/engine/rules/crafting_recipes.py",
+    "backend/engine/rules/quest_items.py",
+    "backend/engine/rules/consumable_effects.py",
+    "backend/engine/interaction/switch_*.py",
+    "backend/engine/interaction/script_item_apply.py",
+    "backend/engine/scripting/item_*.py",
+    "backend/engine/scripting/player_inventory.py",
+    "backend/engine/scripting/switch_proxy.py",
+]
+
+[suites.npc]
+description = "NPCs, companions, memory, conversations, talents"
+tests = [
+    "test_npc_*.py",
+    "test_party_*.py",
+    "test_companion_*.py",
+    "test_ally_effects.py",
+    "test_talents.py",
+    "test_consequences_and_rumors.py",
+]
+sources = [
+    "backend/engine/party/*",
+    "backend/engine/conversations/*",
+    "backend/api/routes/adventures/companion_*.py",
+    "backend/api/routes/adventures/npc_*.py",
+    "backend/api/routes/adventures/talent_use.py",
+    "backend/engine/rules/npc_*.py",
+    "backend/engine/rules/talents.py",
+    "backend/engine/scripting/npc_*.py",
+    "backend/engine/scripting/party_proxy.py",
+    "backend/api/routes/adventures/handover_flow.py",
+    "backend/api/routes/adventures/guardrails/handover*.py",
+    "backend/api/routes/adventures/guardrails/npc_reveal.py",
+]
+
+[suites.combat]
+description = "Combat rules, encounters, party in combat"
+tests = [
+    "test_combat_*.py",
+    "test_area_attacks.py",
+    "test_special_attacks_engine.py",
+    "test_npc_combat_profile.py",
+    "test_npc_damage_rules.py",
+    "test_weapon_config.py",
+    "test_party_loadout.py",
+    "test_agent_combat.py",
+]
+sources = [
+    "backend/engine/combat/*",
+    "backend/api/routes/adventures/combat/*",
+    "backend/api/routes/adventures/turn_combat.py",
+    "backend/api/routes/adventures/agent_combat*.py",
+    "backend/engine/rules/npc_damage.py",
+    "backend/engine/scripting/npc_combat_group.py",
+    "backend/engine/scripting/npc_vitals.py",
+]
+
+[suites.scripting]
+description = "Scripting engine, tw API, triggers, sequence scripts"
+tests = [
+    "test_script_*.py",
+    "test_sandbox_*.py",
+    "test_sequence_scripting.py",
+    "test_sequence_scripts.py",
+    "test_sequence_hooks.py",
+    "test_enhanced_triggers.py",
+    "test_switch_triggers.py",
+    "test_combat_triggers.py",
+    "test_turn_proxy.py",
+    "test_debug_script_command.py",
+    "test_npc_persona_scripting.py",
+    "test_npc_visibility_script.py",
+    "test_party_script_api.py",
+    "test_world_script_triggers.py",
+    "test_after_narration_callbacks.py",
+]
+sources = [
+    "backend/engine/scripting/*",
+    "backend/core/script_validator.py",
+    "backend/core/script_assist_prompts.py",
+    "backend/engine/interaction/trigger_service.py",
+    "backend/engine/rules/sequence_scripts.py",
+    "backend/api/routes/adventures/script_*.py",
+    "backend/api/routes/adventures/debug_script_command.py",
+    "backend/api/routes/adventures/sequence_hooks.py",
+    "backend/api/routes/adventures/scene_scripts.py",
+]
+
+[suites.world]
+description = "World generation, blueprints, manifests, validation, AI fix"
+tests = [
+    "test_world_*.py",
+    "test_manifest_*.py",
+    "test_validation_*.py",
+    "test_ai_fix_*.py",
+    "test_post_generation_auto_fix.py",
+    "test_generation_*.py",
+    "test_adventure_generator_service.py",
+    "test_dynamic_*.py",
+    "test_script_validator.py",
+    "test_edit_adventure_change_set.py",
+    "test_skill_bundle.py",
+]
+sources = [
+    "backend/core/generation_*.py",
+    "backend/engine/world/*",
+    "backend/engine/blueprint/*",
+    "backend/engine/manifest_apply/*",
+    "backend/core/world_validation/*",
+    "backend/core/world_validator.py",
+    "backend/core/world_builder_prompts.py",
+    "backend/core/validators_prompts.py",
+    "backend/core/dialog_validator.py",
+    "backend/core/helpers_validator.py",
+    "backend/core/manifest_extensions.py",
+    "backend/api/routes/adventures/editing/*",
+    "backend/api/routes/adventures/blueprint_routes.py",
+    "backend/api/routes/adventures/dynamic_*.py",
+    "backend/api/routes/adventures/turn_adventure_gen.py",
+    "backend/api/routes/adventures/adventure_creation.py",
+    "scripts/edit_adventure.py",
+    "scripts/bundle_skill.py",
+]
+
+[suites.editor]
+description = "Adventure editor routes and editor-side data sync"
+tests = [
+    "test_editor_*.py",
+    "test_exit_edit.py",
+    "test_exit_api_autocomplete_sync.py",
+    "test_item_take_lock_edit.py",
+    "test_item_type_change*.py",
+    "test_script_editor_routes.py",
+    "test_script_assist.py",
+    "test_prompt_suggestions.py",
+    "test_entity_bundle_version.py",
+    "test_npc_clone.py",
+]
+sources = [
+    "backend/api/routes/adventures/editor*.py",
+    "backend/api/routes/adventures/editing/*",
+    "backend/api/routes/adventures/templates.py",
+    "backend/api/routes/adventures/template_*.py",
+    "backend/api/routes/adventures/prompt_enhancer.py",
+]
+
+[suites.adventures]
+description = "Library, import/export, sessions, saves, maps"
+tests = [
+    "test_adventure_*.py",
+    "test_adventures_api.py",
+    "test_library_*.py",
+    "test_default_adventures.py",
+    "test_portability.py",
+    "test_export_start_scene.py",
+    "test_asset_naming.py",
+    "test_duplicate_media_reuse.py",
+    "test_session_*.py",
+    "test_player_sessions.py",
+    "test_leaderboard_api.py",
+    "test_debug_map_navigation.py",
+    "test_map_engine.py",
+]
+sources = [
+    "backend/services/adventure_library/*",
+    "backend/services/default_adventures.py",
+    "backend/services/session_activity.py",
+    "backend/utils/download_headers.py",
+    "backend/engine/adventures/*",
+    "backend/engine/sessions/*",
+    "backend/core/adventure_*.py",
+    "backend/api/routes/adventures/library.py",
+    "backend/api/routes/adventures/imports.py",
+    "backend/api/routes/adventures/manifest_export.py",
+    "backend/api/routes/adventures/cloning.py",
+    "backend/api/routes/adventures/session_*.py",
+    "backend/api/routes/adventures/sessions.py",
+    "backend/api/routes/adventures/assets.py",
+    "backend/api/routes/adventures/asset_url_healing.py",
+    "backend/api/routes/adventures/adventure_ending.py",
+    "backend/api/routes/adventures/router.py",
+    "backend/api/routes/map_api.py",
+    "backend/api/routes/leaderboard_api.py",
+    "backend/engine/interaction/map_engine.py",
+]
+
+[suites.agent]
+description = "Play-Agent"
+tests = [
+    "test_agent_*.py",
+    "test_walkthrough_reveal.py",
+]
+sources = [
+    "backend/api/routes/adventures/agent_*.py",
+    "backend/api/routes/adventures/walkthrough_reveal.py",
+    "backend/engine/rules/walkthrough_unlocks.py",
+    "backend/engine/rules/sequence_walkthrough.py",
+]
+
+[suites.llm]
+description = "LLM providers, routing, model tests, server settings, setup"
+tests = [
+    "test_llm_*.py",
+    "test_custom_openai*.py",
+    "test_openrouter_*.py",
+    "test_model_*.py",
+    "test_claude_thinking.py",
+    "test_config_*.py",
+    "test_global_settings.py",
+    "test_setup_*.py",
+    "test_health_endpoint.py",
+    "test_style_catalog.py",
+    "test_ui_theme.py",
+    "test_avatars_api.py",
+]
+sources = [
+    "backend/services/model_discovery/*",
+    "backend/core/llm_*.py",
+    "backend/core/model*.py",
+    "backend/core/openrouter_*.py",
+    "backend/core/custom_openai*.py",
+    "backend/core/claude_thinking.py",
+    "backend/core/global_settings.py",
+    "backend/core/config.py",
+    "backend/core/turn_key_preflight.py",
+    "backend/core/style_catalog.py",
+    "backend/core/ui_theme.py",
+    "backend/core/catalog_defaults.py",
+    "backend/core/error_diagnostics.py",
+    "backend/models/server_settings.py",
+    "backend/api/routes/config_api.py",
+    "backend/api/routes/setup_wizard_api.py",
+    "backend/api/routes/model_discovery_api.py",
+    "backend/api/routes/settings_normalization.py",
+    "backend/api/routes/narrator_voices_api.py",
+    "backend/api/routes/avatars.py",
+    "backend/api/routes/characters.py",
+    "backend/static/*",
+]
+
+[suites.media]
+description = "Images, ComfyUI, audio, TTS, voices, STT"
+tests = [
+    "test_image_*.py",
+    "test_media_engine.py",
+    "test_comfyui.py",
+    "test_visual_regenerate_errors.py",
+    "test_script_image.py",
+    "test_session_map_images.py",
+    "test_audio_*.py",
+    "test_tts_*.py",
+    "test_browser_tts.py",
+    "test_openai_compatible_tts.py",
+    "test_voice_*.py",
+    "test_stt.py",
+]
+sources = [
+    "backend/utils/image_*.py",
+    "backend/utils/svg_generator.py",
+    "backend/engine/media/*",
+    "backend/engine/audio/*",
+    "backend/core/comfyui.py",
+    "backend/core/tts_*.py",
+    "backend/core/audio_settings.py",
+    "backend/api/routes/tts_*.py",
+    "backend/api/routes/stt_api.py",
+    "backend/api/routes/voice_map_api.py",
+    "backend/api/routes/audio_settings_api.py",
+    "backend/api/routes/adventures/editor_audio*.py",
+    "backend/api/routes/adventures/audio_snapshot.py",
+    "backend/api/routes/adventures/template_audio_preview.py",
+    "backend/api/routes/adventures/script_image.py",
+    "backend/api/routes/adventures/session_assets.py",
+]
+
+[suites.tooling]
+description = "Developer scripts (test runner, skill bundle)"
+tests = [
+    "test_run_tests_selection.py",
+    "test_skill_bundle.py",
+]
+sources = [
+    "scripts/run_tests.py",
+    "scripts/import_graph.py",
+    "scripts/bundle_skill.py",
+]

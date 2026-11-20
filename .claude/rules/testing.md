@@ -23,7 +23,10 @@ paths:
      pytest tests/test_adventure_lifecycle.py
      ```
    * Ensures adventures can be imported/exported between systems without data corruption.
-5. **Game Loop Regressions**:
+5. **Suites & Affected Tests** ([docs/testing.md](../../docs/testing.md)):
+   * The full suite takes 10–15 minutes. Run the affected tests with `poetry run python scripts/run_tests.py affected` (or `run <suite>`); the pre-push hook does the same.
+   * Every new test file must be added to a suite in `tests/suites.toml` (`tests` globs); new backend modules outside the existing `sources` globs must be added to a suite's `sources`. `tests/test_run_tests_selection.py` enforces both.
+6. **Game Loop Regressions**:
    * When altering gameplay intent-routing, guardrails, or pass logic, execute:
      ```bash
      pytest tests/test_game_loop.py

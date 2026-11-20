@@ -1,0 +1,28 @@
+#!/bin/sh
+# TaleWeaver Git Pre-Push Hook
+# Runs the tests the pushed commits can affect (scripts/run_tests.py pre-push).
+# Skip once with `git push --no-verify` or TW_SKIP_TESTS=1.
+
+echo "🧪 TaleWeaver pre-push: running the affected tests..."
+
+if command -v poetry >/dev/null 2>&1; then
+    poetry run python scripts/run_tests.py pre-push
+    EXIT_CODE=$?
+elif [ -f "./venv/Scripts/python.exe" ]; then
+    ./venv/Scripts/python.exe scripts/run_tests.py pre-push
+    EXIT_CODE=$?
+elif [ -f "./venv/bin/python" ]; then
+    ./venv/bin/python scripts/run_tests.py pre-push
+    EXIT_CODE=$?
+else
+    echo "⚠️ Poetry/venv not found. Skipping test hook."
+    exit 0
+fi
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "❌ Pre-push hook aborted the push: tests failed."
+    echo "💡 Rerun with 'poetry run python scripts/run_tests.py affected', or skip once with 'git push --no-verify'."
+    exit $EXIT_CODE
+fi
+
+exit 0
