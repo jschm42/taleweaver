@@ -36,8 +36,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "455e817fb45e0e2f95e27ea7df71e3b3a9417dca8dcf703357b3fbf5694da36a",
-      "size": 2214
+      "sha256": "ddb73e1cd073409221965307158a4f2fbd9e5d4ea3c63dfc43fe1218a39d4a75",
+      "size": 2157
     }
   ],
   "documentation": [
@@ -69,7 +69,7 @@
     }
   ],
   "compatibility": {
-    "taleweaver": ">=0.7.1-beta",
+    "taleweaver": ">=0.8.1-beta",
     "agents": [
       "claude-code",
       "claude-skills",
