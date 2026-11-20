@@ -47,6 +47,7 @@ from backend.engine.blueprint.converters import (
     weapon_cost,
     weapon_effects,
 )
+from backend.engine.blueprint.section_converters import section_links, section_position
 
 # Stats a d20 roll can use (attack rolls, saves); "ac" is not one of them.
 _ROLL_STATS = ("strength", "dexterity", "intelligence", "wisdom", "charisma")
@@ -258,6 +259,9 @@ SCENE_KEYS: dict[str, FieldSpec] = {
     # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
     "respawn": FieldSpec("is_respawn_point", boolean),
     "revival_point": FieldSpec("is_respawn_point", boolean),
+    # World section ([Section: ID]) the scene belongs to.
+    "section": _ref("section_id"),
+    "region": _ref("section_id"),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
     "dynamic": FieldSpec("dynamic_zone.enabled", boolean),
@@ -578,6 +582,18 @@ TALENT_KEYS: dict[str, FieldSpec] = {
 }
 _hook(TALENT_KEYS, "on_use", "on_use")
 
+# [Section: ID] Label - a region of the world map; the body text is its description.
+SECTION_KEYS: dict[str, FieldSpec] = {
+    "description": FieldSpec("description"),
+    "position": FieldSpec("*", section_position),
+    "status": FieldSpec(
+        "status",
+        choice("built", "stub", aliases={"planned": "stub", "ready": "built", "done": "built"}),
+    ),
+    "brief": FieldSpec("brief"),
+    "links": FieldSpec("planned_links", section_links),
+}
+
 # (tag kind, key) -> what to use instead; the parser warns but still applies the key.
 DEPRECATED_KEYS: dict[tuple[str, str], str] = {
     ("npc", "weapon"): "use main_attack (no item needed)",
@@ -597,6 +613,7 @@ KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "sidequest": SIDEQUEST_KEYS,
     "award": AWARD_KEYS,
     "audio": AUDIO_KEYS,
+    "section": SECTION_KEYS,
     "ability": ABILITY_KEYS,
     "talent": TALENT_KEYS,
 }

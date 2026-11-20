@@ -7,6 +7,8 @@ Listing the fields once keeps them from silently dropping scripts or decorations
 from copy import deepcopy
 from typing import Any
 
+from backend.engine.world.sections import section_id_or_none
+
 SCENE_SCRIPT_FIELDS = (
     "on_enter_scene_script",
     "on_enter_scene_text",
@@ -18,6 +20,8 @@ SCENE_SCRIPT_FIELDS = (
 SCENE_AUDIO_FIELDS = ("audio_track_id",)
 # Respawn mode: a fallen protagonist wakes up at the last revival point reached.
 SCENE_RESPAWN_FIELDS = ("is_respawn_point",)
+# World section (region) the scene belongs to (engine/world/sections.py).
+SCENE_SECTION_FIELDS = ("section_id",)
 SCENE_CONTENT_FIELDS = (
     "id",
     "label",
@@ -27,6 +31,7 @@ SCENE_CONTENT_FIELDS = (
     *SCENE_SCRIPT_FIELDS,
     *SCENE_AUDIO_FIELDS,
     *SCENE_RESPAWN_FIELDS,
+    *SCENE_SECTION_FIELDS,
 )
 
 
@@ -45,4 +50,5 @@ def scene_content_from_dict(data: dict[str, Any]) -> dict[str, Any]:
     # Session exports written before the rename to audio.
     content["audio_track_id"] = data.get("audio_track_id") or data.get("music_track_id")
     content["is_respawn_point"] = data.get("is_respawn_point") is True
+    content["section_id"] = section_id_or_none(data.get("section_id"))
     return content

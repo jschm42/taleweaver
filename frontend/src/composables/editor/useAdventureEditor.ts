@@ -424,7 +424,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'regions' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -524,6 +524,7 @@ const editorTabs = [
   { key: 'sequences', label: 'Chapters' },
   { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
+  { key: 'regions', label: 'Regions' },
   { key: 'scenes', label: 'Scenes' },
   { key: 'inhabitants', label: 'Characters' },
   { key: 'items', label: 'Items' },

@@ -31,6 +31,7 @@ from backend.engine.world.world_conversation_schema import (
     NpcRelationSchema,
 )
 from backend.engine.world.world_object_schema import WorldObjectSchema
+from backend.engine.world.world_section_schema import WorldSectionSchema
 
 
 class AudioTrackSchema(WorldBaseSchema):
@@ -90,6 +91,13 @@ class WorldSceneSchema(WorldBaseSchema):
             "True for a revival point (a shrine, a camp, a healer's hut). Only matters when "
             "`game_over_rules.on_zero_hp` is `respawn`: a protagonist who falls to 0 HP wakes "
             "up at the last revival point reached. Usually False."
+        ),
+    )
+    section_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the entry in `sections` (the region) this scene belongs to. "
+            "Use empty string when the adventure has no sections."
         ),
     )
     helpers_script: Optional[str] = Field(
@@ -955,6 +963,13 @@ class WorldManifesto(WorldBaseSchema):
     dynamic_generation: Optional[dict[str, Any]] = Field(
         default=None,
         description="Optional configuration for procedural dynamic scene image tiers, music mode, and NPC interlude quotes.",
+    )
+    sections: list[WorldSectionSchema] = Field(
+        default=[],
+        description=(
+            "Optional world sections (regions) that group the scenes of a large world. "
+            "Use [] for a normal adventure."
+        ),
     )
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]

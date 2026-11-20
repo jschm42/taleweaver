@@ -27,6 +27,7 @@ from backend.api.routes.adventures.editing.schemas import (
     SceneCreateRequest,
     StartSceneUpdateRequest,
 )
+from backend.api.routes.adventures.editing.section_crud import resolve_target_section
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.engine.world.dynamic_scene_schemas import (
@@ -88,6 +89,8 @@ async def create_editor_scene(
         raise HTTPException(status_code=400, detail="description is required")
 
     clean_decor = _clean_decorative_objects(payload.decorative_objects)
+    adv = await db.get(AdventureTemplate, template_id)
+    section_id = resolve_target_section(adv, payload.section_id) if adv else None
 
     existing_scene = await db.execute(
         select(WorldScene).where(
@@ -118,6 +121,7 @@ async def create_editor_scene(
         image_url=str(payload.image_url or "").strip() or None,
         decorative_objects=clean_decor or None,
         dynamic_zone=norm_zone,
+        section_id=section_id,
     )
     db.add(scene)
     await db.commit()

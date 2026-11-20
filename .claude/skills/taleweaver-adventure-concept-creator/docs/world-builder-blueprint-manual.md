@@ -603,6 +603,29 @@ audio: CRYPT_DRONE
 
 The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
+### Regions for a large world
+
+A world with many scenes reads better in regions: each region gets its own scene map in the editor, and a world map shows how they connect. Declare them with `[Section: ID] Label`, place them with `position: x, y` (percent of the world map) and put scenes in with `section: ID`. A region you only plan for later is `status: planned`; it has no scenes yet, players never see it, and `links` notes the planned routes.
+
+```text
+[Section: HARBOR_TOWN] Harbor Town
+position: 20, 65
+A fishing port under a broken lighthouse.
+
+[Section: GLOOM_PEAKS] Gloom Peaks
+status: planned
+brief: Dwarven ruins above the tree line, cold, few NPCs.
+links: HARBOR_TOWN 8h
+
+[Scene: PIER] The Pier
+section: HARBOR_TOWN
+
+[Scene: LIGHTHOUSE] The Lighthouse
+section: HARBOR_TOWN
+```
+
+Regions gate nothing: a route between two regions is an ordinary exit between their scenes, with the usual locks. Manage regions later on the editor's **Regions** page and filter the **Map** by region.
+
 ### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`) & Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]`)
 
 Combine author-designed map topology with on-demand AI generation in two complementary ways:

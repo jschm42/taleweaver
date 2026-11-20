@@ -16,6 +16,7 @@ from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.world.sections import manifest_sections, normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 
 logger = logging.getLogger(__name__)
@@ -160,10 +161,21 @@ def _apply_audio_tracks(ctx: ApplyContext, adventure: AdventureTemplate) -> None
         adventure.title_track_id = title  # type: ignore[assignment]
 
 
+def _apply_sections(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
+    """World sections (regions); a manifest without them keeps the stored list."""
+    raw = manifest_sections(ctx.manifest)
+    if raw is None:
+        return
+    sections = normalize_sections(raw)
+    adventure.world_sections = sections or None  # type: ignore[assignment]
+    ctx.manifest["sections"] = sections
+
+
 def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
     for key in _NARRATIVE_FIELDS:
         setattr(adventure, key, adventure_field(ctx.manifest, key) or getattr(adventure, key))
     _apply_audio_tracks(ctx, adventure)
+    _apply_sections(ctx, adventure)
     adventure.cover_appearance = clean_appearance(adventure.cover_appearance)  # type: ignore[assignment]
 
     # Legacy manifests with a walkthrough but no sequences get a single main sequence.

@@ -13,6 +13,7 @@ from backend.api.routes.adventures.editing import (
     generation,
     payload,
     script_assist,
+    section_crud,
     story_crud,
     validation,
     world_builder_instruct,
@@ -44,6 +45,7 @@ for _module in (
     script_assist,
     world_crud,
     story_crud,
+    section_crud,
     entity_update,
     generation,
 ):

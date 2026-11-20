@@ -33,6 +33,7 @@ from backend.engine.conversations.settings import normalize_conversation_setting
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.world.sections import manifest_sections
 from backend.engine.world.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -522,6 +523,7 @@ class AdventureTemplateImporter:
                         if prot
                         else {},
                     },
+                    "sections": manifest_sections(manifest_data),
                     "scenes": manifest_data.get("scenes", []),
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),

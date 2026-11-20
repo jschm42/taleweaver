@@ -407,7 +407,11 @@ def _build_special_attack_requirement(
         "DEFEAT: leave `game_over_rules` null (0 HP = game over) unless the story idea asks for "
         "respawning; then set {on_zero_hp: 'respawn', respawn_hp_percent: 25} and mark safe "
         "places (a camp, a shrine) with `is_respawn_point: true`. Use `respawn_allowed: false` "
-        "on a sequence that must stay deadly."
+        "on a sequence that must stay deadly.\n"
+        "WORLD SECTIONS: leave `sections` empty unless the story idea or blueprint declares "
+        "regions; then copy every declared section and set each scene's `section_id` to the "
+        "region it lies in (a scene belongs to exactly one built region; planned 'stub' regions "
+        "have no scenes)."
     )
 
 

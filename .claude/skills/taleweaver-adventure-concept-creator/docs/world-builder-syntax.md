@@ -47,7 +47,7 @@ TaleWeaver's World-Builder reads structured tags in the **Story Idea & Context**
 Nested `[Ability: ID] Name` blocks define special actions and nested `[Talent: ID] Name` blocks define non-combat talents (see below).
 
 ### `[Scene: ID] Name`
-`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `respawn` (yes = revival point: in respawn mode the protagonist wakes up at the last one reached; alias `revival_point`), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
+`decor` (up to 7 decorative objects, comma-separated), `audio` (ID of a `[Audio]` track that plays in this scene), `section` (ID of the `[Section]` region the scene lies in; alias `region`), `respawn` (yes = revival point: in respawn mode the protagonist wakes up at the last one reached; alias `revival_point`), `on_enter`, `on_enter_text`, `on_leave`, `on_leave_text`, `helpers` (script: functions and constants every script can call, see [Scene Helpers](scripting_engine.md#scene-helpers-helpers_script)).
 
 **Dynamic scenes (`[DynamicScene: ID] Name` or `[Scene: ID]` with `dynamic: yes`):**
 Creates a pre-mapped scene node whose authored exits and pre-placed static NPCs/objects stay intact, while its narrative description, ambience, visuals/audio, and procedural encounters are generated on first player entry. Supports `dynamic` (`yes`/`no`), `zone`/`dynamic_zone`/`zone_id` (slug, optional; defaults from scene ID), `theme`/`zone_theme` (atmospheric prompt; also fallback `description`), `danger`/`danger_level` (`peaceful`/`low`/`medium`/`high`/`deadly`/`random`), `max_npcs` (`0`–`5`), `audio_mode`/`dynamic_audio` (`inherit`/`empty`/`generate`), `generation_model`/`dynamic_model` (`mechanics`/`narration`/`world_builder`), `allowed_entities`, `instructions`/`prompt`/`zone_instructions` (optional freeform prompt or Blueprint blocks), `instructions_scope`/`scope` (`once`/`first_scene`/`max_depth`/`all_scenes`), `cluster_consistency`/`consistency` (`yes`/`no`, default `yes`), and `on_after_generated`/`on_after_generated_script`. Multiple `[DynamicScene]` nodes and dynamic `[Exit]` passages sharing a `zone_id` share cluster consistency. Unvisited pre-mapped Dynamic Scenes keep their details hidden in the player's travel overlay until entered.
@@ -275,6 +275,9 @@ Requires **Event Scripts** to be enabled in the generator settings.
 
 ### `[Audio: ID] Name`
 A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the English prompt for the music model: genre, instruments, tempo, mood; instrumental, no artist names or lyrics; ideally ending with a seamless-loop request. Scenes pick a track with `audio: ID`. The World-Builder only stores the prompt; the track is rendered in the editor's **Audio** tab.
+
+### `[Section: ID] Label`
+A region of the world map that groups scenes of a large world (alias `[Region: ID]`). The body text is its description; the Game Master sees it while the player is in the region. Keys: `position` (`x, y` in percent of the world map, 0-100), `status` (`built` default, or `stub`/`planned`: a region without scenes yet, hidden from players), `brief` (directions for building a planned region later), `links` (planned routes of a planned region with an optional travel time, e.g. `HARBOR_TOWN 8h, MINES 2d`). Scenes join a region with `section: ID`. Regions gate nothing; locks stay on exits. See [World sections](specs/world_sections.md).
 
 ### `[Award: KEY] Title`
 `tier` (bronze, silver, gold, negative), `requires`, `goal_item`, `goal_scene`, `defeat`, `guard`.

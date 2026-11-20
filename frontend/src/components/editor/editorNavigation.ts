@@ -4,7 +4,7 @@
  */
 import { computed, defineAsyncComponent, type Component, type ComputedRef } from 'vue'
 import {
-  Award, BookOpen, Brain, Clock, Cog, Feather, Image, Map, MapPin, MessagesSquare, Music, Package, Palette, Scroll,
+  Award, BookOpen, Brain, Clock, Cog, Feather, Globe2, Image, Map, MapPin, MessagesSquare, Music, Package, Palette, Scroll,
   ScrollText, ShieldCheck, Sparkles, User, Users, Workflow,
 } from 'lucide-vue-next'
 import type { WorkbenchNavGroup } from '@/components/workbench/WorkbenchNav.vue'
@@ -19,6 +19,7 @@ export const EDITOR_PAGES: Record<string, Component> = {
   quest: page(() => import('@/components/editor/pages/QuestPage.vue')),
   awards: page(() => import('@/components/editor/pages/AwardsPage.vue')),
   map: page(() => import('@/components/editor/pages/MapPage.vue')),
+  regions: page(() => import('@/components/editor/pages/RegionsPage.vue')),
   scenes: page(() => import('@/components/editor/pages/ScenesPage.vue')),
   inhabitants: page(() => import('@/components/editor/pages/InhabitantsPage.vue')),
   items: page(() => import('@/components/editor/pages/ItemsPage.vue')),
@@ -58,6 +59,7 @@ export function useEditorNavigation(editor: EditorContext): EditorNavigation {
       title: 'World',
       items: [
         { id: 'map', label: 'Map', icon: Map },
+        { id: 'regions', label: 'Regions', icon: Globe2, badge: count(editor.debugData?.adventure?.world_sections) },
         { id: 'scenes', label: 'Scenes', icon: Image, badge: count(editor.editorScenes) },
         { id: 'inhabitants', label: 'Characters', icon: Users, badge: count(editor.editorNpcs) },
         { id: 'items', label: 'Items', icon: Package, badge: count(editor.editorAllItems) },

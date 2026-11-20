@@ -10,18 +10,22 @@ AdventureTemplate and, with ``session_id``, of that session (admins always allow
 """
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.logic import AdventureLogic
+from backend.api.routes.adventures.session_adventure import load_session_adventure
 from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.engine.interaction.map_engine import MapEngine, load_map_exits
+from backend.engine.interaction.map_sections import attach_sections
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
+from backend.models.world_entity import WorldScene
 
 router = APIRouter(tags=["WorldMap"])
 logger = logging.getLogger(__name__)
@@ -73,6 +77,31 @@ async def _authorize_map_access(
 # _get_or_create_map moved to AdventureLogic.get_or_create_map
 
 
+async def _scene_sections(
+    db: AsyncSession, template_id: str, session_id: Optional[str]
+) -> dict[str, Optional[str]]:
+    """scene id -> section id, from the session's own world copy or from the template."""
+    if session_id:
+        query = select(WorldScene.id, WorldScene.section_id).where(
+            WorldScene.session_id == session_id
+        )
+    else:
+        query = select(WorldScene.id, WorldScene.section_id).where(
+            WorldScene.template_id == template_id, WorldScene.session_id.is_(None)
+        )
+    return {row.id: row.section_id for row in (await db.execute(query)).all()}
+
+
+async def _map_sections(db: AsyncSession, template_id: str, session_id: Optional[str]) -> Any:
+    """The sections a map may show: the session's frozen copy, else the template's."""
+    if session_id:
+        state = await AdventureLogic.resolve_session_state(db, session_id)
+        adventure = await load_session_adventure(db, state)
+        return getattr(adventure, "world_sections", None) if adventure else None
+    adventure = await db.get(AdventureTemplate, template_id)
+    return adventure.world_sections if adventure else None
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -87,7 +116,7 @@ async def get_map(
     await _authorize_map_access(db, template_id, session_id, current_user)
     world_map = await AdventureLogic.get_or_create_map(db, template_id, session_id=session_id)
     if not world_map:
-        return {"nodes": {}, "edges": [], "current_scene_id": None}
+        return attach_sections({"nodes": {}, "edges": [], "current_scene_id": None}, {}, None)
 
     map_dict = MapEngine.to_dict(world_map)
 
@@ -107,7 +136,11 @@ async def get_map(
                 map_dict, exits, raw_current_id, exit_states=exit_states
             )
 
-    return map_dict
+    return attach_sections(
+        map_dict,
+        await _scene_sections(db, template_id, session_id),
+        await _map_sections(db, template_id, session_id),
+    )
 
 
 @router.post("/adventures/{template_id}/map/visit", status_code=200)

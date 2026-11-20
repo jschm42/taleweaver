@@ -16,6 +16,7 @@ from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
 from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
+from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -683,6 +684,8 @@ class AdventureExporter:
             "adventure": {**_build_adventure_section(adv), "start_scene_id": start_scene_id},
             "protagonist": _build_protagonist_section(avatar, inventory, equipment),
             "start_scene_id": start_scene_id,
+            # World sections incl. stubs, so an author can continue a campaign from the file.
+            "sections": normalize_sections(adv.world_sections),
             "scenes": [_record_to_dict(s) for s in scenes],
             "exits": [_record_to_dict(e) for e in exits],
             "npcs": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "NPC"],

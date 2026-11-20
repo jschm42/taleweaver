@@ -86,6 +86,15 @@ def _default_audio(block: BlueprintBlock) -> dict[str, Any]:
     }
 
 
+def _default_section(block: BlueprintBlock) -> dict[str, Any]:
+    return {
+        "id": block.ref,
+        "label": block.name or block.ref.replace("_", " ").title(),
+        "description": block.description or "",
+        "status": "built",
+    }
+
+
 # kind -> (factory for a missing entry, fields that must be present before inserting)
 _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[str, ...]]] = {
     "script": (_default_script, ("trigger", "code")),
@@ -96,6 +105,7 @@ _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[s
     "sidequest": (_default_quest, ()),
     "award": (_default_award, ()),
     "audio": (_default_audio, ()),
+    "section": (_default_section, ()),
 }
 _CHILD_COLLECTIONS = {
     "rule": "soft_rules",
@@ -296,6 +306,8 @@ def _apply_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
         _apply_dynamic_exit_fixed(entry, block)
     if block.kind == "scene" and isinstance(entry.get("dynamic_zone"), dict):
         _apply_dynamic_scene_fixed(entry, block)
+    if block.kind == "section" and block.description and not entry.get("description"):
+        entry["description"] = block.description
     if block.kind == "world" and isinstance(entry.get("dynamic_generation"), dict):
         entry["dynamic_generation"] = normalize_dynamic_generation(entry["dynamic_generation"])
 

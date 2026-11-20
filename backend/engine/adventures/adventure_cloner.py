@@ -199,6 +199,7 @@ def _create_cloned_template_entity(
         selected_tone=(deepcopy(original.selected_tone) if original.selected_tone else None),
         narrator_voice=deepcopy(original.narrator_voice),
         audio_tracks=clone_audio_tracks(original.audio_tracks, original.id, new_id),
+        world_sections=deepcopy(original.world_sections) if original.world_sections else None,
         audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
@@ -311,6 +312,7 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             audio_track_id=s.audio_track_id,
             dynamic_zone=deepcopy(s.dynamic_zone) if s.dynamic_zone else None,
             is_respawn_point=bool(s.is_respawn_point),
+            section_id=s.section_id,
         )
         db.add(cloned)
 

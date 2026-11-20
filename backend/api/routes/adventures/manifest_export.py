@@ -3,6 +3,7 @@
 from typing import Any, Optional
 
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 
 _LEGACY_EQUIPMENT_SLOTS = (
@@ -41,6 +42,7 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     # Edited in the template only, so the template column wins over the stored manifest.
     manifest["narrator_voice"] = adventure.narrator_voice
     manifest["audio_tracks"] = adventure.audio_tracks or []
+    manifest["sections"] = normalize_sections(adventure.world_sections)
     manifest["audio_enabled"] = adventure.audio_enabled
     manifest["title_track_id"] = adventure.title_track_id
     manifest["npc_conversations"] = normalize_conversation_settings(adventure.npc_conversations)

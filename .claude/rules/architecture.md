@@ -11,14 +11,15 @@ This document details the core architectural concepts of TaleWeaver for AI agent
 
 ## 1. Adventure Manifest (`WorldManifesto`, `.adv`, `.adz`)
 
-TaleWeaver adventures are represented as self-contained blueprints following specification version `1.4.0`:
+TaleWeaver adventures are represented as self-contained blueprints following specification version `1.5.0`:
 * **`.adv`**: UTF-8 JSON file containing the complete world manifest (`WorldManifesto`).
 * **`.adz`**: ZIP archive containing `adventure.adv` plus localized media in `assets/` (scene backgrounds, entity portraits, audio).
 
 ### Key Manifest Components
 * **`adventure`**: World metadata, title, teaser, lore context, plot overview, tone, time pacing (`time_per_turn`: minutes per narration tick, default 5; `gm_time_control`: whether the GM may change time), rule mode (`"rpg"`, `"story"`, `"chat"`), and win/loss conditions (`completed_condition`, `gameover_condition`).
 * **`protagonist`**: Avatar baseline: name, class role, HP/max HP, stamina/mana, RPG stats (`strength`, `dexterity`, `intelligence`, `wisdom`, `charisma`, `armor_class`), starting inventory, and equipped items.
-* **`scenes`**: Graph nodes representing spatial locations (`id`, `label`, `description`, `image_url`).
+* **`sections`**: Optional world sections (regions) that group scenes on a world map (`id`, `label`, `description`, `map_x`/`map_y`, `status` `built`/`stub`, `brief`, `planned_links`). Stored in `AdventureTemplate.world_sections` (JSON, `engine/world/sections.py`); scenes name theirs in `WorldScene.section_id`. Purely spatial, they gate nothing. Sessions get only built regions without author fields: `session_adventure.template_columns` / `build_session_snapshot` filter them (`player_sections`, `session_manifest`). The CURRENT STATE location block of both passes carries a `Region:` line (`sections.region_line`); the map API adds `sections`, `section_links`, `current_section_id` and node `section_id` (`interaction/map_sections.py`). Editor: Regions page, `PUT /editor/sections`, `POST /editor/sections/assign` (`editing/section_crud.py`). Spec and later phases (travel time, fast travel, per-region generation): `docs/specs/world_sections.md`.
+* **`scenes`**: Graph nodes representing spatial locations (`id`, `label`, `description`, `image_url`, optional `section_id`).
 * **`exits`**: Graph edges between scenes (`from_scene_id`, `to_scene_id`, `exit_type`, `is_locked`, `code_to_unlock`, `item_to_unlock`, `rule_to_unlock`).
 * **`npcs`**: Non-player characters with spatial position, stats, inventory, hidden flag, movement type (`STATIONARY` vs `MOVABLE`), and optional TTS voice.
 * **`objects`**: Interactive scene items or inventory objects (`CONTAINER`, `SWITCH`, `CONTAINER_SWITCH`, `WEAPON`, `WEARABLE`, `CONSUMABLE`, `KEY`, `READABLE`, `CONSTRUCTABLE`). Containers support locks and nested items; switches hold finite state machines (`switch_states`, `switch_actions`); `CONTAINER_SWITCH` combines both in one entity (shown in Room Discoveries with an integrated switch inside the container panel); non-container items support take-locking (`locked: true`), keeping them visible and inspectable in a scene or container while preventing pickup until unlocked. Quest items (`quest_item: true`, `engine/rules/quest_items.py`) can never be given to NPCs or companions by the player and GM removals of them are reverted as rule violations; scripts still move them; the play view frames them in gold.

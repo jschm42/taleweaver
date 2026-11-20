@@ -42,6 +42,7 @@ from backend.api.routes.adventures.editing.common import (
 from backend.api.routes.adventures.editing.entity_update.protagonist import (
     update_protagonist_scripts,
 )
+from backend.api.routes.adventures.editing.section_crud import patched_section_id
 from backend.engine.audio.audio_library import track_id_or_none
 from backend.engine.conversations.npc_fields import CONVERSATION_FIELDS, store_conversation_fields
 from backend.engine.rules.npc_memory import store_memory_slots
@@ -164,6 +165,9 @@ async def _patch_scene(
         scene.audio_track_id = track_id_or_none(updates["audio_track_id"])
     if "is_respawn_point" in updates:
         scene.is_respawn_point = updates["is_respawn_point"] is True
+    if "section_id" in updates:
+        adv = await db.get(AdventureTemplate, template_id)
+        scene.section_id = patched_section_id(adv, updates["section_id"], scene.section_id)
     set_columns(scene, SCENE_SCRIPT_FIELDS, updates)
     return f"scene:{scene.id}"
 

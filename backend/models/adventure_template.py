@@ -77,6 +77,8 @@ class AdventureTemplate(Base, TimestampMixin):
     audio_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )
+    # World sections (regions) that group the scenes; None = no sections (engine/world/sections.py).
+    world_sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     # Dialog skin chosen by the author: {"skin": <id>, "accent": "#rrggbb"} (see core/ui_theme.py)
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 

@@ -50,6 +50,8 @@ export interface EntityEditData {
   companions_allowed?: boolean
   /** Scenes: revival point for the respawn mode. */
   is_respawn_point?: boolean
+  /** Scenes: world section (region) id; '' takes the scene out of its section. */
+  section_id?: string
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string

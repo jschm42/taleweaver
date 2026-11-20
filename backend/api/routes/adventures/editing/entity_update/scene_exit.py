@@ -17,6 +17,7 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_new_id,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.api.routes.adventures.editing.section_crud import resolve_target_section
 from backend.engine.audio.audio_library import track_id_or_none
 from backend.engine.world.dynamic_scene_schemas import (
     build_dynamic_placeholder_scene_id,
@@ -26,6 +27,7 @@ from backend.engine.world.scene_fields import (
     SCENE_AUDIO_FIELDS,
     SCENE_RESPAWN_FIELDS,
     SCENE_SCRIPT_FIELDS,
+    SCENE_SECTION_FIELDS,
 )
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -116,7 +118,12 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
     if entry is None:
         entry = {"id": scene.id, "name": scene.label, "description": scene.description}
         scenes.append(entry)
-    fields = (*SCENE_SCRIPT_FIELDS, *SCENE_AUDIO_FIELDS, *SCENE_RESPAWN_FIELDS)
+    fields = (
+        *SCENE_SCRIPT_FIELDS,
+        *SCENE_AUDIO_FIELDS,
+        *SCENE_RESPAWN_FIELDS,
+        *SCENE_SECTION_FIELDS,
+    )
     entry.update({f: getattr(scene, f) for f in fields})
     entry["dynamic_zone"] = scene.dynamic_zone
     manifest["scenes"] = scenes
@@ -156,6 +163,8 @@ async def update_scene(
     _update_scene_dynamic_zone(scene, payload)
     if given(payload, "is_respawn_point"):
         scene.is_respawn_point = payload.is_respawn_point is True
+    if given(payload, "section_id"):
+        scene.section_id = resolve_target_section(adv, payload.section_id)
     copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
     _sync_scene_manifest(adv, scene)
 

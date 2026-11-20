@@ -21,6 +21,7 @@ from backend.core.world_validation import (
     npc_memory,
     progression,
     recipes,
+    sections,
     story,
     topology,
 )
@@ -38,6 +39,8 @@ CHECKS: tuple[Check, ...] = (
     topology.check_duplicate_ids,
     topology.check_entity_placement,
     topology.check_npc_allowed_scenes,
+    sections.check_scene_sections,
+    sections.check_section_coverage,
     progression.check_key_progression,
     entities.check_item_references,
     entities.check_container_inventory,

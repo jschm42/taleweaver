@@ -40,6 +40,8 @@ class WorldScene(Base, TimestampMixin):
     dynamic_zone = Column(JSON, nullable=True)
     # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
     is_respawn_point = Column(Boolean, nullable=False, default=False, server_default="0")
+    # World section (region) of the scene: an id of AdventureTemplate.world_sections, or None.
+    section_id = Column(String(50), nullable=True)
     adventure_id = synonym("template_id")
 
 

@@ -18,6 +18,7 @@ from backend.engine.manifest_apply.visuals import (
 from backend.engine.media.image_prompt_context import build_scene_image_prompt
 from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
+from backend.engine.world.sections import section_id_or_none
 from backend.models.world_entity import WorldExit, WorldScene
 
 MAX_DECORATIVE_OBJECTS = 7
@@ -122,6 +123,7 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                     scene.get("audio_track_id") or scene.get("music_track_id")
                 ),
                 is_respawn_point=scene.get("is_respawn_point") is True,
+                section_id=section_id_or_none(scene.get("section_id")),
             )
         )
 

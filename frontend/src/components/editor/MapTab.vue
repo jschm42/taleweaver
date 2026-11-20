@@ -14,6 +14,8 @@ const props = defineProps<{
   visualsCacheVersion?: number
   activeSceneId?: string | null
   activeExitId?: string | null
+  /** Scenes outside the selected region that are shown only as its way out (dimmed). */
+  dimmedSceneIds?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -579,6 +581,7 @@ onMounted(() => {
               v-for="node in layoutData.nodes"
               :key="node.id"
               class="absolute pointer-events-auto cursor-pointer group"
+              :class="{ 'opacity-40': dimmedSceneIds?.includes(node.rawId) }"
               :style="{
                 left: (node.x - node.width / 2 + margin) + 'px',
                 top: (node.y - node.height / 2 + margin) + 'px',

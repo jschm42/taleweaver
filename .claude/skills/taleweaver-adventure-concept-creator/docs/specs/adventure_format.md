@@ -20,9 +20,10 @@ The manifest represents the complete blueprint of a generated or exported world.
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "adventure": { ... },
   "protagonist": { ... },
+  "sections": [ ... ],
   "scenes": [ ... ],
   "npcs": [ ... ],
   "objects": [ ... ],
@@ -42,7 +43,8 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.4.0` (current) | Current format. Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, companions (NPC `companion`, exit and sequence `companions_allowed`), and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
+| `1.5.0` (current) | Current format. Adds world sections (regions): top-level `sections` and scene `section_id`. |
+| `1.4.0` up to below `1.5.0` | Supported: importable and playable without restrictions (no world sections). Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, companions (NPC `companion`, exit and sequence `companions_allowed`), and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
 | `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions (predates optional `dynamic_generation` / `dynamic_zone` fields, companions, and respawning). |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
@@ -118,6 +120,30 @@ The baseline state and attributes of the player character.
 
 ---
 
+### 2.2a World sections (`sections`)
+
+Optional regions that group the scenes of a large world on a world map (a town, a mine, a
+mountain range). Without `sections` (or with `[]`) the adventure has no regions and behaves as
+before. Regions are purely spatial: they gate nothing; locks stay on exits. Spec and phases:
+[World sections](world_sections.md).
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `string` | Unique uppercase slug (e.g. `"HARBOR_TOWN"`, max 50). |
+| `label` | `string` | Region name shown to the player. |
+| `description` | `string` | One paragraph. While the player is in the region, the Game Master sees `Region: <label>: <description>` in the location block. |
+| `map_x`, `map_y` | `number` | Position on the world map in percent (0-100; 0/0 = top left). |
+| `order_index` | `number` | List order in the editor. |
+| `status` | `"built"` \| `"stub"` \| `"generating"` | `built` (default): the region holds scenes. `stub`: a planned region without scenes, visible to authors only. Sessions never receive stub regions or the author fields below. |
+| `brief` | `string` | Optional author directions for building a planned region. |
+| `summary` | `string` | Optional short summary of the region's content, used by later generation steps. |
+| `planned_links` | `array` | Planned routes of a planned region, whose exits do not exist yet: `[{"to_section_id", "travel_minutes", "note"}]`. Links between built regions come from exits whose two scenes lie in different regions. |
+
+Exports always contain all regions, planned ones included, so a campaign can be continued
+from the file. A session copies the built regions into its adventure snapshot at start.
+
+---
+
 ### 2.3 Scenes (`scenes`)
 
 The physical locations composing the world map.
@@ -131,6 +157,7 @@ The physical locations composing the world map.
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `audio_track_id` | `string` \| `null` | Optional `id` of the `adventure.audio_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the audio fades out. |
 | `is_respawn_point` | `boolean` | Optional, default `false`. A revival point: in respawn mode a protagonist who falls to 0 HP wakes up at the last one reached (see [Respawn](#respawn)). *(since 1.4.0)* |
+| `section_id` | `string` \| `null` | Optional `id` of the `sections` entry (region) the scene lies in. `null`: no region. A scene may not belong to a planned (`stub`) region. *(since 1.5.0)* |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
 | `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |
