@@ -56,17 +56,31 @@ while a test file is in no suite or a backend module is in no suite's `sources` 
 
 The import check only follows **direct** imports. Following them transitively would select
 most of the suite, because the turn pipeline and `backend.main` import nearly everything.
-The suites cover the area around a change instead. The selection is a fast safety net, not a
-replacement for the full suite: run `run all` before larger merges.
+The suites cover the area around a change instead. The selection is a fast check before
+opening a pull request, not a replacement for the full suite.
 
-## Pre-push hook
+## CI: the gate before a merge
 
-`.githooks/pre-push` runs `affected` for the commits being pushed and blocks the push when a
-test fails. `setup.ps1` / `setup.sh` link the hooks; with a manual setup run:
+Every pull request into `main` runs [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
+
+| Job | Runs |
+| --- | --- |
+| `backend-lint-test` | Ruff on the changed files, mypy (informational), the full pytest suite |
+| `frontend-test` | `npm ci`, `npm test`, `npm run build` |
+
+A failing job fails the check. A branch ruleset on `main` (Settings → Rules → Rulesets)
+makes both jobs required status checks, so a pull request can only be merged when they
+pass.
+
+## Git hooks
+
+`setup.ps1` / `setup.sh` link the hooks; with a manual setup run:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook stays lint-only (Ruff), so commits stay fast. To skip the tests for one
-push, use `git push --no-verify` or set `TW_SKIP_TESTS=1`.
+- `pre-commit` runs Ruff on the staged Python files.
+- `pre-push` is **opt-in**: it runs `affected` for the pushed commits and blocks the push on
+  failures only when `TW_PRE_PUSH_TESTS=1` is set. Without it the hook does nothing, because
+  CI checks every pull request anyway.

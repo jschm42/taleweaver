@@ -1,7 +1,11 @@
 #!/bin/sh
-# TaleWeaver Git Pre-Push Hook
-# Runs the tests the pushed commits can affect (scripts/run_tests.py pre-push).
-# Skip once with `git push --no-verify` or TW_SKIP_TESTS=1.
+# TaleWeaver Git Pre-Push Hook (opt-in)
+# Runs the tests the pushed commits can affect (scripts/run_tests.py pre-push), but only
+# with TW_PRE_PUSH_TESTS=1. The required gate is CI on the pull request (docs/testing.md).
+
+if [ "$TW_PRE_PUSH_TESTS" != "1" ]; then
+    exit 0
+fi
 
 echo "🧪 TaleWeaver pre-push: running the affected tests..."
 

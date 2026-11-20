@@ -5,7 +5,7 @@ Usage:
     python scripts/run_tests.py run turn npc [-- -x]
     python scripts/run_tests.py run all
     python scripts/run_tests.py affected [--staged | --base REF] [--dry-run] [-- -x]
-    python scripts/run_tests.py pre-push        # used by .githooks/pre-push (reads stdin)
+    python scripts/run_tests.py pre-push        # opt-in .githooks/pre-push (TW_PRE_PUSH_TESTS=1)
 
 Suites are defined in ``tests/suites.toml``. ``affected`` (and the pre-push hook) picks:
 changed test files; for a changed source file the suites whose ``sources`` match it
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import os
 import shutil
 import subprocess
 import sys
@@ -310,9 +309,6 @@ def cmd_affected(args: argparse.Namespace) -> int:
 
 
 def cmd_pre_push(args: argparse.Namespace) -> int:
-    if os.environ.get("TW_SKIP_TESTS") == "1":
-        print("TW_SKIP_TESTS=1: skipping the pre-push tests.")
-        return 0
     return _select_and_run(pre_push_changed_files(sys.stdin.read().splitlines()), args)
 
 
