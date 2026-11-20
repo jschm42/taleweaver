@@ -81,8 +81,8 @@ fully explains).
 
 * The pre-commit hook (`.githooks/pre-commit`) runs Ruff on staged Python files. Never skip
   it with `--no-verify`; fix the findings instead.
-* The pre-push hook (`.githooks/pre-push`) runs the affected tests. Never skip it either;
-  run `poetry run python scripts/run_tests.py affected` before pushing to see failures early.
+* CI must pass before a pull request into `main` can be merged. Run
+  `poetry run python scripts/run_tests.py affected` before pushing to see failures early.
 * Pass the message with a heredoc or `-F -` so newlines and quotes survive:
   `git commit -F - <<'EOF' ... EOF`.
 * Commit on a feature branch, not directly on `main`, unless the user says otherwise.

@@ -291,7 +291,7 @@ Afterwards, start TaleWeaver with the run script. It pulls the latest changes, r
 git clone https://github.com/jschm42/taleweaver.git
 cd taleweaver
 poetry install
-git config core.hooksPath .githooks   # lint on commit, affected tests on push (docs/testing.md)
+git config core.hooksPath .githooks   # Ruff on commit; tests run in CI (docs/testing.md)
 
 # 2. Configure environment & encryption keys
 cp .env.example .env
