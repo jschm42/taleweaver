@@ -51,13 +51,5 @@ jobs:
         poetry run mypy backend --ignore-missing-imports || true # Optional: remove || true once fully typed
 
     - name: Run Tests with pytest
-      run: |
-        # Ensure a tests directory exists or this step will fail natively.
-        # We handle it gracefully in case it doesn't exist yet.
-        if [ -d "backend/tests" ]; then
-          poetry run pytest backend/tests/ -v
-        elif [ -d "tests" ]; then
-          poetry run pytest tests/ -v || true
-        else
-          echo "No tests directory found. Skipping tests."
-        fi
+      # The full suite; the pre-push hook only runs the affected tests (docs/testing.md).
+      run: poetry run pytest tests/ -q
