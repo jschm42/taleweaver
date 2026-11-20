@@ -227,7 +227,11 @@ def build_manifest(skill: Skill, version: str) -> dict[str, Any]:
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
     """Write pretty-printed UTF-8 JSON. O(size of data)."""
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    # LF on every platform: git checks the skill out with LF (.gitattributes), and the
+    # manifest checksums package.json byte by byte.
+    path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+    )
 
 
 # --- Bundle ------------------------------------------------------------------------
