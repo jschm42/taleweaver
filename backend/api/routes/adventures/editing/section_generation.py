@@ -5,8 +5,6 @@
   ``stub`` with its ``generation_error``. The editor polls its assets to see the result.
 - ``POST /{template_id}/editor/sections/plan``: returns a proposal (campaign outline plus
   planned regions). Nothing is stored; the author reviews and saves it on the Regions page.
-- ``POST`` / ``DELETE /{template_id}/editor/sections/map-image``: draws (or removes) the
-  world map image from the regions (``engine/world/section_map_image.py``).
 
 Spec: docs/specs/world_sections.md (9.3-9.4).
 """
@@ -14,7 +12,6 @@ Spec: docs/specs/world_sections.md (9.3-9.4).
 from __future__ import annotations
 
 import asyncio
-import copy
 import logging
 from typing import Any
 
@@ -33,7 +30,6 @@ from backend.engine.world.section_generator import (
     generate_section,
     plan_sections,
 )
-from backend.engine.world.section_map_image import world_map_prompt
 from backend.engine.world.sections import normalize_sections, section_id_or_none
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -173,49 +169,3 @@ async def plan_editor_sections(
         return await plan_sections(db, template_id, current_user, payload.count, payload.direction)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/{template_id}/editor/sections/map-image")
-async def generate_world_map_image(
-    template_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """Draws the world map image from the regions and their positions (image model)."""
-    from backend.core.style_catalog import resolve_style_instruction
-    from backend.engine.media.media_engine import MediaEngine
-
-    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
-    if not normalize_sections(adv.world_sections):
-        raise HTTPException(status_code=400, detail="Add regions before drawing the world map.")
-    keys = current_user.encrypted_api_keys
-    try:
-        url = await MediaEngine.generate_scene_image(
-            world_map_prompt(adv),
-            template_id,
-            {"t2i_settings": current_user.t2i_settings},
-            copy.copy(keys) if keys else {},
-            style_instruction=resolve_style_instruction(
-                adv.selected_image_styles, current_user.image_styles_catalog
-            ),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if not url:
-        raise HTTPException(status_code=502, detail="The image model returned no image.")
-    adv.world_map_image_url = url
-    await db.commit()
-    return {"world_map_image_url": url}
-
-
-@router.delete("/{template_id}/editor/sections/map-image")
-async def remove_world_map_image(
-    template_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """Removes the world map image (the file stays in the adventure's library)."""
-    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
-    adv.world_map_image_url = None
-    await db.commit()
-    return {"world_map_image_url": None}

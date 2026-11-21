@@ -509,7 +509,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "audio_enabled": bool(getattr(adv, "audio_enabled", True)),
         "fast_travel_enabled": getattr(adv, "fast_travel_enabled", True) is not False,
         "world_outline": normalize_outline(getattr(adv, "world_outline", None)),
-        "world_map_image_url": getattr(adv, "world_map_image_url", None),
+        "world_map_layout": deepcopy(getattr(adv, "world_map_layout", None)),
         "title_track_id": adv.title_track_id,
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
@@ -625,9 +625,8 @@ def _localize_manifest_images(
     adventure["image_url"] = _localize_asset_path(
         adventure.get("image_url"), adventure_dir, asset_mapping
     )
-    adventure["world_map_image_url"] = _localize_asset_path(
-        adventure.get("world_map_image_url"), adventure_dir, asset_mapping
-    )
+    for tile in (adventure.get("world_map_layout") or {}).get("tiles") or []:
+        tile["url"] = _localize_asset_path(tile.get("url"), adventure_dir, asset_mapping)
     if manifest["protagonist"]:
         manifest["protagonist"]["profile_image"] = _localize_asset_path(
             manifest["protagonist"].get("profile_image"), adventure_dir, asset_mapping

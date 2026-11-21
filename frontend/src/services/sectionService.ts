@@ -3,6 +3,7 @@
  * Spec: docs/specs/world_sections.md.
  */
 import { API_BASE, authHeaders } from '@/services/http'
+import type { MapLayout } from '@/types'
 
 export type SectionStatus = 'built' | 'stub' | 'generating'
 
@@ -51,6 +52,26 @@ export interface WorldOutline {
   arc: string[]
   sections: OutlineSection[]
   threads: OutlineThread[]
+}
+
+export interface MapPromptInfo {
+  prompt: string
+  style: string
+  tone: string
+}
+
+export interface MapTileOptions {
+  col: number
+  row: number
+  prompt: string
+  use_style: boolean
+  use_tone: boolean
+}
+
+/** The layout as the editor payload holds it (adventure.world_map_layout). */
+export function layoutOf(adventure: Record<string, unknown> | null | undefined): MapLayout | null {
+  const raw = adventure?.world_map_layout as MapLayout | null | undefined
+  return raw && Array.isArray(raw.tiles) ? raw : null
 }
 
 export interface RegionPlan {
@@ -128,22 +149,49 @@ export const sectionService = {
     return await res.json()
   },
 
-  /** Draws the world map image from the regions (image model); returns its URL. */
-  async generateMapImage(adventureId: string): Promise<string> {
+  /** The default prompt of one map tile plus the adventure's image style and tone. */
+  async getMapPrompt(adventureId: string, col: number, row: number): Promise<MapPromptInfo> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image/prompt?col=${col}&row=${row}`, {
+      headers: authHeaders(false),
+    })
+    if (!res.ok) throw await failure(res, 'Failed to load the map prompt.')
+    return await res.json()
+  },
+
+  /** Draws one map tile (image model); a tile next to the map grows it. */
+  async generateMapTile(adventureId: string, options: MapTileOptions): Promise<MapLayout | null> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image`, {
       method: 'POST',
       headers: authHeaders(true),
+      body: JSON.stringify(options),
     })
-    if (!res.ok) throw await failure(res, 'Failed to draw the world map.')
-    return (await res.json()).world_map_image_url
+    if (!res.ok) throw await failure(res, 'Failed to draw the map tile.')
+    return (await res.json()).world_map_layout
   },
 
-  async removeMapImage(adventureId: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image`, {
-      method: 'DELETE',
-      headers: authHeaders(true),
+  /** Uploads an own image as one map tile (PNG, JPEG or WEBP, up to 4096 px and 12 MB). */
+  async uploadMapTile(adventureId: string, col: number, row: number, file: File): Promise<MapLayout | null> {
+    const payload = new FormData()
+    payload.append('col', String(col))
+    payload.append('row', String(row))
+    payload.append('file', file)
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image/upload`, {
+      method: 'POST',
+      headers: authHeaders(false),
+      body: payload,
     })
-    if (!res.ok) throw await failure(res, 'Failed to remove the world map image.')
+    if (!res.ok) throw await failure(res, 'Failed to upload the map tile.')
+    return (await res.json()).world_map_layout
+  },
+
+  /** Removes one map tile; empty last columns and rows are dropped. */
+  async removeMapTile(adventureId: string, col: number, row: number): Promise<MapLayout | null> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image?col=${col}&row=${row}`, {
+      method: 'DELETE',
+      headers: authHeaders(false),
+    })
+    if (!res.ok) throw await failure(res, 'Failed to remove the map tile.')
+    return (await res.json()).world_map_layout
   },
 
   /** Moves scenes into a section (a planned one becomes built), or out of all with null. */

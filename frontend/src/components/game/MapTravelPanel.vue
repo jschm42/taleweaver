@@ -1,22 +1,18 @@
 <script setup lang="ts">
 /**
- * MapTravelPanel — the bottom strip of the world map: the regions the player discovered and
- * the unlocked fast travel points. Choosing a point asks for confirmation and emits `travel`;
+ * MapTravelPanel — the bottom strip of the map: the unlocked fast travel points. Choosing a point asks for confirmation and emits `travel`;
  * the game view then sends `/fast_travel <scene id>` (docs/specs/world_sections.md, 6.3).
  */
 import { computed, ref, watch } from 'vue'
 import { api } from '@/composables/useApi'
 import { useConfirm } from '@/composables/useDialogs'
-import type { MapRegion, MapRegionLink, TravelOptions, TravelPoint } from '@/types'
-import PlayerRegionMap from '@/components/game/PlayerRegionMap.vue'
+import type { MapRegion, TravelOptions, TravelPoint } from '@/types'
 
 const props = defineProps<{
   open: boolean
   gameId: string
   regions: MapRegion[]
-  regionLinks: MapRegionLink[]
   currentRegionId: string | null
-  mapImageUrl?: string | null
 }>()
 
 const emit = defineEmits<{ (e: 'travel', sceneId: string): void }>()
@@ -28,7 +24,7 @@ const failed = ref('')
 
 const regionLabels = computed(() => Object.fromEntries(props.regions.map((r) => [r.id, r.label])))
 const points = computed(() => options.value?.points || [])
-const visible = computed(() => props.regions.length > 0 || points.value.length > 0)
+const visible = computed(() => points.value.length > 0)
 
 async function load(): Promise<void> {
   if (!props.gameId) return
@@ -72,26 +68,6 @@ async function travel(point: TravelPoint): Promise<void> {
 
 <template>
   <div v-if="visible" class="tw-dialog-header shrink-0 px-4 sm:px-8 py-3 space-y-2 border-t max-h-[45%] overflow-y-auto">
-    <PlayerRegionMap
-      v-if="regions.length > 1"
-      :regions="regions"
-      :links="regionLinks"
-      :current-region-id="currentRegionId"
-      :image-url="mapImageUrl"
-    />
-    <div v-else-if="regions.length" class="flex flex-wrap items-center gap-2 text-xs">
-      <span class="tw-muted">Regions:</span>
-      <span
-        v-for="region in regions"
-        :key="region.id"
-        class="tw-dialog-chip !opacity-100"
-        :class="{ 'ring-1 ring-current': region.id === currentRegionId }"
-        :title="region.description"
-      >
-        {{ region.label }}<span v-if="region.discovery === 'revealed'" class="tw-muted"> (seen)</span>
-      </span>
-    </div>
-
     <div v-if="loading" class="tw-muted text-xs">Loading travel points...</div>
     <div v-else-if="failed" class="text-xs text-red-300">{{ failed }}</div>
     <template v-else-if="points.length">

@@ -427,53 +427,6 @@ async def test_sections_survive_export_and_import(auth_client, setup_test_db, mo
 # --- world map image -------------------------------------------------------------------------
 
 
-def test_world_map_prompt_places_regions_by_compass_and_forbids_text():
-    from backend.engine.world.section_map_image import world_map_prompt
-
-    # Arrange
-    adventure = SimpleNamespace(
-        world_sections=[
-            {**HARBOR, "map_x": 10, "map_y": 90},
-            {"id": "PEAKS", "label": "Peaks", "map_x": 80, "map_y": 10, "status": "stub", "brief": "Ice."},
-        ],
-        plot="A storm.",
-    )  # fmt: skip
-
-    # Act
-    prompt = world_map_prompt(adventure)
-
-    # Assert
-    assert "Harbor Town in the south-west: A fishing port." in prompt
-    assert "Peaks in the north-east: Ice." in prompt
-    assert "No text" in prompt
-
-
-@pytest.mark.asyncio
-async def test_drawing_the_world_map_stores_the_image_and_the_map_returns_it(
-    auth_client, setup_test_db, monkeypatch
-):
-    monkeypatch.setattr(
-        "backend.engine.media.media_engine.MediaEngine.generate_scene_image",
-        AsyncMock(return_value="/data/adventures/library/x/scenes/map.png"),
-    )
-    # Arrange
-    template_id = await _seed_template([HARBOR])
-
-    # Act
-    drawn = await auth_client.post(f"/api/adventures/{template_id}/editor/sections/map-image")
-    world_map = await auth_client.get(f"/api/adventures/{template_id}/map")
-    removed = await auth_client.delete(f"/api/adventures/{template_id}/editor/sections/map-image")
-
-    # Assert
-    assert drawn.status_code == 200, drawn.text
-    assert drawn.json()["world_map_image_url"].endswith("map.png")
-    assert world_map.json()["world_map_image_url"].endswith("map.png")
-    assert removed.json() == {"world_map_image_url": None}
-    async with TestSessionLocal() as db:
-        adv = await db.get(AdventureTemplate, template_id)
-    assert adv.world_map_image_url is None
-
-
 @pytest.mark.asyncio
 async def test_drawing_needs_regions(auth_client, setup_test_db):
     # Arrange
@@ -484,3 +437,164 @@ async def test_drawing_needs_regions(auth_client, setup_test_db):
 
     # Assert
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_map_prompt_can_be_edited_and_tone_and_style_are_optional(
+    auth_client, setup_test_db, monkeypatch
+):
+    calls = []
+
+    async def _draw(prompt, _template_id, _config, _keys, style_instruction=None):
+        calls.append((prompt, style_instruction))
+        return "/data/adventures/library/x/scenes/map.png"
+
+    monkeypatch.setattr("backend.engine.media.media_engine.MediaEngine.generate_scene_image", _draw)
+    # Arrange
+    template_id = await _seed_template([HARBOR])
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, template_id)
+        adv.selected_tone = {"id": "grim", "instruction": "Grim and rainy."}
+        adv.selected_image_styles = [{"id": "ink", "instruction": "Ink drawing."}]
+        await db.commit()
+    url = f"/api/adventures/{template_id}/editor/sections/map-image"
+
+    # Act
+    info = (await auth_client.get(f"{url}/prompt")).json()
+    await auth_client.post(
+        url, json={"prompt": "A parchment map.", "use_style": True, "use_tone": True}
+    )
+    await auth_client.post(
+        url, json={"prompt": "A parchment map.", "use_style": False, "use_tone": False}
+    )
+
+    # Assert
+    assert "Harbor Town" in info["prompt"] and info["tone"] == "Grim and rainy."
+    assert calls[0] == ("A parchment map. Mood and atmosphere: Grim and rainy.", "Ink drawing.")
+    assert calls[1] == ("A parchment map.", None)
+
+
+def test_tiles_grow_the_grid_only_next_to_the_map_and_shrink_again():
+    from backend.engine.world.world_map_layout import place_tile, remove_tile
+
+    # Act
+    one = place_tile(None, 0, 0, "/a.png")
+    wide = place_tile(one, 1, 0, "/b.png")
+    tall = place_tile(wide, 0, 1, "/c.png")
+    shrunk = remove_tile(remove_tile(tall, 0, 1), 1, 0)
+
+    # Assert
+    assert (wide["cols"], wide["rows"]) == (2, 1)
+    assert (tall["cols"], tall["rows"]) == (2, 2) and len(tall["tiles"]) == 3
+    assert (shrunk["cols"], shrunk["rows"]) == (1, 1)
+    with pytest.raises(ValueError):
+        place_tile(one, 2, 0, "/far.png")
+
+
+def test_region_positions_follow_a_growing_grid():
+    from backend.engine.world.world_map_layout import rescale_sections
+
+    # Act
+    sections = rescale_sections(
+        normalize_sections([{**HARBOR, "map_x": 50, "map_y": 80}]), (1, 1), (2, 2)
+    )
+
+    # Assert
+    assert (sections[0]["map_x"], sections[0]["map_y"]) == (25.0, 40.0)
+
+
+def test_tile_prompt_names_its_part_and_its_regions():
+    from backend.engine.world.world_map_layout import tile_prompt
+
+    # Arrange: a 2x1 map; HARBOR lies in the right tile, PEAKS in the left one.
+    adventure = SimpleNamespace(
+        world_sections=[
+            {**HARBOR, "map_x": 80, "map_y": 90},
+            {"id": "PEAKS", "label": "Peaks", "map_x": 10, "map_y": 10, "status": "stub", "brief": "Ice."},
+        ],
+        plot="A storm.",
+    )  # fmt: skip
+    layout = {"cols": 2, "rows": 1, "tiles": [{"col": 0, "row": 0, "url": "/a.png"}]}
+
+    # Act
+    right = tile_prompt(adventure, layout, 1, 0)
+
+    # Assert
+    assert "column 2 of 2, row 1 of 1" in right
+    assert "Harbor Town in the south: A fishing port." in right
+    assert "Peaks" not in right and "No text" in right
+
+
+@pytest.mark.asyncio
+async def test_drawing_tiles_extends_the_map_and_moves_the_regions(
+    auth_client, setup_test_db, monkeypatch
+):
+    monkeypatch.setattr(
+        "backend.engine.media.media_engine.MediaEngine.generate_scene_image",
+        AsyncMock(return_value="/data/adventures/library/x/scenes/tile.png"),
+    )
+    # Arrange
+    template_id = await _seed_template([{**HARBOR, "map_x": 60, "map_y": 40}])
+    url = f"/api/adventures/{template_id}/editor/sections/map-image"
+
+    # Act
+    first = await auth_client.post(url, json={"col": 0, "row": 0})
+    second = await auth_client.post(url, json={"col": 1, "row": 0})
+    world_map = (await auth_client.get(f"/api/adventures/{template_id}/map")).json()
+    async with TestSessionLocal() as db:
+        moved = (await db.get(AdventureTemplate, template_id)).world_sections[0]["map_x"]
+    far = await auth_client.post(url, json={"col": 3, "row": 0})
+    removed = await auth_client.delete(f"{url}?col=1&row=0")
+
+    # Assert
+    assert first.status_code == 200, first.text
+    assert second.json()["world_map_layout"]["cols"] == 2
+    assert world_map["world_map_layout"]["cols"] == 2
+    assert moved == 30.0
+    assert far.status_code == 400
+    assert removed.json()["world_map_layout"]["cols"] == 1
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, template_id)
+    assert adv.world_sections[0]["map_x"] == 60.0
+
+
+@pytest.mark.asyncio
+async def test_an_own_tile_can_be_uploaded(auth_client, setup_test_db, tmp_path, monkeypatch):
+    import io
+
+    from PIL import Image
+
+    from backend.core.config import settings
+
+    monkeypatch.setattr(settings, "DATA_DIR", str(tmp_path))
+    # Arrange
+    template_id = await _seed_template([HARBOR])
+    buffer = io.BytesIO()
+    Image.new("RGB", (64, 36), "white").save(buffer, format="PNG")
+
+    # Act
+    resp = await auth_client.post(
+        f"/api/adventures/{template_id}/editor/sections/map-image/upload",
+        data={"col": "0", "row": "1"},
+        files={"file": ("map.png", buffer.getvalue(), "image/png")},
+    )
+
+    # Assert
+    assert resp.status_code == 200, resp.text
+    layout = resp.json()["world_map_layout"]
+    assert (layout["cols"], layout["rows"]) == (1, 2)
+    assert "/visuals/world_map/" in layout["tiles"][0]["url"]
+
+
+def test_imported_layout_keeps_only_tiles_with_files():
+    from backend.engine.world.world_map_layout import imported_map_layout
+
+    # Act
+    layout = imported_map_layout(
+        {"cols": 2, "rows": 1, "tiles": [{"col": 0, "row": 0, "url": "assets/a.png"},
+                                         {"col": 1, "row": 0, "url": "assets/missing.png"}]},
+        {"assets/a.png": "/data/adventures/library/new/a.png"},
+    )  # fmt: skip
+
+    # Assert
+    assert layout["tiles"] == [{"col": 0, "row": 0, "url": "/data/adventures/library/new/a.png"}]

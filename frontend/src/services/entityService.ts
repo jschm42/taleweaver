@@ -146,6 +146,9 @@ export interface ExitCreateData {
   from_scene_id: string
   to_scene_id: string
   label: string
+  /** In-game minutes the way takes (a long journey between regions). */
+  travel_minutes?: number | null
+  travel_label?: string
   exit_type?: 'one_way' | 'bidirectional'
   is_locked?: boolean
   is_revealed?: boolean

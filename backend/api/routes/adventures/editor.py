@@ -15,6 +15,7 @@ from backend.api.routes.adventures.editing import (
     script_assist,
     section_crud,
     section_generation,
+    section_map_routes,
     story_crud,
     validation,
     world_builder_instruct,
@@ -48,6 +49,7 @@ for _module in (
     story_crud,
     section_crud,
     section_generation,
+    section_map_routes,
     entity_update,
     generation,
 ):

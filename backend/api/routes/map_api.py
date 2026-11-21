@@ -140,7 +140,7 @@ async def get_map(
         await _scene_sections(db, template_id, session_id),
         getattr(adventure, "world_sections", None),
     )
-    map_dict["world_map_image_url"] = getattr(adventure, "world_map_image_url", None)
+    map_dict["world_map_layout"] = getattr(adventure, "world_map_layout", None)
     return map_dict
 
 

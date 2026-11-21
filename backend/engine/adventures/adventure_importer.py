@@ -35,6 +35,7 @@ from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
 from backend.engine.world.sections import manifest_sections
 from backend.engine.world.world_generator import WorldGenerator
+from backend.engine.world.world_map_layout import imported_map_layout
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -103,7 +104,7 @@ def _apply_imported_media(
     template.title_track_id = title_track_or_none(
         adv_data.get("title_track_id"), template.audio_tracks
     )
-    template.world_map_image_url = asset_mapping.get(adv_data.get("world_map_image_url"))
+    template.world_map_layout = imported_map_layout(adv_data.get("world_map_layout"), asset_mapping)
 
 
 class AdventureConflictError(Exception):

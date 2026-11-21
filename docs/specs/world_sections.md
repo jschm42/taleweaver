@@ -7,7 +7,9 @@ instead of a toggle in the creation wizard (9.3).
 | --- | --- |
 | Player world map | `frontend/src/components/game/PlayerRegionMap.vue` (map dialog's travel strip) |
 | Triggers `on_enter_section` / `on_leave_section` | `api/routes/adventures/section_triggers.py`; fired after an exit, each fast travel step, GM transitions and the respawn (not for script teleports or `/debug goto`) |
-| World map image (`AdventureTemplate.world_map_image_url`, migration `e8a0c2d4f6b7`) | `engine/world/section_map_image.py`, `POST`/`DELETE /{template_id}/editor/sections/map-image`, map API field `world_map_image_url` |
+| World map tiles (`AdventureTemplate.world_map_layout` = `{cols, rows, tiles: [{col, row, url}]}`, migrations `e8a0c2d4f6b7`, `f1b3d5e7a9c2` converts the old single image into a 1 x 1 layout) | `engine/world/world_map_layout.py` (normalize, place/remove tile, rescale regions, per-tile prompt); `editing/section_map_routes.py`: `GET .../map-image/prompt?col&row` (default prompt of that tile, style, tone), `POST .../map-image {col, row, prompt, use_style, use_tone}`, `POST .../map-image/upload` (form `col`, `row`, `file`), `DELETE .../map-image?col&row`. A new tile must touch the map: one column right or one row below, at most 6 x 6. Growing or shrinking the grid rescales the region positions so they stay over the same spot. Map API field `world_map_layout`; export, import and cloning keep every tile. Editor: **Map images** dialog (tile grid, draw, upload, download, remove); both world maps (`components/worldmap/WorldMapViewport.vue`) zoom with the wheel or buttons and pan by dragging the background, markers keep their screen size |
+| Map views | Editor Map page and players' map dialog open on the world map; a region opens its scene graph (`utils/regionMapView.ts`, `regionGraph.regionSceneIds`), scenes without a region have an own entry; no view of all scenes at once |
+| Connections and travel times on the world map | `RegionMapCard.vue`: **Connect regions** creates a gateway exit between two built regions (scene of each, name, two-way, travel time) or a planned route with a planned region; a route's chip opens its travel time (the gateway exits' `travel_minutes`, or the planned route's), with an estimate from the map distance (hours per 10 % of the map) |
 | Quest region hint (quest `section_id`, blueprint `region:`) | `agent_objectives.py` ("continues in ..."), region generation fills it, quest dialog |
 | Several travel points per section | already possible: any number of scenes can be fast travel points (decision 7) |
 | Road events | recipe in the blueprint manual (*Long journeys and fast travel*) |
@@ -213,6 +215,13 @@ Update `docs/specs/adventure_format.md`.
 * `engine/interaction/map_sections.attach_sections` tags the map nodes with their section
   at response time (unexplored placeholders get none) and derives the discovered sections
   (`discovery: visited | revealed`) and the links between them from the known edges.
+
+### 6.1a How a route's travel time is set
+
+Nothing is calculated: a route between two built regions takes the `travel_minutes` of its
+gateway exits (the shortest one is shown on the world map), a planned route stores its own
+`travel_minutes` until its region is generated. The world map's route dialog edits them and can
+suggest a value from the straight-line map distance and a pace the author enters.
 
 ### 6.2 Travel time on exits (phase 2)
 

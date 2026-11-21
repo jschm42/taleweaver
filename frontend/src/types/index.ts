@@ -452,8 +452,15 @@ export interface WorldMapData {
   /** Links between discovered regions (known exits between their scenes). */
   section_links?: MapRegionLink[]
   current_section_id?: string | null
-  /** Drawn world map behind the regions, if the author made one. */
-  world_map_image_url?: string | null
+  /** Drawn world map behind the regions (a grid of image tiles), if the author made one. */
+  world_map_layout?: MapLayout | null
+}
+
+/** The drawn world map: a grid of 16:9 image tiles (AdventureTemplate.world_map_layout). */
+export interface MapLayout {
+  cols: number
+  rows: number
+  tiles: Array<{ col: number; row: number; url: string }>
 }
 
 export interface MapRegion {
