@@ -1017,6 +1017,7 @@ onMounted(() => {
             :open="open"
             :game-id="gameId"
             :regions="mapData?.sections || []"
+            :region-links="mapData?.section_links || []"
             :current-region-id="mapData?.current_section_id || null"
             @travel="(sceneId) => emit('travel', sceneId)"
           />

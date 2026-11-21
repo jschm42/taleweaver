@@ -25,6 +25,8 @@ export interface WorldSection {
   planned_links: PlannedLink[]
   /** Why the last generation of a planned region failed ("" = none). */
   generation_error?: string
+  /** What to check after a generation: fix-ups and new validation findings. */
+  generation_notes?: string[]
 }
 
 export interface OutlineSection {

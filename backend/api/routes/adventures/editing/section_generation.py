@@ -70,12 +70,44 @@ def _set_status(
     store_sections(adv, sections)
 
 
+async def _store_notes(
+    db: AsyncSession, template_id: str, section_id: str, notes: list[str]
+) -> None:
+    adv = await db.get(AdventureTemplate, template_id)
+    if adv is None:
+        return
+    sections = normalize_sections(adv.world_sections)
+    for section in sections:
+        if section["id"] == section_id:
+            section["generation_notes"] = notes
+    store_sections(adv, sections)
+    await db.commit()
+
+
+async def _findings(db: AsyncSession, template_id: str) -> dict[Any, Any]:
+    """Signatures of the adventure's validation findings (lazy import: the editor router
+    imports this module, and the change-set module imports the editor endpoints)."""
+    from backend.api.routes.adventures.editing.change_set import structural_findings
+    from backend.api.routes.adventures.editing.validation import _finding_signature
+
+    return {_finding_signature(f): f for f in await structural_findings(db, template_id)}
+
+
+async def _new_findings(db: AsyncSession, template_id: str, baseline: set[Any]) -> list[str]:
+    """Validation findings the generated region introduced (the Validation page has details)."""
+    after = await _findings(db, template_id)
+    return [f"{f.severity}: {f.message}" for key, f in after.items() if key not in baseline]
+
+
 async def run_generation(template_id: str, section_id: str, user_id: str) -> None:
     """The background job: generate and merge, or put the region back to planned."""
     async with session_factory()() as db:
         try:
             user = await apply_global_settings(db, await db.get(User, user_id))
-            await generate_section(db, template_id, section_id, user)
+            baseline = set(await _findings(db, template_id))
+            notes = await generate_section(db, template_id, section_id, user)
+            notes.extend(await _new_findings(db, template_id, baseline))
+            await _store_notes(db, template_id, section_id, notes)
         except Exception as exc:
             await db.rollback()
             detail = (

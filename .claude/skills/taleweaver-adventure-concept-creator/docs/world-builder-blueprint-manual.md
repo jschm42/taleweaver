@@ -626,7 +626,18 @@ section: HARBOR_TOWN
 
 Regions gate nothing: a route between two regions is an ordinary exit between their scenes, with the usual locks. Manage regions later on the editor's **Regions** page and filter the **Map** by region.
 
-A planned region does not have to be written by hand. On the **Regions** page, **Plan regions** proposes new planned regions and a campaign outline from the plot; **Generate region** then builds one planned region (6-10 scenes with characters, items, exits to its neighbours and fast travel points) from its brief, the outline and what already exists. Players who started the adventure earlier are offered the new region when they open their session.
+**Events on the road** belong in the exit's `on_use` script, which runs when the player takes the way (also during fast travel, where any message it writes stops the trip at that place):
+
+```text
+[Exit: HARBOR_SQUARE -> PASS_FOOT] the mountain road
+travel: 8h
+on_use: |
+  if tw.dice.random() < 0.3:
+      tw.time.advance('2h')
+      tw.story.narrate("A rockslide blocks the road. Finding a way around costs two hours.")
+```
+
+A planned region does not have to be written by hand. On the **Regions** page, **Plan regions** proposes new planned regions and a campaign outline from the plot; **Generate region** then builds one planned region (6-10 scenes with characters, items, exits to its neighbours and fast travel points) from its brief, the outline and what already exists. Players who started the adventure earlier are offered the new region when they open their session. While regions are still planned, finishing the last chapter does not end the adventure: players get a *To be continued* notice and keep exploring (a win guard or `tw.game.win()` still ends it).
 
 ### Long journeys and fast travel
 

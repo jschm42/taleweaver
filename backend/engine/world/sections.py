@@ -28,7 +28,15 @@ MAX_LINKS = 12
 MAX_NOTE_LENGTH = 200
 MAX_TRAVEL_MINUTES = 60 * 24 * 365
 # Fields only the author needs; sessions never receive them.
-AUTHOR_ONLY_KEYS = ("status", "brief", "summary", "planned_links", "generation_error")
+AUTHOR_ONLY_KEYS = (
+    "status",
+    "brief",
+    "summary",
+    "planned_links",
+    "generation_error",
+    "generation_notes",
+)
+MAX_NOTES = 12
 # Description length in the GM's CURRENT STATE region line.
 _PROMPT_DESCRIPTION_LENGTH = 300
 _ID_CLEAN = re.compile(r"[^A-Z0-9]+")
@@ -92,6 +100,12 @@ def _links(raw: Any, own_id: str) -> list[dict[str, Any]]:
     return list(links.values())[:MAX_LINKS]
 
 
+def _notes(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [n for n in (_text(v, MAX_NOTE_LENGTH * 2) for v in raw) if n][:MAX_NOTES]
+
+
 def _status(raw: Any) -> str:
     status = str(raw or "").strip().lower()
     return status if status in SECTION_STATUSES else DEFAULT_STATUS
@@ -118,6 +132,8 @@ def normalize_section(raw: Any, index: int = 0) -> Optional[dict[str, Any]]:
         "planned_links": _links(raw.get("planned_links"), section_id),
         # Why the last generation of a planned region failed ("" = none).
         "generation_error": _text(raw.get("generation_error"), MAX_NOTE_LENGTH * 3),
+        # What the author should check after a generation (fix-ups, new validation findings).
+        "generation_notes": _notes(raw.get("generation_notes")),
     }
 
 

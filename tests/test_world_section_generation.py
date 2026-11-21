@@ -400,3 +400,63 @@ async def test_expansion_adds_a_region_built_after_the_session_started(setup_tes
     assert [q["id"] for q in state.quests] == ["Q_HERMIT"]
     snap_sections = state.entity_states["__manifest_snapshot__"]["adventure"]["world_sections"]
     assert [s["id"] for s in snap_sections] == ["HARBOR", "PEAKS"]
+
+
+# --- after the last chapter / after a generation ---------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_planned_regions_keep_the_campaign_going(setup_test_db):
+    from backend.api.routes.adventures.campaign_continuation import (
+        TO_BE_CONTINUED_NOTE,
+        campaign_continues,
+        take_to_be_continued_note,
+    )
+
+    async with TestSessionLocal() as db:
+        # Arrange
+        adv = await _seed_template(db)
+        known = {"__manifest_snapshot__": {"adventure": {"world_sections": [HARBOR]}}}
+        state = SessionState(template_id="campaign", session_id="none", entity_states=known)
+
+        # Act
+        planned = await campaign_continues(db, state)
+        adv.world_sections = normalize_sections([HARBOR])
+        await db.commit()
+        finished = await campaign_continues(db, state)
+
+    first, second = take_to_be_continued_note(state), take_to_be_continued_note(state)
+
+    # Assert
+    assert planned is True and finished is False
+    assert first == TO_BE_CONTINUED_NOTE and second is None
+
+
+@pytest.mark.asyncio
+async def test_generation_notes_list_fixups_and_new_findings(setup_test_db, monkeypatch):
+    finding = SimpleNamespace(severity="warn", message="Region 'Peaks' has no fast travel point.")
+    rounds = iter([{}, {"new": finding}])
+
+    async def _generated(*_args, **_kwargs):
+        return ["Dropped on_init scripts."]
+
+    async def _findings(*_args, **_kwargs):
+        return next(rounds)
+
+    monkeypatch.setattr(section_generation, "generate_section", _generated)
+    monkeypatch.setattr(section_generation, "_findings", _findings)
+    monkeypatch.setattr(section_generation, "session_factory", lambda: TestSessionLocal)
+    async with TestSessionLocal() as db:
+        await _seed_template(db)
+
+    # Act
+    await section_generation.run_generation("campaign", "PEAKS", "nobody")
+
+    # Assert
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, "campaign")
+    peaks = next(s for s in adv.world_sections if s["id"] == "PEAKS")
+    assert peaks["generation_notes"] == [
+        "Dropped on_init scripts.",
+        "warn: Region 'Peaks' has no fast travel point.",
+    ]

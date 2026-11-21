@@ -27,6 +27,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import RegionForm from '@/components/editor/regions/RegionForm.vue'
 import RegionGenerateControls from '@/components/editor/regions/RegionGenerateControls.vue'
+import RegionGenerationNotes from '@/components/editor/regions/RegionGenerationNotes.vue'
 import RegionOutlineCard from '@/components/editor/regions/RegionOutlineCard.vue'
 import RegionPlanModal from '@/components/editor/regions/RegionPlanModal.vue'
 import RegionSceneAssignModal from '@/components/editor/regions/RegionSceneAssignModal.vue'
@@ -204,6 +205,11 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
             :scene-count="counts[selected.id] || 0"
             @assign-scenes="openAssign"
             @delete="deleteRegion(selected)"
+          />
+          <RegionGenerationNotes
+            v-if="selected.status === 'built' && selected.generation_notes?.length"
+            :notes="selected.generation_notes"
+            @dismiss="selected.generation_notes = []"
           />
           <RegionGenerateControls
             v-if="selected.status !== 'built'"

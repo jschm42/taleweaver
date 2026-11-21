@@ -142,9 +142,18 @@ async def apply_pending_sequence_progress(
     for seq_msg in seq_messages:
         db.add(ChatMessage(session_id=state.session_id, role="system", content=seq_msg))
     session_status = state.session.status if state.session else None
+    from backend.api.routes.adventures.campaign_continuation import (
+        campaign_continues,
+        take_to_be_continued_note,
+    )
     from backend.api.routes.adventures.out_of_turn_progress import last_sequence_ends_adventure
 
     all_completed = last_sequence_ends_adventure(adventure, state)
+    if all_completed and state.is_completed is not True and await campaign_continues(db, state):
+        note = take_to_be_continued_note(state)
+        if note:
+            db.add(ChatMessage(session_id=state.session_id, role="system", content=note))
+        all_completed = False
     if (state.is_completed is True or all_completed) and session_status not in TERMINAL_STATUSES:
         manager = GameTurnManager(
             db, state.session_id, user, state=state, adventure=adventure, avatar=avatar

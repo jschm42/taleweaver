@@ -7,12 +7,14 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/composables/useApi'
 import { useConfirm } from '@/composables/useDialogs'
-import type { MapRegion, TravelOptions, TravelPoint } from '@/types'
+import type { MapRegion, MapRegionLink, TravelOptions, TravelPoint } from '@/types'
+import PlayerRegionMap from '@/components/game/PlayerRegionMap.vue'
 
 const props = defineProps<{
   open: boolean
   gameId: string
   regions: MapRegion[]
+  regionLinks: MapRegionLink[]
   currentRegionId: string | null
 }>()
 
@@ -68,8 +70,14 @@ async function travel(point: TravelPoint): Promise<void> {
 </script>
 
 <template>
-  <div v-if="visible" class="tw-dialog-header shrink-0 px-4 sm:px-8 py-3 space-y-2 border-t max-h-[35%] overflow-y-auto">
-    <div v-if="regions.length" class="flex flex-wrap items-center gap-2 text-xs">
+  <div v-if="visible" class="tw-dialog-header shrink-0 px-4 sm:px-8 py-3 space-y-2 border-t max-h-[45%] overflow-y-auto">
+    <PlayerRegionMap
+      v-if="regions.length > 1"
+      :regions="regions"
+      :links="regionLinks"
+      :current-region-id="currentRegionId"
+    />
+    <div v-else-if="regions.length" class="flex flex-wrap items-center gap-2 text-xs">
       <span class="tw-muted">Regions:</span>
       <span
         v-for="region in regions"

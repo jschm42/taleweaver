@@ -1,10 +1,11 @@
 # World Sections, Travel Time and Fast Travel (Concept)
 
-Status (2026-11-21): **phases 1-3 implemented.** Still open: a drawn world map for players
-(the play view shows regions and fast travel points in a strip below the scene graph,
-`MapTravelPanel.vue`), the campaign toggle in the creation wizard (9.3 is an editor action
-instead), the "to be continued" notice (9.7), and the whole-template validation after a
-region generation (the author runs the Validation page).
+Status (2026-11-21): **phases 1-3 implemented**, from phase 4 the player's world map
+(`PlayerRegionMap.vue` in the map dialog's travel strip) and the road-event recipe (blueprint
+manual, *Long journeys and fast travel*). Planning regions is an editor action instead of a
+toggle in the creation wizard (9.3). Still open from phase 4: `on_enter_section` /
+`on_leave_section` triggers, a generated world map image, quest region hints, several
+travel points per section.
 
 | Phase 3 piece | Where |
 | --- | --- |
@@ -434,8 +435,9 @@ region's `section_id`, new chapters are numbered after the existing ones, `on_in
 scripts are dropped. On any error the job retries once with the errors in the prompt, then
 gives up: nothing is applied and the section returns to `stub`. On success the region is
 merged, the section becomes `built` with its `summary`, `planned_links` is cleared and the
-outline threads are updated. The whole-template validators do not run automatically yet;
-the author checks the result on the Validation page.
+outline threads are updated. Then the whole-template validators run once more; the findings
+the region introduced and the fix-ups are stored in the section's `generation_notes` and
+shown on the Regions page until the author dismisses them.
 
 **Apply path: a merge into the template** (`engine/manifest_apply/section_merge.py`), not
 the change-set applier as planned. The change-set request models cover only part of what the
@@ -524,9 +526,10 @@ Limits, to be stated in the docs:
 * A campaign with stubs must not be winnable before its last section exists. The outline
   fixes the final goal from the start; when a session has finished every available
   sequence while the template still has stubs, the player gets a "to be continued" notice
-  instead of an ending. *(Not built yet: the notice needs a change to the sequence
-  completion logic; until then an author keeps the final goal out of reach, e.g. with a
-  win guard, while regions are still planned.)*
+  instead of an ending (`campaign_continuation.py`: while the template has planned
+  regions or regions the session has not taken in yet, finishing the last known chapter
+  shows the notice once, `entity_states["__to_be_continued__"]`, and the session stays
+  active; a win guard and `tw.game.win()` still end it).
 
 Effort: moderate. The cloning code exists; the new parts are the id-based merge of the
 snapshot lists and the offer in the client. It belongs to phase 3, since without it
