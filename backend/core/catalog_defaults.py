@@ -8,7 +8,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "dark fantasy oil painting, dramatic chiaroscuro, visible textured "
         "brushwork, deep shadows with warm firelight highlights, muted earthy "
         "palette with ember accents, weathered medieval materials, atmospheric haze",
-        "image_url": "/assets/catalog/styles/dark-fantasy-painting_35657e9e.jpg",
+        "image_url": "/assets/catalog/styles/21a67697_dark-fantasy-painting.webp",
     },
     {
         "id": "cinematic-realism",
@@ -18,7 +18,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "natural and practical lighting, volumetric light, rich but natural color "
         "grade, shallow depth of field, realistic materials and skin texture, fine "
         "film grain",
-        "image_url": "/assets/catalog/styles/cinematic-realism_bd485f41.jpg",
+        "image_url": "/assets/catalog/styles/2cb03a4a_cinematic-realism.webp",
     },
     {
         "id": "stylized-rpg-art",
@@ -28,7 +28,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "readable silhouettes, slightly exaggerated proportions, soft cel-like "
         "shading with painted textures, vibrant but grounded palette, clear focal "
         "point",
-        "image_url": "/assets/catalog/styles/stylized-rpg-art_db5e95d6.jpg",
+        "image_url": "/assets/catalog/styles/9f1895ef_stylized-rpg-art.webp",
     },
     {
         "id": "grimdark-ink-sketch",
@@ -37,7 +37,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "grimdark pen and ink illustration, dense cross-hatching, scratchy "
         "expressive linework, heavy black ink washes, dry-brush and splatter "
         "texture, aged distressed paper, stark black and white, no color",
-        "image_url": "/assets/catalog/styles/grimdark-ink-sketch_023b9ad4.jpg",
+        "image_url": "/assets/catalog/styles/4b761143_grimdark-ink-sketch.webp",
     },
     {
         "id": "cyberpunk-neon",
@@ -46,7 +46,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "cyberpunk aesthetic, high-tech low-life detail, saturated magenta and cyan "
         "neon light against deep shadow, reflective wet surfaces, holographic glow, "
         "haze, grime on chrome and plastic, futuristic noir mood",
-        "image_url": "/assets/catalog/styles/cyberpunk-neon_e4b9fd38.jpg",
+        "image_url": "/assets/catalog/styles/3823ee64_cyberpunk-neon.webp",
     },
     {
         "id": "ethereal-watercolor",
@@ -55,7 +55,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "ethereal watercolor painting, wet-on-wet washes, soft bleeding edges, "
         "granulating pigment, white paper glowing through, gentle luminous light, "
         "dreamy pastel palette, delicate loose linework",
-        "image_url": "/assets/catalog/styles/ethereal-watercolor_963ce2cd.jpg",
+        "image_url": "/assets/catalog/styles/e83fcf1c_ethereal-watercolor.webp",
     },
     {
         "id": "science-fiction",
@@ -65,7 +65,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "industrial detail, cool blue-white lighting with glowing interface "
         "accents, polished metal, glass and composite materials, cinematic wide "
         "composition",
-        "image_url": "/assets/catalog/styles/science-fiction_93659096.jpg",
+        "image_url": "/assets/catalog/styles/4efc432a_science-fiction.webp",
     },
     {
         "id": "pixelart",
@@ -74,7 +74,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "16-bit pixel art in the look of 1990s point-and-click adventure games, "
         "crisp visible pixels, limited color palette with dithering, hand-placed "
         "detail, no anti-aliasing, no blur, no text, no user interface",
-        "image_url": "/assets/catalog/styles/pixelart_5fb230a4.jpg",
+        "image_url": "/assets/catalog/styles/013c3c73_pixelart.webp",
     },
     {
         "id": "film-noir",
@@ -83,7 +83,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "classic film noir, black and white 1940s cinematography, hard low-key "
         "lighting, deep shadows with bright edge highlights, strong chiaroscuro, "
         "slanted light patterns, smoky haze, grainy film texture, no color",
-        "image_url": "/assets/catalog/styles/classic-film-noir_73cadd52.jpg",
+        "image_url": "/assets/catalog/styles/2db52151_film-noir.webp",
     },
     {
         "id": "ghibli-whimsy",
@@ -92,7 +92,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "hand-painted 2D animation background art, soft gouache and watercolor "
         "textures, gentle clean line art, lush detailed nature, warm nostalgic "
         "sunlight, soft rich palette, whimsical cozy atmosphere",
-        "image_url": "/assets/catalog/styles/ghibli-esque-whimsy_37636857.jpg",
+        "image_url": "/assets/catalog/styles/129ca73e_ghibli-whimsy.webp",
     },
     {
         "id": "retro-synthwave",
@@ -101,7 +101,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "1980s synthwave retro-futurism, glowing neon pink, violet and electric "
         "blue palette, chrome highlights, sunset gradients, glowing wireframe "
         "accents, soft bloom, VHS scanline texture, airbrushed album-cover finish",
-        "image_url": "/assets/catalog/styles/retro-synthwave_47522b15.jpg",
+        "image_url": "/assets/catalog/styles/cdbebc19_retro-synthwave.webp",
     },
     {
         "id": "bio-organic-gothic",
@@ -111,7 +111,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "ribbed bone-like structures, cables like sinews, glossy wet surfaces and "
         "cold metal, near-monochrome black, bone and grey-green palette, low eerie "
         "light, intricate unsettling detail",
-        "image_url": "/assets/catalog/styles/bio-organic-gothic_23707b39.jpg",
+        "image_url": "/assets/catalog/styles/3172f6f1_bio-organic-gothic.webp",
     },
     {
         "id": "impressionist-oil",
@@ -120,7 +120,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "impressionist oil painting, thick impasto, visible broken brush and "
         "palette-knife strokes, dabs of pure color, shimmering natural light, soft "
         "edges, romantic atmosphere, visible canvas texture",
-        "image_url": "/assets/catalog/styles/impressionist-oil_801143d7.jpg",
+        "image_url": "/assets/catalog/styles/fa1c3e22_impressionist-oil.webp",
     },
     {
         "id": "shonen-anime",
@@ -129,7 +129,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "modern action anime key visual, crisp clean line art, bold cel shading "
         "with sharp shadow shapes, dynamic camera angle, dramatic rim light, "
         "saturated colors, energetic glowing effects, sharp focus",
-        "image_url": "/assets/catalog/styles/modern-shonen-anime_7417820f.jpg",
+        "image_url": "/assets/catalog/styles/47e0a625_shonen-anime.webp",
     },
     {
         "id": "classical-comic",
@@ -139,7 +139,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "Silver Age comic book art, bold black ink outlines, flat primary colors "
         "with Ben-Day halftone dots, dramatic spot blacks, dynamic composition, "
         "printed paper texture, no text, no speech bubbles, no captions",
-        "image_url": "/assets/catalog/styles/classical-heroic-comic_8970c6ab.jpg",
+        "image_url": "/assets/catalog/styles/62cd1c91_classical-comic.webp",
     },
     {
         "id": "survival-science-fiction",
@@ -149,7 +149,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "scratched and patched hard-surface materials, dust, frost and grime, harsh "
         "alien light, desaturated palette with cold teal and warning-orange "
         "accents, haze, grounded realism, isolation and scarcity",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/727022ea_survival-science-fiction.webp",
     },
     {
         "id": "survival-rpg",
@@ -159,7 +159,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "silhouettes, handcrafted and weathered materials like rope, hide, rough "
         "wood and rusted metal, earthy muted palette with warm firelight accents, "
         "natural overcast light, gritty but legible detail",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/46a800ac_survival-rpg.webp",
     },
     {
         "id": "survival-realism",
@@ -169,7 +169,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "available light, overcast sky or low sun, 35mm lens, real materials with "
         "mud, wear and moisture, desaturated earthy color grade, fine film grain, "
         "no stylization, no magical glow",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/32a42339_survival-realism.webp",
     },
     {
         "id": "storybook-gouache",
@@ -178,7 +178,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "children's picture book illustration, opaque gouache painting, matte "
         "chalky texture, soft rounded shapes, warm limited palette, gentle diffused "
         "light, visible paper grain, charming and inviting",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/da1c88b2_storybook-gouache.webp",
     },
     {
         "id": "ukiyo-e-woodblock",
@@ -187,7 +187,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "ukiyo-e woodblock print, bold flowing outlines, flat areas of color, "
         "subtle bokashi gradients, stylized waves, clouds and wind lines, muted "
         "indigo, vermilion and ochre palette, washi paper texture, no text",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/23e79c6c_ukiyo-e-woodblock.webp",
     },
     {
         "id": "victorian-engraving",
@@ -196,7 +196,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "19th-century steel engraving illustration, fine parallel line hatching and "
         "cross-hatching, stippled shading, meticulous detail, monochrome ink on "
         "aged cream paper, encyclopedia plate look, no color",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/74d15583_victorian-engraving.webp",
     },
     {
         "id": "art-nouveau",
@@ -206,7 +206,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "borders, elegant stylized figures, flat decorative color areas with gold "
         "accents, muted sage, ochre and rose palette, poster lithograph texture, no "
         "text",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/6ecb8f54_art-nouveau.webp",
     },
     {
         "id": "isometric-diorama",
@@ -215,7 +215,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "isometric miniature diorama, three-quarter top-down view, tilt-shift depth "
         "of field, tiny highly detailed props, soft global illumination, clean "
         "readable layout, toy-like scale, cohesive palette",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/f893489c_isometric-diorama.webp",
     },
     {
         "id": "low-poly-3d",
@@ -224,7 +224,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "low-poly 3D render, flat-shaded faceted geometry, simple clean shapes, "
         "soft ambient occlusion, gentle directional light, harmonious pastel and "
         "earthy palette, stylized indie game look",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/47d8e1b7_low-poly-3d.webp",
     },
     {
         "id": "claymation",
@@ -233,7 +233,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "stop-motion claymation, handmade plasticine characters and sets, visible "
         "fingerprints and tool marks, slightly lumpy shapes, miniature practical "
         "lighting, shallow depth of field, playful saturated colors",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/5270631c_claymation.webp",
     },
     {
         "id": "stained-glass",
@@ -242,7 +242,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "instruction": "stained glass window art, jewel-toned translucent glass panels, bold dark "
         "lead lines, light glowing through the glass, simplified symbolic figures, "
         "Gothic window composition, rich ruby, sapphire and gold palette",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/d862bb50_stained-glass.webp",
     },
     {
         "id": "weird-west",
@@ -252,7 +252,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "haze, worn leather, wood and iron, low golden sun with long shadows, ochre "
         "and rust palette with eerie green accents, gritty painterly texture, "
         "uncanny undertone",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/49a78586_weird-west.webp",
     },
     {
         "id": "solarpunk",
@@ -262,7 +262,7 @@ DEFAULT_IMAGE_STYLES: list[dict[str, Any]] = [
         "architecture, solar sails and glass, warm bright daylight, clean saturated "
         "greens, whites and gold, optimistic and airy atmosphere, art nouveau "
         "inspired curves",
-        "image_url": None,
+        "image_url": "/assets/catalog/styles/3c490a83_solarpunk.webp",
     },
 ]
 
@@ -274,7 +274,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Build dread slowly: unsettling details, sparse comfort, threats that are "
         "heard before they are seen, and consequences that feel truly dangerous. "
         "Keep the unknown unexplained for as long as possible.",
-        "image_url": "/assets/catalog/tones/horror_7e4a6db5.jpg",
+        "image_url": "/assets/catalog/tones/ed6cf1ea_horror.webp",
     },
     {
         "id": "sci-fi",
@@ -283,7 +283,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Ground the future in believable technology and its social consequences. "
         "Drive the story through discovery, technical puzzles and the question of "
         "what the new means for people.",
-        "image_url": "/assets/catalog/tones/sci-fi_0b2e548f.jpg",
+        "image_url": "/assets/catalog/tones/e56b4e32_sci-fi.webp",
     },
     {
         "id": "sitcom",
@@ -292,7 +292,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Favor witty dialogue, running gags, comic timing and low-stakes chaos. "
         "Setbacks are charming rather than cruel, and every scene ends on a beat "
         "that lands.",
-        "image_url": "/assets/catalog/tones/sitcom_3b747e63.jpg",
+        "image_url": "/assets/catalog/tones/8e8440c6_sitcom.webp",
     },
     {
         "id": "classic-rpg",
@@ -300,7 +300,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "description": "Heroic quests with balanced drama and wonder.",
         "instruction": "Keep a clear quest structure with meaningful choices, memorable allies and "
         "rivals, and a steady balance of danger, discovery and reward.",
-        "image_url": "/assets/catalog/tones/classic-rpg_551efe58.jpg",
+        "image_url": "/assets/catalog/tones/5fe78e50_classic-rpg.webp",
     },
     {
         "id": "heroic-epic",
@@ -309,7 +309,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Tell the story on a grand scale: ancient stakes, legendary places and "
         "deeds that will be sung about. Courage is costly, and victories feel "
         "earned and momentous.",
-        "image_url": "/assets/catalog/tones/heroic-epic_9206142b.jpg",
+        "image_url": "/assets/catalog/tones/2a878790_heroic-epic.webp",
     },
     {
         "id": "melancholic-somber",
@@ -317,7 +317,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "description": "Reflective and quiet, focused on loss and faded glory.",
         "instruction": "Use quiet, reflective language and a slow pace. Dwell on loss, memory and "
         "the beauty in what is fading; hope is small, fragile and precious.",
-        "image_url": "/assets/catalog/tones/melancholic-somber_e5a53a82.jpg",
+        "image_url": "/assets/catalog/tones/198e5ac7_melancholic-somber.webp",
     },
     {
         "id": "post-apocalyptic",
@@ -344,7 +344,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Every character wants something and hides something. Drive the story "
         "through negotiations, leverage, shifting alliances and secrets whose "
         "reveal changes the balance of power.",
-        "image_url": "/assets/catalog/tones/political-intrigue_2396d222.jpg",
+        "image_url": "/assets/catalog/tones/d176947d_political-intrigue.webp",
     },
     {
         "id": "cosmic-horror",
@@ -353,7 +353,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Hint at forces too vast to understand, never show them fully. Knowledge "
         "comes at a cost to the mind, and the deeper the protagonist looks, the "
         "smaller humanity seems.",
-        "image_url": "/assets/catalog/tones/cosmic-horror_8e1a9584.jpg",
+        "image_url": "/assets/catalog/tones/a1dbace1_cosmic-horror.webp",
     },
     {
         "id": "noir-detective",
@@ -370,7 +370,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "description": "Ridiculous physical comedy and deadpan reactions.",
         "instruction": "Undermine every serious moment with absurd coincidences, over-the-top "
         "physical comedy and characters who react with complete deadpan calm.",
-        "image_url": "/assets/catalog/tones/absurd-slapstick_42e21daa.jpg",
+        "image_url": "/assets/catalog/tones/3c2ea8cf_absurd-slapstick.webp",
     },
     {
         "id": "survival-grit",
@@ -379,7 +379,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Make survival the core tension: food, water, warmth, light and health run "
         "low, injuries linger and nature is indifferent. Small wins like a fire or "
         "a dry shelter feel huge; choices are practical and often painful.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/931d49ce_survival-grit.webp",
     },
     {
         "id": "stranded-sci-fi",
@@ -389,7 +389,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "limited, systems fail at the worst moment and the environment is alien and "
         "lethal. Ingenuity, improvised repairs and grim calculation drive the "
         "story.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/fbe4d054_stranded-sci-fi.webp",
     },
     {
         "id": "survival-horror",
@@ -399,7 +399,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "light and a threat that is stronger than the protagonist. Running and "
         "hiding are often wiser than fighting, and safe places never stay safe for "
         "long.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/56c26707_survival-horror.webp",
     },
     {
         "id": "heist-caper",
@@ -408,7 +408,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Build the story around a plan: casing the target, assembling the crew, and "
         "the moment everything goes wrong. Reward cleverness, keep the banter sharp "
         "and save one twist for the end.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/c46fbc7a_heist-caper.webp",
     },
     {
         "id": "fairy-tale-folklore",
@@ -417,7 +417,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Tell it like an old tale: the world follows strange but strict rules, "
         "promises bind, names have power and spirits bargain. Kindness and wit "
         "matter more than strength, and every gift has a hidden price.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/32f470c4_fairy-tale-folklore.webp",
     },
     {
         "id": "gothic-romance",
@@ -426,7 +426,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Mix longing and dread: a decaying house or bloodline, a dangerous "
         "attraction and secrets the past refuses to bury. Let emotions run high and "
         "atmosphere carry the story.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/cf1cf0ba_gothic-romance.webp",
     },
     {
         "id": "cozy-mystery",
@@ -435,7 +435,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Keep it a puzzle among neighbors: a crime in a small community, quirky "
         "suspects with secrets, fair clues and red herrings. Violence stays "
         "offstage, and the solution feels earned.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/0008e42e_cozy-mystery.webp",
     },
     {
         "id": "pulp-adventure",
@@ -444,7 +444,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Move fast from peril to peril: lost ruins, ticking traps, daring escapes "
         "and villains with grand schemes. End scenes on cliffhangers and let "
         "bravado win the day.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/16af6837_pulp-adventure.webp",
     },
     {
         "id": "psychological-thriller",
@@ -453,7 +453,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Make the protagonist doubt what is real: contradictory clues, people who "
         "might be lying and memories that do not fit. Tension comes from not "
         "knowing whom to trust, including oneself.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/1f79ee95_psychological-thriller.webp",
     },
     {
         "id": "war-drama",
@@ -462,7 +462,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Show war from the ground: bonds between comrades, orders that demand "
         "terrible choices and losses that are not forgotten. Never glorify "
         "violence; every victory has a cost.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/6f07ac92_war-drama.webp",
     },
     {
         "id": "coming-of-age",
@@ -471,7 +471,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Focus on change: first responsibilities, friendships tested, mistakes that "
         "teach and the moment of stepping out of someone's shadow. Warmth and "
         "awkwardness sit side by side.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/fee71bd7_coming-of-age.webp",
     },
     {
         "id": "weird-west",
@@ -480,7 +480,7 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Tell a Western where the frontier hides more than outlaws: dusty towns, "
         "hard justice, long rides and something uncanny under the sand. Keep the "
         "dialogue laconic and the supernatural unsettling.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/1f04a056_weird-west.webp",
     },
     {
         "id": "solarpunk-hope",
@@ -489,6 +489,6 @@ DEFAULT_TONES: list[dict[str, Any]] = [
         "instruction": "Show a future worth building: communities that cooperate, technology in "
         "harmony with nature and problems solved through ingenuity and solidarity. "
         "Conflicts are real but hope is stronger.",
-        "image_url": None,
+        "image_url": "/assets/catalog/tones/4f14ea63_solarpunk-hope.webp",
     },
 ]
