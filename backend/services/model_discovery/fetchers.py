@@ -137,7 +137,14 @@ async def fetch_google(
 async def fetch_openrouter(
     client: httpx.AsyncClient, api_key: Optional[str], base_url: str
 ) -> list[DiscoveredModel]:
-    payload = await _get_json(client, f"{base_url}/models", headers=_bearer(api_key))
+    # Without the filter OpenRouter lists only models that can output text, which leaves out
+    # pure image models such as openai/gpt-image-*.
+    payload = await _get_json(
+        client,
+        f"{base_url}/models",
+        headers=_bearer(api_key),
+        params={"output_modalities": "all"},
+    )
     models = (_model(i.get("id"), i.get("name"), classify_openrouter(i)) for i in _items(payload))
     return [m for m in models if m]
 
