@@ -3,6 +3,7 @@
 from typing import Any, Optional
 
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.world.section_outline import normalize_outline
 from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 
@@ -43,6 +44,7 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     manifest["narrator_voice"] = adventure.narrator_voice
     manifest["audio_tracks"] = adventure.audio_tracks or []
     manifest["sections"] = normalize_sections(adventure.world_sections)
+    manifest["world_outline"] = normalize_outline(adventure.world_outline)
     manifest["audio_enabled"] = adventure.audio_enabled
     manifest["fast_travel_enabled"] = adventure.fast_travel_enabled is not False
     manifest["title_track_id"] = adventure.title_track_id

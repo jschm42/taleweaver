@@ -1,8 +1,21 @@
 # World Sections, Travel Time and Fast Travel (Concept)
 
-Status (2026-11-20): **phases 1 and 2 implemented.** The player's map shows the discovered
-regions and the fast travel points in a strip below the scene graph (`MapTravelPanel.vue`); a
-drawn world map for players (a World tab like the editor's) is still open.
+Status (2026-11-21): **phases 1-3 implemented.** Still open: a drawn world map for players
+(the play view shows regions and fast travel points in a strip below the scene graph,
+`MapTravelPanel.vue`), the campaign toggle in the creation wizard (9.3 is an editor action
+instead), the "to be continued" notice (9.7), and the whole-template validation after a
+region generation (the author runs the Validation page).
+
+| Phase 3 piece | Where |
+| --- | --- |
+| Outline (`AdventureTemplate.world_outline`, migration `d6f8b0c2e4a5`) | `engine/world/section_outline.py` |
+| Ledger | `engine/world/section_ledger.py` |
+| Schemas, prompts, generator, validation | `engine/world/section_schemas.py`, `section_prompt.py`, `section_generator.py`, `section_validation.py` |
+| Merge into the template | `engine/manifest_apply/section_merge.py` |
+| Editor endpoints (generate in background, plan) | `api/routes/adventures/editing/section_generation.py` |
+| Session expansion | `api/routes/adventures/session_expansion.py`, `expansion_routes.py`, `frontend/src/composables/useRegionExpansion.ts` |
+| Editor UI | `components/editor/regions/RegionGenerateControls.vue`, `RegionPlanModal.vue`, `RegionOutlineCard.vue` |
+| Tests | `tests/test_world_section_generation.py` |
 
 | Phase 1 piece | Where |
 | --- | --- |
@@ -374,24 +387,25 @@ never stored and never written by an LLM. Contents:
 It serves two purposes: prompt context (a few thousand tokens for 100 scenes) and the
 validation reference in 9.5.
 
-### 9.3 Initial generation
+### 9.3 Planning regions
 
-The generator gets a "Campaign" toggle; off by default, so the current flow is unchanged.
-With the toggle on:
-
-1. One call produces the outline and 3–5 sections with label, description, map position
-   and planned links.
-2. The existing `generate_world` produces the first section as a normal manifest, with the
-   outline as extra context. All its scenes get that `section_id`; the other sections are
-   stored as stubs.
-
-Generation time is that of a normal adventure of 6–10 scenes, not shorter.
+Implemented as an editor action instead of a toggle in the creation wizard, so it also works
+for adventures that already exist: **Regions → Plan regions** (`POST
+/{template_id}/editor/sections/plan {count, direction}`, `section_generator.plan_sections`,
+schema `CampaignPlan`). One call proposes the outline and `count` planned regions with
+description, map position, brief and planned links to the existing regions. Nothing is
+stored: the proposal goes into the page's draft, and the author reviews and saves it. A new
+adventure that should become a campaign is generated as usual (it becomes the first region
+when its scenes are assigned to one), then planned here.
 
 ### 9.4 Section generation in the editor
 
-The author clicks a stub on the world map, optionally edits its brief and starts the
-generation as a background job (same job infrastructure as the other generation jobs; the
-loader calls `apply_global_settings`). The section is `generating` meanwhile.
+The author selects a planned region, optionally edits its brief, saves and clicks **Generate
+region** (`POST /{template_id}/editor/sections/{section_id}/generate {brief}`). The job runs
+as a background task with its own database session (`section_generation.run_generation`,
+which calls `apply_global_settings`). The section is `generating` meanwhile and the Regions
+page polls the editor data; a failed job puts it back to `stub` with `generation_error`.
+Images are not generated; the editor's visual tools add them later.
 
 Prompt: outline + ledger + brief + the full gateway scenes of built neighbours (from
 `planned_links`).
@@ -415,30 +429,21 @@ Deterministic, before anything is written:
 * items required by locks are obtainable in this section or already exist
 * scripts pass `script_validator`
 
-Then the whole-template validators in `core/world_validation/` run on the merged result.
-On any failure the job retries once with the errors in the prompt, then gives up: nothing
-is applied and the section returns to `stub`. On success the content is applied in one
-transaction, the section becomes `built`, `planned_links` is cleared and the outline
-threads are updated.
+Before the checks, `prepare_section` fixes what needs no retry: every scene gets the
+region's `section_id`, new chapters are numbered after the existing ones, `on_init`
+scripts are dropped. On any error the job retries once with the errors in the prompt, then
+gives up: nothing is applied and the section returns to `stub`. On success the region is
+merged, the section becomes `built` with its `summary`, `planned_links` is cleared and the
+outline threads are updated. The whole-template validators do not run automatically yet;
+the author checks the result on the Validation page.
 
-**Apply path: the change-set applier** (`api/routes/adventures/editing/change_set.py`).
-It fits: every operation runs the real editor endpoint (field checks, manifest sync), a
-`DeferredCommitSession` makes the whole set one transaction, and it reports only the
-validation findings the set introduced. A converter `section_manifest_to_ops` turns the
-`SectionManifest` into operations. What exists and what is missing:
-
-| Need | Operation | State |
-| --- | --- | --- |
-| scenes, exits, NPCs, objects | `create_scene`, `create_exit`, `create_entity`, `update` | exists; request models need the new fields |
-| quests, awards, scripts | `create_quest`, `create_award`, `set_script` | exists |
-| NPC combat / companion blocks | `set_npc_combat`, `set_npc_companion` | exists |
-| sections | `create_section`, `update_section` | **new** |
-| sequences | `append_sequence` | **new**; today only `update_adventure` can replace the whole list |
-| outline | `update_adventure` with `world_outline` | field to add to `AdventureTemplateUpdate` |
-
-`MAX_OPERATIONS` is 200. A section of 8 scenes needs roughly 60–100 operations, so the
-limit holds; the converter fails early with a clear error when it does not. No merge mode
-in `engine/manifest_apply/` is needed.
+**Apply path: a merge into the template** (`engine/manifest_apply/section_merge.py`), not
+the change-set applier as planned. The change-set request models cover only part of what the
+generator writes for characters and items (combat profiles, companions, conversations,
+switch states, ...); the manifest applier's `persist_scenes`, `persist_exits`,
+`persist_npcs` and `persist_objects` handle all of it. `merge_section` runs them without
+clearing the world, then appends quests, awards, chapters and scripts to the template and
+its `original_manifest` (incl. the scene entries, from which sessions read scene helpers).
 
 ### 9.6 Blueprint
 
@@ -488,7 +493,9 @@ entities) plus a manifest snapshot in the session state (quests, sequences, scri
 updated, only re-linked to the new template. Without extra work, a player who started
 before a section was built never sees it.
 
-Solution: **session expansion**, new module `engine/sessions/session_expansion.py`.
+Solution: **session expansion**, module `api/routes/adventures/session_expansion.py` (it
+reuses the session cloning helpers of the API layer), endpoints `GET` / `POST
+/{game_id}/expansion` (`expansion_routes.py`).
 
 * `pending_sections(db, state)`: `built` sections of the template that have no rows in
   the session.
@@ -500,9 +507,10 @@ Solution: **session expansion**, new module `engine/sessions/session_expansion.p
 * It only adds. No existing row, no `entity_states` entry and no avatar field is touched.
   That is safe because section generation is additive (decision 8) and may not change the
   init script.
-* Trigger: when a session is opened and `pending_sections` is not empty, the client asks
-  once ("New region available: Gloom Peaks. Add it to this adventure?"). The owner check
-  uses `resolve_session_state(..., user_id=...)`; the new endpoint goes into
+* Trigger: when a session is opened and `pending_sections` is not empty, the play view asks
+  ("New region: Gloom Peaks", `useRegionExpansion.ts`). A declined region is remembered in
+  the browser and not offered again. The owner check uses
+  `resolve_session_state(..., user_id=...)`; both endpoints are in
   `tests/test_session_ownership.py`.
 * Checkpoints written before the expansion do not contain the section. Loading one makes
   it pending again and the offer reappears; nothing breaks.
@@ -516,7 +524,9 @@ Limits, to be stated in the docs:
 * A campaign with stubs must not be winnable before its last section exists. The outline
   fixes the final goal from the start; when a session has finished every available
   sequence while the template still has stubs, the player gets a "to be continued" notice
-  instead of an ending.
+  instead of an ending. *(Not built yet: the notice needs a change to the sequence
+  completion logic; until then an author keeps the final goal out of reach, e.g. with a
+  win guard, while regions are still planned.)*
 
 Effort: moderate. The cloning code exists; the new parts are the id-based merge of the
 snapshot lists and the offer in the client. It belongs to phase 3, since without it

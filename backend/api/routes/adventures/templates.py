@@ -43,6 +43,7 @@ from backend.core.prompts import (
     TEMPLATE_FIELD_GENERATION_USER_PROMPT_TEMPLATE,
 )
 from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.world.section_outline import normalize_outline
 from backend.engine.world.world_generator import WorldGenerator
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -800,6 +801,8 @@ async def update_adventure(
 
     for field, value in update_data.items():
         setattr(adv, field, value)
+    if "world_outline" in update_data:
+        adv.world_outline = normalize_outline(update_data["world_outline"])
 
     # Sync strict_rules internally if mode changed (but not if strict_rules was patched directly)
     if "rule_enforcement_mode" in update_data and "strict_rules" not in update_data:

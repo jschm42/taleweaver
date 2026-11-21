@@ -626,6 +626,8 @@ section: HARBOR_TOWN
 
 Regions gate nothing: a route between two regions is an ordinary exit between their scenes, with the usual locks. Manage regions later on the editor's **Regions** page and filter the **Map** by region.
 
+A planned region does not have to be written by hand. On the **Regions** page, **Plan regions** proposes new planned regions and a campaign outline from the plot; **Generate region** then builds one planned region (6-10 scenes with characters, items, exits to its neighbours and fast travel points) from its brief, the outline and what already exists. Players who started the adventure earlier are offered the new region when they open their session.
+
 ### Long journeys and fast travel
 
 A way between distant places can cost in-game time: `travel` on an exit moves the clock when the player uses it. Mark central places with `fast_travel: yes`; once the player has been there, the map offers to travel back from anywhere (the route is walked with all its events and travel time). A waystone that must be activated first uses `fast_travel_unlock: script` and a script that unlocks it.

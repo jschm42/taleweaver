@@ -1,57 +1,93 @@
 <script setup lang="ts">
 /**
  * Regions (world sections): spatial groups of scenes on a world map, for large adventures.
- * The region list is edited as a draft and saved through the save bar; choosing a region's
- * scenes runs immediately. Spec: docs/specs/world_sections.md.
+ * Regions and the campaign outline are edited as one draft and saved through the save bar;
+ * choosing scenes, planning regions and generating a planned region run immediately.
+ * Spec: docs/specs/world_sections.md.
  */
-import { computed, ref } from 'vue'
-import { Globe2, Plus } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { Globe2, Plus, Sparkles } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
 import { useConfirm, usePrompt } from '@/composables/useDialogs'
 import { useDraft } from '@/composables/useDraft'
 import { useToast } from '@/composables/useToast'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
-import { sectionService, sectionsOf, type WorldSection } from '@/services/sectionService'
+import {
+  outlineOf,
+  sectionService,
+  sectionsOf,
+  type RegionPlan,
+  type WorldOutline,
+  type WorldSection,
+} from '@/services/sectionService'
 import PageHeader from '@/components/workbench/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import RegionForm from '@/components/editor/regions/RegionForm.vue'
+import RegionGenerateControls from '@/components/editor/regions/RegionGenerateControls.vue'
+import RegionOutlineCard from '@/components/editor/regions/RegionOutlineCard.vue'
+import RegionPlanModal from '@/components/editor/regions/RegionPlanModal.vue'
 import RegionSceneAssignModal from '@/components/editor/regions/RegionSceneAssignModal.vue'
 import RegionWorldMap from '@/components/editor/regions/RegionWorldMap.vue'
 import { regionIdFor, regionLinks, sceneCount } from '@/components/editor/regions/regionGraph'
+
+interface RegionsDraft {
+  sections: WorldSection[]
+  outline: WorldOutline
+}
+
+const POLL_MS = 5000
 
 const editor = useEditor()
 const confirm = useConfirm()
 const prompt = usePrompt()
 const toast = useToast()
 
-const { draft, isDirty, changedCount, isSaving, reset, commit } = useDraft<WorldSection[]>(() =>
-  sectionsOf(editor.debugData?.adventure),
-)
+const { draft, isDirty, changedCount, isSaving, reset, commit } = useDraft<RegionsDraft>(() => ({
+  sections: sectionsOf(editor.debugData?.adventure),
+  outline: outlineOf(editor.debugData?.adventure),
+}))
 useUnsavedGuard(isDirty)
 
 const selectedId = ref<string | null>(null)
 const assignOpen = ref(false)
+const planOpen = ref(false)
 const assigning = ref(false)
+const starting = ref(false)
 
+const sections = computed(() => draft.value.sections)
 const scenes = computed(() => (editor.editorScenes || []) as { id: string; label?: string; name?: string; section_id?: string | null }[])
-const selected = computed(() => draft.value.find((s) => s.id === selectedId.value) || null)
-const links = computed(() => regionLinks(draft.value, scenes.value, editor.debugData?.exits || []))
-const counts = computed(() => Object.fromEntries(draft.value.map((s) => [s.id, sceneCount(scenes.value, s.id)])))
-const labels = computed(() => Object.fromEntries(draft.value.map((s) => [s.id, s.label])))
+const selected = computed(() => sections.value.find((s) => s.id === selectedId.value) || null)
+const links = computed(() => regionLinks(sections.value, scenes.value, editor.debugData?.exits || []))
+const counts = computed(() => Object.fromEntries(sections.value.map((s) => [s.id, sceneCount(scenes.value, s.id)])))
+const labels = computed(() => Object.fromEntries(sections.value.map((s) => [s.id, s.label])))
 const sceneOptions = computed(() =>
   scenes.value.map((s) => ({ id: s.id, label: s.label || s.name || s.id, sectionId: s.section_id || null })),
 )
 const unassigned = computed(() => scenes.value.filter((s) => !s.section_id).length)
+const generating = computed(() => sectionsOf(editor.debugData?.adventure).some((s) => s.status === 'generating'))
+
+// While a region is generated on the server, reload the editor data until it is done.
+let pollTimer: ReturnType<typeof setInterval> | null = null
+watch(generating, (busy) => {
+  if (busy && !pollTimer) pollTimer = setInterval(() => void editor.fetchDebugInfo(), POLL_MS)
+  if (!busy && pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}, { immediate: true })
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 
 async function addRegion(): Promise<void> {
   const label = await prompt({ title: 'New region', label: 'Name', placeholder: 'e.g. Harbor Town', validate: (v) => (v.trim() ? null : 'Enter a name.') })
   if (!label) return
-  const id = regionIdFor(label, new Set(draft.value.map((s) => s.id)))
-  const index = draft.value.length
-  draft.value.push({
+  const id = regionIdFor(label, new Set(sections.value.map((s) => s.id)))
+  const index = sections.value.length
+  draft.value.sections.push({
     id, label: label.trim(), description: '', map_x: 15 + (index % 4) * 23, map_y: Math.min(90, 20 + Math.floor(index / 4) * 25),
     order_index: index, status: 'stub', brief: '', summary: '', planned_links: [],
   })
@@ -67,29 +103,49 @@ async function deleteRegion(section: WorldSection): Promise<void> {
     danger: true,
   })
   if (!ok) return
-  draft.value = draft.value
+  draft.value.sections = sections.value
     .filter((s) => s.id !== section.id)
     .map((s) => ({ ...s, planned_links: s.planned_links.filter((l) => l.to_section_id !== section.id) }))
   selectedId.value = null
 }
 
 function moveRegion(id: string, x: number, y: number): void {
-  const section = draft.value.find((s) => s.id === id)
+  const section = sections.value.find((s) => s.id === id)
   if (!section) return
   section.map_x = x
   section.map_y = y
 }
 
+function applyPlan(plan: RegionPlan): void {
+  draft.value.sections = plan.sections
+  if (plan.outline) draft.value.outline = plan.outline
+  toast.info('Review the planned regions, then save.')
+}
+
 async function save(): Promise<void> {
   try {
-    await commit(async (sections) => {
-      const result = await sectionService.saveSections(editor.adventureId, sections)
+    await commit(async (value) => {
+      const result = await sectionService.saveSections(editor.adventureId, value.sections)
+      await sectionService.saveOutline(editor.adventureId, value.outline)
       if (result.cleared_scene_ids.length) toast.info(`${result.cleared_scene_ids.length} scene(s) no longer belong to a region.`)
       await editor.fetchDebugInfo()
     })
     toast.success('Regions saved.')
   } catch (error: unknown) {
     toast.error(error instanceof Error ? error.message : 'Failed to save the regions.')
+  }
+}
+
+async function generate(section: WorldSection): Promise<void> {
+  starting.value = true
+  try {
+    await sectionService.generateSection(editor.adventureId, section.id, section.brief)
+    await editor.fetchDebugInfo()
+    toast.info(`Building ${section.label}...`)
+  } catch (error: unknown) {
+    toast.error(error instanceof Error ? error.message : 'Failed to start the region generation.')
+  } finally {
+    starting.value = false
   }
 }
 
@@ -122,12 +178,13 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
   <div class="space-y-6">
     <PageHeader title="Regions" description="Group the scenes of a large world into regions on a world map. Small adventures need none.">
       <template #actions>
+        <UiButton variant="ai" :icon="Sparkles" @click="planOpen = true">Plan regions</UiButton>
         <UiButton variant="primary" :icon="Plus" @click="addRegion">Add region</UiButton>
       </template>
     </PageHeader>
 
     <UiEmptyState
-      v-if="!draft.length"
+      v-if="!sections.length"
       :icon="Globe2"
       title="No regions yet"
       description="Without regions all scenes share one map, which works well for up to about 15 scenes."
@@ -135,20 +192,31 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
 
     <template v-else>
       <UiCard title="World map" :description="`Drag a region to move it. ${unassigned} scene(s) belong to no region.`">
-        <RegionWorldMap :sections="draft" :links="links" :selected-id="selectedId" :scene-counts="counts" @select="selectedId = $event" @move="moveRegion" />
+        <RegionWorldMap :sections="sections" :links="links" :selected-id="selectedId" :scene-counts="counts" @select="selectedId = $event" @move="moveRegion" />
       </UiCard>
 
       <UiCard v-if="selected" :title="selected.label">
-        <RegionForm
-          :key="selected.id"
-          v-model="draft[draft.indexOf(selected)]"
-          :others="draft.filter((s) => s.id !== selected?.id)"
-          :scene-count="counts[selected.id] || 0"
-          @assign-scenes="openAssign"
-          @delete="deleteRegion(selected)"
-        />
+        <div class="space-y-6">
+          <RegionForm
+            :key="selected.id"
+            v-model="draft.sections[sections.indexOf(selected)]"
+            :others="sections.filter((s) => s.id !== selected?.id)"
+            :scene-count="counts[selected.id] || 0"
+            @assign-scenes="openAssign"
+            @delete="deleteRegion(selected)"
+          />
+          <RegionGenerateControls
+            v-if="selected.status !== 'built'"
+            :section="selected"
+            :dirty="isDirty"
+            :starting="starting"
+            @generate="generate(selected)"
+          />
+        </div>
       </UiCard>
       <p v-else class="wb-hint">Select a region on the map to edit it.</p>
+
+      <RegionOutlineCard v-model="draft.outline" :labels="labels" />
     </template>
 
     <RegionSceneAssignModal
@@ -159,6 +227,7 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
       :saving="assigning"
       @apply="applyAssignment"
     />
+    <RegionPlanModal v-model:open="planOpen" :adventure-id="editor.adventureId" :existing-ids="sections.map((s) => s.id)" @apply="applyPlan" />
 
     <UiSaveBar :dirty="isDirty" :count="changedCount" :saving="isSaving" @save="save" @discard="reset" />
   </div>

@@ -470,6 +470,13 @@ export interface MapRegionLink {
   is_locked: boolean
 }
 
+/** A region offered to a running session (GET /adventures/{game}/expansion). */
+export interface RegionSummary {
+  id: string
+  label: string
+  description: string
+}
+
 /** A fast travel point as GET /adventures/{game}/travel/options returns it. */
 export interface TravelPoint {
   scene_id: string

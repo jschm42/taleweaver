@@ -16,6 +16,7 @@ from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.world.section_outline import normalize_outline
 from backend.engine.world.sections import manifest_sections, normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 
@@ -170,6 +171,9 @@ def _apply_sections(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
     sections = normalize_sections(raw)
     adventure.world_sections = sections or None  # type: ignore[assignment]
     ctx.manifest["sections"] = sections
+    outline = normalize_outline(adventure_field(ctx.manifest, "world_outline"))
+    if outline is not None:
+        adventure.world_outline = outline  # type: ignore[assignment]
 
 
 def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:

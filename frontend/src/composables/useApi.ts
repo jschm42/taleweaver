@@ -28,6 +28,7 @@ import type {
   LeaderboardResponse,
   EarnedAward,
   TravelOptions,
+  RegionSummary,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -585,6 +586,16 @@ export const api = {
     return request(`/adventures/${gameId}/containers/${encodeURIComponent(entityId)}/unlock`, {
       method: 'POST',
     })
+  },
+
+  /** Regions the author built after this session started. */
+  getSessionExpansion(gameId: string): Promise<{ pending: RegionSummary[] }> {
+    return request(`/adventures/${gameId}/expansion`)
+  },
+
+  /** Adds every pending region to the session; progress stays as it is. */
+  applySessionExpansion(gameId: string): Promise<{ added: RegionSummary[] }> {
+    return request(`/adventures/${gameId}/expansion`, { method: 'POST', body: JSON.stringify({}) })
   },
 
   /** Unlocked fast travel points with route time, or why travel is blocked. */

@@ -21,6 +21,7 @@ from backend.api.routes.adventures.editor_special_actions import (
     router as editor_special_actions_router,
 )
 from backend.api.routes.adventures.editor_talents import router as editor_talents_router
+from backend.api.routes.adventures.expansion_routes import router as expansion_router
 from backend.api.routes.adventures.gameplay import router as gameplay_router
 from backend.api.routes.adventures.imports import router as imports_router
 from backend.api.routes.adventures.library import router as library_router
@@ -70,4 +71,5 @@ router.include_router(chat_history_router)
 router.include_router(dice_router)
 router.include_router(dialog_router)
 router.include_router(travel_router)
+router.include_router(expansion_router)
 router.include_router(agent_router)

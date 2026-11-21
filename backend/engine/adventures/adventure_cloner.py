@@ -201,6 +201,7 @@ def _create_cloned_template_entity(
         audio_tracks=clone_audio_tracks(original.audio_tracks, original.id, new_id),
         world_sections=deepcopy(original.world_sections) if original.world_sections else None,
         fast_travel_enabled=original.fast_travel_enabled is not False,
+        world_outline=deepcopy(original.world_outline) if original.world_outline else None,
         audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),

@@ -46,6 +46,7 @@ import { provideDialogSkin } from '@/skins/dialogSkin'
 import WorldMemoriesModal from '@/components/game/WorldMemoriesModal.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
 import { api } from '@/composables/useApi'
+import { useRegionExpansion } from '@/composables/useRegionExpansion'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
@@ -390,10 +391,14 @@ watch(trackedQuestId, (newId) => {
   }
 })
 
+// Regions the author built after this session started are offered once.
+const regionExpansion = useRegionExpansion(() => props.id, () => connect(props.id))
+
 onMounted(() => {
   // Re-fetch config so in-game controls (e.g. TTS) reflect the latest server-side settings,
   // even if the user changed them after the initial app mount.
   void refreshConfig()
+  void regionExpansion.offer()
 })
 
 onBeforeUnmount(() => {

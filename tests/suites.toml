@@ -358,6 +358,7 @@ sources = [
     "backend/api/routes/adventures/manifest_export.py",
     "backend/api/routes/adventures/cloning.py",
     "backend/api/routes/adventures/session_*.py",
+    "backend/api/routes/adventures/expansion_routes.py",
     "backend/api/routes/adventures/sessions.py",
     "backend/api/routes/adventures/assets.py",
     "backend/api/routes/adventures/asset_url_healing.py",
