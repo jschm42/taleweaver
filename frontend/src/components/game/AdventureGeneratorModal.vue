@@ -27,8 +27,8 @@ import GeneratorAdvancedSettings from './generator/GeneratorAdvancedSettings.vue
 import GeneratorProgressStream, { type LogEntry } from './generator/GeneratorProgressStream.vue'
 import GeneratorAssetStats, { type AssetStatsMap } from './generator/GeneratorAssetStats.vue'
 import GeneratorLightbox from './generator/GeneratorLightbox.vue'
-import AdventureRuleModeSelector from '@/components/create-adventure/AdventureRuleModeSelector.vue'
-import AutoValidateFixToggle from '@/components/create-adventure/AutoValidateFixToggle.vue'
+import AdventureRuleModeSelector from '@/components/game/generator/AdventureRuleModeSelector.vue'
+import AutoValidateFixToggle from '@/components/game/generator/AutoValidateFixToggle.vue'
 
 const props = defineProps<{
   open: boolean

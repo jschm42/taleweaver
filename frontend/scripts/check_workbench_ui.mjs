@@ -24,6 +24,10 @@ export const MIGRATED = [
   'src/views/dev',
   'src/components/admin',
   'src/views/AdminView.vue',
+  // Creation (phase 5)
+  'src/views/CreateAdventureView.vue',
+  'src/components/create-adventure',
+  'src/composables/createAdventure',
   // Shared fields of admin and setup wizard
   'src/components/common/ModelCombobox.vue',
   'src/components/common/OpenAICompatibleTtsFields.vue',
