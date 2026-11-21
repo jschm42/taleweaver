@@ -173,12 +173,14 @@ class CatalogService {
     simpleModel: string,
     index: number | null = null,
     customPrompt: string | null = null,
+    quality: 'simple' | 'advanced' = 'simple',
   ) {
-    // Validate: need a model configured
+    // Validate: need a model configured (simpleModel is the model of the chosen quality)
     if (!simpleModel) {
+      const label = quality === 'advanced' ? 'High-Fidelity Model' : 'Simple Model'
       this.statusMessage.value = {
         type: 'error',
-        text: 'Please configure and save the "Simple Model" in Visual Preferences before generating catalog images.',
+        text: `Please configure and save the "${label}" in Visual Preferences before generating catalog images.`,
       }
       return
     }
@@ -201,6 +203,8 @@ class CatalogService {
         prompt: customPrompt,
         name: item.name,
         description: item.description,
+        instruction: item.instruction,
+        quality,
       })
 
       if (data.status === 'success') {

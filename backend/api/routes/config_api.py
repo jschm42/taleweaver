@@ -63,6 +63,12 @@ from backend.engine.audio.browser_tts import is_browser_provider
 from backend.engine.audio.openai_compatible_tts import OPENAI_COMPATIBLE_PROVIDER
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
+from backend.engine.media.catalog_tile_image import (
+    TileQuality,
+    catalog_tile_model,
+    catalog_tile_options,
+    catalog_tile_prompt,
+)
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
 from backend.services.model_discovery import clear_cache as clear_model_discovery_cache
@@ -600,6 +606,8 @@ class CatalogGeneratePayload(BaseModel):
     prompt: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
+    instruction: Optional[str] = None
+    quality: TileQuality = "simple"
 
 
 @router.get("")
@@ -1224,13 +1232,13 @@ async def generate_catalog_image(
     user = current_user
 
     t2i = user.t2i_settings or {}
-    provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
-    model = t2i.get("simple_model")
+    provider, model = catalog_tile_model(t2i, payload.quality)
 
     if not model:
+        label = "High-Fidelity Model" if payload.quality == "advanced" else "Simple Model"
         return {
             "status": "error",
-            "message": "The 'Simple Model' for image generation is not configured. Please set it in Visual Preferences.",
+            "message": f"The '{label}' for image generation is not configured. Please set it in Visual Preferences.",
         }
 
     api_key = _resolve_provider_api_key(provider, user.encrypted_api_keys)
@@ -1246,13 +1254,12 @@ async def generate_catalog_image(
         catalog_dir = _safe_data_path("catalog", catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
 
-        base_prompt = payload.prompt
-        if not base_prompt:
-            item_name = payload.name or safe_target_id.replace("-", " ")
-            base_prompt = f"A visual representation of the visual style '{item_name}'."
-            if payload.description:
-                base_prompt += f" Context: {payload.description}"
-            base_prompt += " High quality, professional digital art, no text."
+        base_prompt = payload.prompt or catalog_tile_prompt(
+            catalog_type,
+            payload.name or safe_target_id.replace("-", " "),
+            payload.description,
+            payload.instruction,
+        )
 
         img_url = await MediaEngine.generate_image(
             prompt=base_prompt,
@@ -1261,7 +1268,7 @@ async def generate_catalog_image(
             provider=provider,
             target_dir=catalog_dir,
             filename=asset_filename(safe_target_id, t2i.get("image_format")),
-            provider_options=t2i,
+            provider_options=catalog_tile_options(t2i, provider, payload.quality),
         )
 
         logger.info("Catalog generate result for '%s': img_url=%r", payload.target_id, img_url)

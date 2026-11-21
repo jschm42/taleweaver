@@ -1,34 +1,41 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { Plus, RotateCcw, ScrollText, Trash2 } from 'lucide-vue-next'
-import {
-  narratorVoiceService,
-  VOICE_INSTRUCTION_MAX,
-  VOICE_SAMPLE_MAX,
-  type NarratorVoice,
-} from '@/services/narratorVoiceService'
+/**
+ * Narrator personas: tile overview like the style and tone catalogs. Edits, restore and
+ * import change the local draft; the save bar stores the catalog.
+ */
+import { computed, onMounted, ref } from 'vue'
+import { Download, FileUp, Pencil, Plus, RotateCcw, ScrollText, Trash2 } from 'lucide-vue-next'
+import { narratorVoiceService, type NarratorVoice } from '@/services/narratorVoiceService'
+import { confirmDialog } from '@/composables/useDialogs'
 import { useDraft } from '@/composables/useDraft'
 import { useToast } from '@/composables/useToast'
+import {
+  buildCatalogFile,
+  catalogFileName,
+  downloadJson,
+  mergeCatalog,
+  parseCatalogFile,
+} from '@/components/admin/catalogTransfer'
+import PersonaEditModal from '@/components/admin/PersonaEditModal.vue'
 import PageHeader from '@/components/workbench/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
-import UiCard from '@/components/ui/UiCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
-import UiField from '@/components/ui/UiField.vue'
-import UiIconButton from '@/components/ui/UiIconButton.vue'
-import UiInput from '@/components/ui/UiInput.vue'
+import UiMenu, { type MenuItem } from '@/components/ui/UiMenu.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import UiSpinner from '@/components/ui/UiSpinner.vue'
-import UiTextarea from '@/components/ui/UiTextarea.vue'
 
 const toast = useToast()
 const saved = ref<NarratorVoice[]>([])
 const defaults = ref<NarratorVoice[]>([])
 const isLoading = ref(true)
 const loadError = ref('')
+const importInput = ref<HTMLInputElement | null>(null)
+const editIndex = ref<number | null>(null)
+const isEditorOpen = ref(false)
 
 const { draft: voices, isDirty, changedCount, isSaving, reset, commit } = useDraft(() => saved.value)
 
-const copy = (list: NarratorVoice[]) => list.map((voice) => ({ ...voice }))
+const copy = (list: NarratorVoice[]): NarratorVoice[] => list.map((voice) => ({ ...voice }))
 
 onMounted(async () => {
   try {
@@ -42,19 +49,78 @@ onMounted(async () => {
   }
 })
 
-const addVoice = () => {
-  voices.value.push({ id: '', name: '', description: '', instruction: '', sample: '' })
+const editingVoice = computed(() => (editIndex.value === null ? null : voices.value[editIndex.value]))
+
+function openEditor(index: number | null): void {
+  editIndex.value = index
+  isEditorOpen.value = true
 }
 
-const removeVoice = (index: number) => {
-  voices.value.splice(index, 1)
+function applyVoice(voice: NarratorVoice): void {
+  if (editIndex.value === null) {
+    voices.value.push(voice)
+    return
+  }
+  voices.value[editIndex.value] = voice
 }
 
-const restoreDefaults = () => {
-  voices.value = copy(defaults.value)
+async function removeVoice(index: number): Promise<void> {
+  const name = voices.value[index]?.name || 'this persona'
+  const confirmed = await confirmDialog({
+    title: `Remove "${name}"?`,
+    message: 'The persona is removed when you save. Adventures keep their own copy.',
+    confirmLabel: 'Remove',
+    danger: true,
+  })
+  if (confirmed) voices.value.splice(index, 1)
 }
 
-const save = async () => {
+function mergeIntoDraft(incoming: NarratorVoice[], done: string): void {
+  const result = mergeCatalog(voices.value, incoming)
+  voices.value = result.items
+  toast.success(`${done}: ${result.replaced} updated, ${result.added} added. Review and save.`)
+}
+
+async function restoreDefaults(): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: 'Restore the default personas?',
+    message: 'Built-in personas get their original text back; missing ones are added. Your own personas stay. Nothing is stored until you save.',
+    confirmLabel: 'Restore defaults',
+  })
+  if (confirmed) mergeIntoDraft(copy(defaults.value), 'Defaults restored')
+}
+
+async function onImportFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    mergeIntoDraft(parseCatalogFile(await file.text(), 'personas') as NarratorVoice[], 'Imported')
+  } catch (err) {
+    toast.error(`Import failed: ${(err as Error).message}`)
+  }
+}
+
+function exportPersonas(): void {
+  downloadJson(catalogFileName('personas'), buildCatalogFile('personas', saved.value))
+  toast.success(isDirty.value ? 'Exported the saved personas (unsaved changes are not included).' : 'Personas exported.')
+}
+
+const pageMenu = computed<MenuItem[]>(() => [
+  { label: 'Import from file…', icon: FileUp, onSelect: () => importInput.value?.click() },
+  { label: 'Export to file', icon: Download, disabled: !saved.value.length, onSelect: exportPersonas },
+  { label: 'Restore defaults…', icon: RotateCcw, separated: true, onSelect: () => void restoreDefaults() },
+])
+
+function tileMenu(index: number): MenuItem[] {
+  return [
+    { label: 'Edit', icon: Pencil, onSelect: () => openEditor(index) },
+    { label: 'Remove', icon: Trash2, tone: 'danger', separated: true, onSelect: () => void removeVoice(index) },
+  ]
+}
+
+const save = async (): Promise<void> => {
   try {
     let result: NarratorVoice[] = []
     await commit(async (list) => {
@@ -76,10 +142,9 @@ const save = async () => {
       description="How the Game Master words the narration. Authors pick one per adventure in the editor's Tone page."
     >
       <template #actions>
-        <UiButton :icon="RotateCcw" title="Replace the list with the built-in personas (saved only when you save)" @click="restoreDefaults">
-          Restore defaults
-        </UiButton>
-        <UiButton variant="primary" :icon="Plus" @click="addVoice">Add persona</UiButton>
+        <UiMenu :items="pageMenu" label="Import, export and restore personas" />
+        <input ref="importInput" type="file" accept=".json,application/json" class="hidden" @change="onImportFile" />
+        <UiButton variant="primary" :icon="Plus" @click="openEditor(null)">Add persona</UiButton>
       </template>
     </PageHeader>
 
@@ -94,43 +159,39 @@ const save = async () => {
         description="Saving an empty list restores the built-in personas."
       >
         <template #action>
-          <UiButton variant="primary" :icon="Plus" @click="addVoice">Add persona</UiButton>
+          <UiButton variant="primary" :icon="Plus" @click="openEditor(null)">Add persona</UiButton>
         </template>
       </UiEmptyState>
 
-      <UiCard v-for="(voice, index) in voices" :key="index" :title="voice.name || 'New persona'" :description="voice.description">
-        <template #actions>
-          <UiIconButton :icon="Trash2" :label="`Remove ${voice.name || 'this persona'}`" variant="danger" size="sm" @click="removeVoice(index)" />
-        </template>
-        <div class="space-y-4">
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <UiField label="Name" required>
-              <UiInput v-model="voice.name" maxlength="80" placeholder="e.g. Hardboiled Noir Detective" />
-            </UiField>
-            <UiField label="Short description">
-              <UiInput v-model="voice.description" maxlength="300" placeholder="Genre and character of the persona" />
-            </UiField>
+      <ul v-else class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <li
+          v-for="(voice, index) in voices"
+          :key="(voice.id || 'new') + '-' + index"
+          class="relative flex flex-col rounded-xl border border-wb-line bg-wb-surface transition-colors hover:border-wb-line-strong"
+        >
+          <div class="absolute right-2 top-2">
+            <UiMenu :items="tileMenu(index)" :label="`Actions for ${voice.name || 'this persona'}`" />
           </div>
-          <UiField
-            label="Instruction for the Game Master"
-            required
-            hint="Personas without a name or instruction are skipped when saving."
-            :count="voice.instruction.length"
-            :max-length="VOICE_INSTRUCTION_MAX"
+          <button
+            type="button"
+            class="flex flex-1 flex-col gap-2 rounded-xl p-4 pr-12 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent"
+            @click="openEditor(index)"
           >
-            <UiTextarea v-model="voice.instruction" :maxlength="VOICE_INSTRUCTION_MAX" :rows="3" placeholder="Narrate like … Use … Never …" />
-          </UiField>
-          <UiField
-            label="Style sample"
-            hint="One or two sentences in this voice. The Game Master copies the style, not the content."
-            :count="(voice.sample || '').length"
-            :max-length="VOICE_SAMPLE_MAX"
-          >
-            <UiTextarea v-model="voice.sample" :maxlength="VOICE_SAMPLE_MAX" :rows="2" />
-          </UiField>
-        </div>
-      </UiCard>
+            <span class="flex items-center gap-2">
+              <ScrollText class="h-4 w-4 shrink-0 text-wb-faint" aria-hidden="true" />
+              <span class="wb-label truncate !text-wb-strong">{{ voice.name || 'New persona' }}</span>
+            </span>
+            <span v-if="voice.id" class="wb-mono truncate text-wb-faint">{{ voice.id }}</span>
+            <span class="wb-hint line-clamp-2">{{ voice.description || 'No description.' }}</span>
+            <span v-if="voice.sample" class="wb-body line-clamp-3 border-l-2 border-wb-line-strong pl-3 italic text-wb-muted">
+              {{ voice.sample }}
+            </span>
+          </button>
+        </li>
+      </ul>
     </template>
+
+    <PersonaEditModal v-model:open="isEditorOpen" :voice="editingVoice" :is-new="editIndex === null" @apply="applyVoice" />
 
     <UiSaveBar :dirty="isDirty" :count="changedCount" :saving="isSaving" @save="save" @discard="reset" />
   </div>

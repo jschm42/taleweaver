@@ -30,6 +30,7 @@ from backend.api.routes import (
     audio_settings_api,
     auth_api,
     avatars,
+    catalog_defaults_api,
     characters,
     config_api,
     data,
@@ -201,6 +202,7 @@ app.include_router(narrator_voices_api.router, prefix="/api")
 app.include_router(voice_map_api.router, prefix="/api")
 app.include_router(audio_settings_api.router, prefix="/api")
 app.include_router(config_api.router, prefix="/api")
+app.include_router(catalog_defaults_api.router, prefix="/api")
 app.include_router(setup_wizard_api.router, prefix="/api")
 app.include_router(model_discovery_api.router, prefix="/api")
 app.include_router(adventures.router, prefix="/api")

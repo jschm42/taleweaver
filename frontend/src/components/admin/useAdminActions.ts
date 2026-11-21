@@ -129,8 +129,11 @@ export function useCatalogEditing() {
     target: CatalogTile,
     targetIndex: number | null = null,
     prompt: string | null = null,
+    quality: 'simple' | 'advanced' = 'simple',
   ): Promise<void> {
-    await catalogService.generateImage(catalogType, target, settingsService.t2iForm.value.simple_model, targetIndex, prompt)
+    const form = settingsService.t2iForm.value
+    const model = quality === 'advanced' ? form.advanced_model : form.simple_model
+    await catalogService.generateImage(catalogType, target, model, targetIndex, prompt, quality)
     isPromptOpen.value = false
   }
 

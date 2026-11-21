@@ -941,6 +941,21 @@ export const api = {
   },
 
   /** Catalog */
+  /** Built-in defaults of the styles or tones catalog (admin only). */
+  getCatalogDefaults(type: 'styles' | 'tones'): Promise<{ items: CatalogTile[] }> {
+    return request(`/settings/catalog-defaults/${type}`)
+  },
+
+  /** Suggested image prompt for a catalog tile (small LLM, built-in template as fallback). */
+  suggestCatalogPrompt(payload: {
+    catalog_type: 'styles' | 'tones'
+    name: string
+    description?: string
+    instruction?: string
+  }): Promise<{ prompt: string; source: 'llm' | 'template' }> {
+    return request('/settings/catalog/suggest-prompt', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 60000 })
+  },
+
   generateCatalogImage(payload: any): Promise<any> {
     return request('/settings/catalog/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 180000 })
   },

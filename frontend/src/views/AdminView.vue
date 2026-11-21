@@ -36,6 +36,11 @@ const settings = useSettingsActions()
 const users = useUserEditing()
 const catalog = useCatalogEditing()
 
+// The prompt dialog's entry is being generated (keys follow catalogService: "<type>_<index>").
+const isPromptGenerating = computed(() => {
+  const data = catalog.promptData.value
+  return Boolean(data && catalogService.isGeneratingItem.value[`${data.type}_${data.index}`])
+})
 const catalogType = computed<CatalogType>(() => (activeSection.value === 'tones' ? 'tones' : 'styles'))
 const catalogItems = computed(() =>
   catalogType.value === 'tones' ? catalogService.toneCatalog.value : catalogService.imageStylesCatalog.value,
@@ -200,8 +205,9 @@ onMounted(() => {
     <PromptInputModal
       :is-open="catalog.isPromptOpen.value"
       :data="catalog.promptData.value"
+      :is-generating="isPromptGenerating"
       @close="catalog.isPromptOpen.value = false"
-      @generate="({ type, item, index, prompt }) => catalog.generateImage(type, item, index, prompt)"
+      @generate="({ type, item, index, prompt, quality }) => catalog.generateImage(type, item, index, prompt, quality)"
     />
   </WorkbenchShell>
 </template>

@@ -395,6 +395,7 @@ tests = [
     "test_setup_*.py",
     "test_health_endpoint.py",
     "test_style_catalog.py",
+    "test_catalog_tile_image.py",
     "test_ui_theme.py",
     "test_avatars_api.py",
 ]
@@ -414,6 +415,8 @@ sources = [
     "backend/core/error_diagnostics.py",
     "backend/models/server_settings.py",
     "backend/api/routes/config_api.py",
+    "backend/api/routes/catalog_defaults_api.py",
+    "backend/engine/media/catalog_tile_image.py",
     "backend/api/routes/setup_wizard_api.py",
     "backend/api/routes/model_discovery_api.py",
     "backend/api/routes/settings_normalization.py",

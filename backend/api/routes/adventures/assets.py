@@ -100,10 +100,11 @@ def _build_default_visual_body(target_type: str, target_obj: Any) -> str:
 
 def _target_type_style_tag(target_type: str) -> str:
     tags = {
-        "protagonist": " Game character art style.",
-        "scene": " RPG visual novel style, high detail.",
+        # Genre-neutral on purpose: the chosen image style sets the look.
+        "protagonist": " Character art, full figure, high detail.",
+        "scene": " Detailed environment, high detail.",
         "npc": " Character portrait, high detail.",
-        "object": " Fantasy item concept art, isolated and clearly readable.",
+        "object": " Item concept art, isolated and clearly readable.",
     }
     return tags.get(target_type, "")
 
