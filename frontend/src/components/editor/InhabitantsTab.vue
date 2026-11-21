@@ -8,6 +8,10 @@ import { computed } from 'vue'
 import { Brain } from 'lucide-vue-next'
 import { getItemIcon } from '@/utils/game_icons'
 import { hasAnyScript } from '@/utils/editor_utils'
+import { sectionsOf } from '@/services/sectionService'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import PlaceFilterBar from '@/components/editor/filters/PlaceFilterBar.vue'
+import { ELSEWHERE, sectionMapOf, usePlaceFilter } from '@/components/editor/filters/placeFilter'
 
 const props = defineProps<{
   form: any
@@ -69,9 +73,19 @@ const sections = computed<InhabitantSection[]>(() => {
     byScene.delete(key)
   }
   const rest = [...byScene.values()].flat()
-  if (rest.length) result.push({ key: '__UNASSIGNED__', label: 'Unassigned / elsewhere', sceneId: null, npcs: rest })
+  if (rest.length) result.push({ key: ELSEWHERE, label: 'Unassigned / elsewhere', sceneId: null, npcs: rest })
   return result
 })
+
+const placeFilter = usePlaceFilter({
+  memoryKey: () => `characters:${props.adventure?.id || props.debugData?.adventure?.id || ''}`,
+  sections: () => sectionsOf(props.debugData?.adventure),
+  sectionOfScene: () => sectionMapOf(props.editorScenes),
+  groups: () => sections.value.map((s) => ({ sceneId: s.sceneId, label: s.label, count: s.npcs.length })),
+})
+
+const visibleSections = computed<InhabitantSection[]>(() => sections.value.filter((s) => placeFilter.matches(s.sceneId)))
+const visibleCount = computed(() => visibleSections.value.reduce((sum, s) => sum + s.npcs.length, 0))
 
 const companionOf = (npc: any): any => npc?.metadata_json?.companion || null
 
@@ -107,7 +121,19 @@ function getSceneLabel(sceneId?: string | null): string {
           </button>
         </div>
       </div>
-      <div v-for="section in sections" :key="section.key" class="space-y-3">
+      <PlaceFilterBar
+        v-if="placeFilter.hasRegions.value || sections.length > 1"
+        :filter="placeFilter"
+        :shown="visibleCount"
+        :total="editorNpcs.length"
+        noun="characters"
+      />
+      <UiEmptyState
+        v-if="!visibleSections.length"
+        title="No characters here"
+        description="No character stands in a scene of this region. Pick another region or scene."
+      />
+      <div v-for="section in visibleSections" :key="section.key" class="space-y-3">
         <h4 class="flex items-center gap-2 text-[11px] font-black text-sky-300/90 uppercase tracking-[0.2em] border-b border-white/5 pb-1.5">
           <i class="ra ra-compass"></i>
           <span>{{ section.label }}</span>

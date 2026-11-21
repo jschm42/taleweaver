@@ -3,6 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { Brain } from 'lucide-vue-next'
 import { getImageUrl, getOriginalImageUrl, hasRenderableImagePath } from '@/utils/game_icons'
 import { hasAnyScript } from '@/utils/editor_utils'
+import { sectionsOf } from '@/services/sectionService'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import PlaceFilterBar from '@/components/editor/filters/PlaceFilterBar.vue'
+import { sectionMapOf, usePlaceFilter } from '@/components/editor/filters/placeFilter'
 
 const props = defineProps<{
   editorScenes: any[]
@@ -42,6 +46,16 @@ const scenes = computed<any[]>(() => {
   return source.filter((scene: any) => !String(scene?.id || '').trim().startsWith('DYN_'))
 })
 
+const placeFilter = usePlaceFilter({
+  memoryKey: () => `scenes:${props.adventureId || ''}`,
+  sections: () => sectionsOf(props.debugData?.adventure),
+  sectionOfScene: () => sectionMapOf(props.editorScenes),
+  groups: () => scenes.value.map((scene: any) => ({ sceneId: String(scene?.id || ''), label: String(scene?.label || scene?.name || scene?.id), count: 1 })),
+})
+const matchesRegion = (sceneId: string): boolean => placeFilter.matches(sceneId)
+
+const visibleScenes = computed<any[]>(() => scenes.value.filter((scene: any) => matchesRegion(String(scene?.id || ''))))
+
 const sceneLabelById = computed<Map<string, string>>(() => {
   const map = new Map<string, string>()
   for (const scene of scenes.value) {
@@ -70,6 +84,7 @@ const dynamicPlaceholders = computed<DynamicPlaceholderCard[]>(() => {
   const result: DynamicPlaceholderCard[] = []
   for (const exit of exits) {
     if (!exit?.is_dynamic) continue
+    if (!matchesRegion(String(exit.from_scene_id || '').trim())) continue
     const targetId = String(exit.to_scene_id || '').trim()
     const key = targetId || String(exit.id || `${exit.from_scene_id}_${exit.label}`)
     if (!key || seen.has(key)) continue
@@ -170,6 +185,21 @@ function isStartScene(scene: any): boolean {
       </div>
     </div>
 
+    <PlaceFilterBar
+      v-if="placeFilter.hasRegions.value && scenes.length"
+      :filter="placeFilter"
+      :shown="visibleScenes.length"
+      :total="scenes.length"
+      noun="scenes"
+      :show-scene="false"
+    />
+
+    <UiEmptyState
+      v-if="scenes.length && !visibleScenes.length && !dynamicPlaceholders.length"
+      title="No scenes in this region"
+      description="Pick another region, or assign scenes to this one in the scene editor or on the Regions page."
+    />
+
     <!-- Empty State -->
     <div v-if="!scenes.length && !dynamicPlaceholders.length" class="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/10 rounded-2xl bg-slate-900/30">
       <i class="ra ra-map text-4xl text-slate-600 mb-4"></i>
@@ -181,9 +211,9 @@ function isStartScene(scene: any): boolean {
     </div>
 
     <!-- Scene Grid -->
-    <div v-if="scenes.length || dynamicPlaceholders.length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <div v-if="visibleScenes.length || dynamicPlaceholders.length" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
       <div
-        v-for="(scene, idx) in scenes"
+        v-for="(scene, idx) in visibleScenes"
         :key="'scene_' + (scene.id || idx)"
         @click="emit('open-scene', scene.id)"
         @mouseenter="emit('handle-hover', { id: scene.id, name: scene.label || scene.name, description: scene.description, image_url: scene.image_url, type: 'LOCATION' }, $event)"

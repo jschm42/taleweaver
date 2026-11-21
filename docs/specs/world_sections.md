@@ -35,7 +35,7 @@ instead of a toggle in the creation wizard (9.3).
 | Validators | `core/world_validation/sections.py` |
 | Map API (`sections`, `section_links`, node `section_id`) | `engine/interaction/map_sections.py`, `api/routes/map_api.py` |
 | Editor endpoints, change-set ops `set_sections` / `assign_section` | `api/routes/adventures/editing/section_crud.py` |
-| Editor UI: Regions page, Map region filter, scene region select | `components/editor/regions/`, `pages/RegionsPage.vue`, `pages/MapPage.vue`, `SceneSectionSelect.vue` |
+| Editor UI: Regions page, Map region filter, scene region select, list filters | `components/editor/regions/`, `pages/RegionsPage.vue`, `pages/MapPage.vue`, `SceneSectionSelect.vue`, `components/editor/filters/` |
 | Tests | `tests/test_world_sections.py` |
 
 | Phase | Content | Depends on |
@@ -355,6 +355,10 @@ Needs `docs/scripting_engine.md`, `world_scripting_prompt.py` and
 * Scene form: section select, "Fast travel point" checkbox and its unlock mode. Exit form:
   travel minutes and label, offered for all exits and highlighted for gateway exits.
 * Bulk action "move scenes to section" for restructuring existing adventures.
+* List filters (`components/editor/filters/`): the Scenes list filters by region, the
+  Characters and Items lists by region and scene (the scene select narrows to the chosen
+  region; "No region" keeps scenes without a section, entries without a known scene show only
+  under "All regions" or their own scene option). The choice is kept per adventure and list.
 * CRUD in a new `editing/section_crud.py`, not in `world_crud.py`.
 * The change-set tool (`scripts/edit_adventure.py`, skill `taleweaver-adventure-editor`)
   learns sections and the new exit fields.
