@@ -31,7 +31,7 @@ const ROWS: {
 <template>
   <UiCard
     title="World size"
-    description="Larger worlds take longer to build. Model limits can keep the result below the maximum."
+    description="Larger worlds take longer to build. Regions are added later in the World-Editor (Regions page)."
   >
     <div class="divide-y divide-wb-line">
       <LimitRow v-for="row in ROWS" :key="row.limit" v-bind="row" />
