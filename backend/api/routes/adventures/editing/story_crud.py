@@ -157,6 +157,8 @@ async def validate_editor_script(
         "on_time_reached",
         "on_respawn",
         "on_conversation_heard",
+        "on_enter_section",
+        "on_leave_section",
     }
     if payload.trigger and payload.trigger not in valid_triggers:
         errors.append(

@@ -26,6 +26,7 @@ from backend.api.routes.adventures.fast_travel_plan import live_block_reason, lo
 from backend.api.routes.adventures.game_clock_flow import run_due_time_events
 from backend.api.routes.adventures.respawn_flow import end_or_respawn
 from backend.api.routes.adventures.scene_scripts import run_global_scene_scripts
+from backend.api.routes.adventures.section_triggers import run_section_change_scripts
 from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.rules.rule_engine import GameOverError
 from backend.engine.rules.travel_time import (
@@ -120,6 +121,7 @@ async def _hop(manager: Any, step: Any, trip: _Trip) -> list[Any]:
     trip.scene = scene
     trip.passed.append(scene.label or scene.id)
     messages.extend(await _on_enter(manager, scene))
+    messages.extend(await run_section_change_scripts(manager, from_id, scene.id))
     messages.extend(await _time_events(manager))
     return messages
 

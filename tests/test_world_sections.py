@@ -422,3 +422,65 @@ async def test_sections_survive_export_and_import(auth_client, setup_test_db, mo
     assert sections["GLOOM_PEAKS"]["brief"] == "Dwarven ruins."
     assert await _scene_sections("copy") == {"SQUARE": "HARBOR_TOWN", "TRAIL": None}
     assert exported_again["sections"] == manifest["sections"]
+
+
+# --- world map image -------------------------------------------------------------------------
+
+
+def test_world_map_prompt_places_regions_by_compass_and_forbids_text():
+    from backend.engine.world.section_map_image import world_map_prompt
+
+    # Arrange
+    adventure = SimpleNamespace(
+        world_sections=[
+            {**HARBOR, "map_x": 10, "map_y": 90},
+            {"id": "PEAKS", "label": "Peaks", "map_x": 80, "map_y": 10, "status": "stub", "brief": "Ice."},
+        ],
+        plot="A storm.",
+    )  # fmt: skip
+
+    # Act
+    prompt = world_map_prompt(adventure)
+
+    # Assert
+    assert "Harbor Town in the south-west: A fishing port." in prompt
+    assert "Peaks in the north-east: Ice." in prompt
+    assert "No text" in prompt
+
+
+@pytest.mark.asyncio
+async def test_drawing_the_world_map_stores_the_image_and_the_map_returns_it(
+    auth_client, setup_test_db, monkeypatch
+):
+    monkeypatch.setattr(
+        "backend.engine.media.media_engine.MediaEngine.generate_scene_image",
+        AsyncMock(return_value="/data/adventures/library/x/scenes/map.png"),
+    )
+    # Arrange
+    template_id = await _seed_template([HARBOR])
+
+    # Act
+    drawn = await auth_client.post(f"/api/adventures/{template_id}/editor/sections/map-image")
+    world_map = await auth_client.get(f"/api/adventures/{template_id}/map")
+    removed = await auth_client.delete(f"/api/adventures/{template_id}/editor/sections/map-image")
+
+    # Assert
+    assert drawn.status_code == 200, drawn.text
+    assert drawn.json()["world_map_image_url"].endswith("map.png")
+    assert world_map.json()["world_map_image_url"].endswith("map.png")
+    assert removed.json() == {"world_map_image_url": None}
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, template_id)
+    assert adv.world_map_image_url is None
+
+
+@pytest.mark.asyncio
+async def test_drawing_needs_regions(auth_client, setup_test_db):
+    # Arrange
+    template_id = await _seed_template()
+
+    # Act
+    resp = await auth_client.post(f"/api/adventures/{template_id}/editor/sections/map-image")
+
+    # Assert
+    assert resp.status_code == 400

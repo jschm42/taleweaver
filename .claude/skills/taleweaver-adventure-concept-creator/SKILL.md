@@ -55,6 +55,7 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Sidequest: ID] Title` | `goal`, `goal_item`, `guard`, `xp` |
 | `[Award: KEY] Title` | `tier`, `requires`, `guard` |
 | `[Section: ID] Label` (or `[Region: ID]`) | Region of a large world; body = description; `position: x, y` (0-100), `status` (`built` default / `planned`: no scenes yet, hidden from players), `brief`, `links` (`HARBOR_TOWN 8h, MINES`). Only for worlds with many scenes; regions gate nothing |
+| `[Sidequest: ID] Title` region hint | `region: ID` names the `[Section]` where the quest continues |
 | `[Audio: ID] Name` | `prompt` (English music prompt: genre, instruments, tempo, mood; instrumental, no artist names; scenes that share a mood share a track) |
 | `[Talent: ID] Name` (inside the Protagonist) | `target` (`none`/`npc`/`item`/`any`), `cost` (`mana 10`), `uses`, `gm` (what the GM reveals/narrates), `locked`, `unlock_*`, `on_use` (`talent` dict in scope). Non-combat; the player types `use <talent>` / `cast <talent> on <target>` |
 | `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item`, `area` (`splash 1` / `all`, protagonist only), `save` (`dex`), `spare_passive` |

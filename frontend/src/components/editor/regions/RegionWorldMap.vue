@@ -4,6 +4,7 @@
  * exit connects them, dashed: planned). Regions can be dragged to a new position.
  */
 import { computed, ref } from 'vue'
+import { getImageUrl } from '@/utils/game_icons'
 import type { WorldSection } from '@/services/sectionService'
 import { formatTravel, type RegionLink } from '@/components/editor/regions/regionGraph'
 
@@ -12,6 +13,8 @@ const props = defineProps<{
   links: RegionLink[]
   selectedId: string | null
   sceneCounts: Record<string, number>
+  /** Drawn world map behind the regions, if any. */
+  imageUrl?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -56,7 +59,8 @@ function stopDrag(): void {
 <template>
   <div
     ref="board"
-    class="relative w-full aspect-[16/9] rounded-xl border border-wb-line bg-wb-sunken overflow-hidden select-none touch-none"
+    class="relative w-full aspect-[16/9] rounded-xl border border-wb-line bg-wb-sunken bg-cover bg-center overflow-hidden select-none touch-none"
+    :style="imageUrl ? { backgroundImage: `url(${getImageUrl(imageUrl)})` } : undefined"
     @pointermove="onDrag"
     @pointerup="stopDrag"
     @pointercancel="stopDrag"

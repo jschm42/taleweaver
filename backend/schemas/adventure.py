@@ -41,6 +41,8 @@ class SequenceScriptSchema(BaseModel):
         "on_time_reached",
         "on_respawn",
         "on_conversation_heard",
+        "on_enter_section",
+        "on_leave_section",
     ]
     target_id: Optional[str] = ""
     code: str = ""

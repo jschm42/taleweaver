@@ -624,6 +624,8 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_time_reached",
         "on_respawn",
         "on_conversation_heard",
+        "on_enter_section",
+        "on_leave_section",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -764,6 +766,13 @@ class QuestSchema(WorldBaseSchema):
         default="",
         description="Deterministic Python boolean expression evaluated against tw context. Quest only completes when True.",
     )
+    section_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the world section (region) where the quest continues. Use empty "
+            "string when the adventure has no sections."
+        ),
+    )
 
     model_config = {"extra": "ignore"}
 
@@ -894,9 +903,11 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_time_reached",
         "on_respawn",
         "on_conversation_heard",
+        "on_enter_section",
+        "on_leave_section",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None), on_conversation_heard (the protagonist overheard an NPC conversation topic; target = topic id)",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None), on_conversation_heard (the protagonist overheard an NPC conversation topic; target = topic id), on_enter_section / on_leave_section (the protagonist entered / left a world section; target = section id or None)",
     )
     target_id: Optional[str] = Field(
         None,

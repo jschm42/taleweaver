@@ -13,6 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
+from backend.api.routes.adventures.section_triggers import run_section_change_scripts
 from backend.api.routes.adventures.listen_mode_command import (
     handle_listen_mode_command,
     is_listen_mode_command,
@@ -1558,6 +1559,12 @@ class GameTurnManager:
                         )
                         rule_violations.extend(cs_scene.rejected_actions)
                         sys_msgs = await self._apply_script_changeset(cs_scene, game_event)
+                        sys_msgs = [
+                            *sys_msgs,
+                            *await run_section_change_scripts(
+                                self, self.state.current_scene_id, game_event.new_scene_id
+                            ),
+                        ]
                         for sm in sys_msgs:
                             yield sse_role_message(sm)
 

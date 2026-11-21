@@ -10,6 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.section_triggers import run_section_change_scripts
 from backend.api.routes.adventures.arrival_narration_flow import narrate_arrival
 from backend.api.routes.adventures.travel_flow import apply_exit_travel
 from backend.api.routes.adventures.container_detach import (
@@ -434,6 +435,9 @@ class TurnInteractionsManager:
             for m in msgs:
                 yield f"event: system\ndata: {json.dumps({'role': 'system', 'content': m})}\n\n"
         for m in await run_global_scene_scripts(self.manager, "on_enter_scene", scene.id):
+            role = getattr(m, "role", "system")
+            yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
+        for m in await run_section_change_scripts(self.manager, current_scene_id, scene.id):
             role = getattr(m, "role", "system")
             yield f"event: {role}\ndata: {json.dumps({'role': role, 'content': str(m)})}\n\n"
 

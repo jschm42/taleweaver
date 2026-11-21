@@ -28,6 +28,8 @@ def prepare_section(manifest: dict[str, Any], section_id: str, ledger: Ledger) -
     notes: list[str] = []
     for scene in manifest.get("scenes") or []:
         scene["section_id"] = section_id
+    for quest in manifest.get("quests") or []:
+        quest["section_id"] = quest.get("section_id") or section_id
     next_order = max(ledger.sequence_orders, default=0) + 1
     for offset, sequence in enumerate(manifest.get("sequences") or []):
         sequence["order"] = next_order + offset

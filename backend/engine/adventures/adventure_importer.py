@@ -89,6 +89,23 @@ def _gm_time_control(*sources: Optional[dict[str, Any]]) -> bool:
     return True
 
 
+def _apply_imported_media(
+    template: Any, manifest_data: dict, adv_data: dict, asset_mapping: dict
+) -> None:
+    """Audio library, title track and world map image of an imported ``.adz``."""
+    map_imported_audio(manifest_data, asset_mapping)
+    template.audio_tracks = normalize_tracks(
+        adv_data.get("audio_tracks") or adv_data.get("music_tracks"), template.id
+    )
+    template.audio_enabled = bool(
+        adv_data.get("audio_enabled", adv_data.get("music_enabled", True))
+    )
+    template.title_track_id = title_track_or_none(
+        adv_data.get("title_track_id"), template.audio_tracks
+    )
+    template.world_map_image_url = asset_mapping.get(adv_data.get("world_map_image_url"))
+
+
 class AdventureConflictError(Exception):
     """Raised when an adventure being imported already exists."""
 
@@ -473,15 +490,8 @@ class AdventureTemplateImporter:
                 os.makedirs(target_base_dir, exist_ok=True)
 
                 existing_images_mapping = extract_adz_assets(zip_file, target_base_dir)
-                map_imported_audio(manifest_data, existing_images_mapping)
-                new_template.audio_tracks = normalize_tracks(
-                    adv_data.get("audio_tracks") or adv_data.get("music_tracks"), new_template_id
-                )
-                new_template.audio_enabled = bool(
-                    adv_data.get("audio_enabled", adv_data.get("music_enabled", True))
-                )
-                new_template.title_track_id = title_track_or_none(
-                    adv_data.get("title_track_id"), new_template.audio_tracks
+                _apply_imported_media(
+                    new_template, manifest_data, adv_data, existing_images_mapping
                 )
 
                 # Reconstruct world

@@ -415,7 +415,8 @@ def _build_special_attack_requirement(
         "`travel_minutes` (e.g. 480 for a day's march) and optional `travel_label`; doors and "
         "short paths get none. Mark one or two central scenes per region (a square, an inn, a "
         "waystone) with `is_fast_travel_point: true`; players can later travel back there from "
-        "anywhere. Use `fast_travel_unlock: 'script'` only when a script unlocks the point."
+        "anywhere. Use `fast_travel_unlock: 'script'` only when a script unlocks the point. "
+        "Give a quest the `section_id` of the region where it continues."
     )
 
 

@@ -260,7 +260,7 @@ Nested blocks (indent them for readability; they always belong to the **latest**
 - `[Script: ID] Name` (indented): a chapter script that only runs while this sequence is active. Keys: `trigger`, `target`, `at` (for `on_time_reached`), `code`.
 
 ### `[Script: ID] Name`
-A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`, `on_respawn`), `target` (entity ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
+A global script (written at the start of a line, not indented). `trigger` (`on_init`, `on_enter_scene`, `on_interact`, `on_turn_start`, `on_turn_end`, `on_logic_pass_done`, `on_narration_done`, `on_time_reached`, `on_respawn`, `on_conversation_heard`, `on_enter_section`, `on_leave_section`), `target` (entity ID, scene ID or, for the section triggers, the `[Section]` ID), `at` (only for `on_time_reached`: the elapsed in-game time, e.g. `90`, `2h 30m`, `1d`), `code`.
 
 ```
 [Script: NIGHTFALL] Night falls
@@ -271,7 +271,7 @@ code: tw.direct('Night has fallen: describe darkness and cold.')
 Requires **Event Scripts** to be enabled in the generator settings.
 
 ### `[Sidequest: ID] Title`
-`goal`, `impact`, `goal_item`, `goal_scene`, `defeat`, `guard`, `xp`.
+`goal`, `impact`, `goal_item`, `goal_scene`, `defeat`, `guard`, `xp`, `region` (alias `section`: the `[Section]` where the quest continues; the Play-Agent sees it as a hint).
 
 ### `[Audio: ID] Name`
 A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the English prompt for the music model: genre, instruments, tempo, mood; instrumental, no artist names or lyrics; ideally ending with a seamless-loop request. Scenes pick a track with `audio: ID`. The World-Builder only stores the prompt; the track is rendered in the editor's **Audio** tab.

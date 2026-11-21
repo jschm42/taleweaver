@@ -626,6 +626,8 @@ section: HARBOR_TOWN
 
 Regions gate nothing: a route between two regions is an ordinary exit between their scenes, with the usual locks. Manage regions later on the editor's **Regions** page and filter the **Map** by region.
 
+**Region scripts** react when the player crosses a region border: a script with `trigger: on_enter_section` (or `on_leave_section`) and the region's ID as `target` runs once per crossing, e.g. to change the music, start a chapter or warn about the cold. A side quest can name the region where it continues with `region: ID`.
+
 **Events on the road** belong in the exit's `on_use` script, which runs when the player takes the way (also during fast travel, where any message it writes stops the trip at that place):
 
 ```text
@@ -637,7 +639,7 @@ on_use: |
       tw.story.narrate("A rockslide blocks the road. Finding a way around costs two hours.")
 ```
 
-A planned region does not have to be written by hand. On the **Regions** page, **Plan regions** proposes new planned regions and a campaign outline from the plot; **Generate region** then builds one planned region (6-10 scenes with characters, items, exits to its neighbours and fast travel points) from its brief, the outline and what already exists. Players who started the adventure earlier are offered the new region when they open their session. While regions are still planned, finishing the last chapter does not end the adventure: players get a *To be continued* notice and keep exploring (a win guard or `tw.game.win()` still ends it).
+On the Regions page, **Draw map** paints a world map from the regions and their positions as the background of the editor's and the players' world map (no lettering; the names are drawn on top). A planned region does not have to be written by hand. On the **Regions** page, **Plan regions** proposes new planned regions and a campaign outline from the plot; **Generate region** then builds one planned region (6-10 scenes with characters, items, exits to its neighbours and fast travel points) from its brief, the outline and what already exists. Players who started the adventure earlier are offered the new region when they open their session. While regions are still planned, finishing the last chapter does not end the adventure: players get a *To be continued* notice and keep exploring (a win guard or `tw.game.win()` still ends it).
 
 ### Long journeys and fast travel
 

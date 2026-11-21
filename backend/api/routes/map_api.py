@@ -92,14 +92,12 @@ async def _scene_sections(
     return {row.id: row.section_id for row in (await db.execute(query)).all()}
 
 
-async def _map_sections(db: AsyncSession, template_id: str, session_id: Optional[str]) -> Any:
-    """The sections a map may show: the session's frozen copy, else the template's."""
+async def _map_adventure(db: AsyncSession, template_id: str, session_id: Optional[str]) -> Any:
+    """Where the map's sections come from: the session's frozen copy, else the template."""
     if session_id:
         state = await AdventureLogic.resolve_session_state(db, session_id)
-        adventure = await load_session_adventure(db, state)
-        return getattr(adventure, "world_sections", None) if adventure else None
-    adventure = await db.get(AdventureTemplate, template_id)
-    return adventure.world_sections if adventure else None
+        return await load_session_adventure(db, state)
+    return await db.get(AdventureTemplate, template_id)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -136,11 +134,14 @@ async def get_map(
                 map_dict, exits, raw_current_id, exit_states=exit_states
             )
 
-    return attach_sections(
+    adventure = await _map_adventure(db, template_id, session_id)
+    map_dict = attach_sections(
         map_dict,
         await _scene_sections(db, template_id, session_id),
-        await _map_sections(db, template_id, session_id),
+        getattr(adventure, "world_sections", None),
     )
+    map_dict["world_map_image_url"] = getattr(adventure, "world_map_image_url", None)
+    return map_dict
 
 
 @router.post("/adventures/{template_id}/map/visit", status_code=200)

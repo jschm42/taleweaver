@@ -1,11 +1,16 @@
 # World Sections, Travel Time and Fast Travel (Concept)
 
-Status (2026-11-21): **phases 1-3 implemented**, from phase 4 the player's world map
-(`PlayerRegionMap.vue` in the map dialog's travel strip) and the road-event recipe (blueprint
-manual, *Long journeys and fast travel*). Planning regions is an editor action instead of a
-toggle in the creation wizard (9.3). Still open from phase 4: `on_enter_section` /
-`on_leave_section` triggers, a generated world map image, quest region hints, several
-travel points per section.
+Status (2026-11-21): **phases 1-4 implemented.** Planning regions is an editor action
+instead of a toggle in the creation wizard (9.3).
+
+| Phase 4 piece | Where |
+| --- | --- |
+| Player world map | `frontend/src/components/game/PlayerRegionMap.vue` (map dialog's travel strip) |
+| Triggers `on_enter_section` / `on_leave_section` | `api/routes/adventures/section_triggers.py`; fired after an exit, each fast travel step, GM transitions and the respawn (not for script teleports or `/debug goto`) |
+| World map image (`AdventureTemplate.world_map_image_url`, migration `e8a0c2d4f6b7`) | `engine/world/section_map_image.py`, `POST`/`DELETE /{template_id}/editor/sections/map-image`, map API field `world_map_image_url` |
+| Quest region hint (quest `section_id`, blueprint `region:`) | `agent_objectives.py` ("continues in ..."), region generation fills it, quest dialog |
+| Several travel points per section | already possible: any number of scenes can be fast travel points (decision 7) |
+| Road events | recipe in the blueprint manual (*Long journeys and fast travel*) |
 
 | Phase 3 piece | Where |
 | --- | --- |

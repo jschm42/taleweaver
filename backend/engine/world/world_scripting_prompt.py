@@ -48,6 +48,17 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
         "once the protagonist overheard an NPC conversation topic (conversation_topics)",
         "Topic id (or None for any topic)",
     ),
+    (
+        "on_enter_section",
+        "when the protagonist enters a scene of another world section (region), after its "
+        "on_enter_scene scripts (a region's welcome, weather, danger)",
+        "Section id (or None for every region)",
+    ),
+    (
+        "on_leave_section",
+        "when the protagonist leaves a world section (region) for another one",
+        "Section id (or None for every region)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a

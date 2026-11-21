@@ -7,11 +7,13 @@
  */
 import { computed } from 'vue'
 import type { MapRegion, MapRegionLink } from '@/types'
+import { getImageUrl } from '@/utils/game_icons'
 
 const props = defineProps<{
   regions: MapRegion[]
   links: MapRegionLink[]
   currentRegionId: string | null
+  imageUrl?: string | null
 }>()
 
 const byId = computed(() => new Map(props.regions.map((region) => [region.id, region])))
@@ -24,7 +26,10 @@ const lines = computed(() =>
 </script>
 
 <template>
-  <div class="relative w-full aspect-[16/6] min-h-[8rem] rounded-xl border border-white/10 bg-black/30 overflow-hidden" role="img" :aria-label="`World map with ${regions.length} known regions`">
+  <div
+    class="relative w-full aspect-[16/6] min-h-[8rem] rounded-xl border border-white/10 bg-black/30 bg-cover bg-center overflow-hidden"
+    :style="imageUrl ? { backgroundImage: `url(${getImageUrl(imageUrl)})` } : undefined"
+    role="img" :aria-label="`World map with ${regions.length} known regions`">
     <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
       <line
         v-for="{ link, a, b } in lines"

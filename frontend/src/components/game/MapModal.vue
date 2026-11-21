@@ -1018,6 +1018,7 @@ onMounted(() => {
             :game-id="gameId"
             :regions="mapData?.sections || []"
             :region-links="mapData?.section_links || []"
+            :map-image-url="mapData?.world_map_image_url || null"
             :current-region-id="mapData?.current_section_id || null"
             @travel="(sceneId) => emit('travel', sceneId)"
           />

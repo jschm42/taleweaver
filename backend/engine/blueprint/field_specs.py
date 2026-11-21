@@ -535,6 +535,8 @@ SCRIPT_TRIGGERS = (
     "on_time_reached",
     "on_respawn",
     "on_conversation_heard",
+    "on_enter_section",
+    "on_leave_section",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),
@@ -548,6 +550,9 @@ SIDEQUEST_KEYS: dict[str, FieldSpec] = {
     **_GOAL_KEYS,
     "goal": FieldSpec("goal"),
     "impact": FieldSpec("impact"),
+    # The region where the quest continues (a hint for the player and the Play-Agent).
+    "section": _ref("section_id"),
+    "region": _ref("section_id"),
 }
 
 AWARD_KEYS: dict[str, FieldSpec] = {

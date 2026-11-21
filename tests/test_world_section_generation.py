@@ -460,3 +460,30 @@ async def test_generation_notes_list_fixups_and_new_findings(setup_test_db, monk
         "Dropped on_init scripts.",
         "warn: Region 'Peaks' has no fast travel point.",
     ]
+
+
+def test_quest_regions_reach_the_manifest_the_generation_and_the_agent():
+    from backend.api.routes.adventures.agent_objectives import format_objectives
+    from backend.engine.blueprint import analyze_blueprint
+    from backend.engine.blueprint.merge import apply_blueprint
+
+    # Arrange
+    manifest = {"quests": []}
+    region = _region()
+    state = SimpleNamespace(
+        quests=[{"id": "Q", "title": "The Hermit", "status": "open", "section_id": "PEAKS"}],
+        active_sequence_id=None,
+        entity_states={},
+    )
+    adventure = SimpleNamespace(world_sections=[HARBOR, {**PEAKS, "status": "built"}], sequences=[])
+
+    # Act
+    blueprint, _ = analyze_blueprint("[Sidequest: Q] The Hermit\nregion: PEAKS\n")
+    apply_blueprint(manifest, blueprint)
+    prepare_section(region, "PEAKS", _ledger())
+    objectives = format_objectives(adventure, state)
+
+    # Assert
+    assert manifest["quests"][0]["section_id"] == "PEAKS"
+    assert region["quests"][0]["section_id"] == "PEAKS"
+    assert "The Hermit (continues in Peaks)" in objectives

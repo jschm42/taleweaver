@@ -16,6 +16,7 @@ const props = defineProps<{
   regions: MapRegion[]
   regionLinks: MapRegionLink[]
   currentRegionId: string | null
+  mapImageUrl?: string | null
 }>()
 
 const emit = defineEmits<{ (e: 'travel', sceneId: string): void }>()
@@ -76,6 +77,7 @@ async function travel(point: TravelPoint): Promise<void> {
       :regions="regions"
       :links="regionLinks"
       :current-region-id="currentRegionId"
+      :image-url="mapImageUrl"
     />
     <div v-else-if="regions.length" class="flex flex-wrap items-center gap-2 text-xs">
       <span class="tw-muted">Regions:</span>

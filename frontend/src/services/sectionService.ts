@@ -128,6 +128,24 @@ export const sectionService = {
     return await res.json()
   },
 
+  /** Draws the world map image from the regions (image model); returns its URL. */
+  async generateMapImage(adventureId: string): Promise<string> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image`, {
+      method: 'POST',
+      headers: authHeaders(true),
+    })
+    if (!res.ok) throw await failure(res, 'Failed to draw the world map.')
+    return (await res.json()).world_map_image_url
+  },
+
+  async removeMapImage(adventureId: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/map-image`, {
+      method: 'DELETE',
+      headers: authHeaders(true),
+    })
+    if (!res.ok) throw await failure(res, 'Failed to remove the world map image.')
+  },
+
   /** Moves scenes into a section (a planned one becomes built), or out of all with null. */
   async assignScenes(adventureId: string, sectionId: string | null, sceneIds: string[]): Promise<SectionAssignResult> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/assign`, {

@@ -452,6 +452,8 @@ export interface WorldMapData {
   /** Links between discovered regions (known exits between their scenes). */
   section_links?: MapRegionLink[]
   current_section_id?: string | null
+  /** Drawn world map behind the regions, if the author made one. */
+  world_map_image_url?: string | null
 }
 
 export interface MapRegion {

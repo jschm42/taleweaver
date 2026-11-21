@@ -79,6 +79,8 @@ class AdventureTemplate(Base, TimestampMixin):
     )
     # World sections (regions) that group the scenes; None = no sections (engine/world/sections.py).
     world_sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Background image of the world map (engine/world/section_map_image.py).
+    world_map_image_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Campaign outline for generating planned regions (engine/world/section_outline.py).
     world_outline: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # Whether the player may fast travel to unlocked fast travel points (engine/rules/fast_travel.py).

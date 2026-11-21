@@ -6,7 +6,7 @@
  * Spec: docs/specs/world_sections.md.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Globe2, Plus, Sparkles } from 'lucide-vue-next'
+import { Globe2, Image as ImageIcon, Plus, Sparkles } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
 import { useConfirm, usePrompt } from '@/composables/useDialogs'
 import { useDraft } from '@/composables/useDraft'
@@ -57,6 +57,8 @@ const assignOpen = ref(false)
 const planOpen = ref(false)
 const assigning = ref(false)
 const starting = ref(false)
+const drawing = ref(false)
+const mapImage = computed(() => (editor.debugData?.adventure?.world_map_image_url as string | null) || null)
 
 const sections = computed(() => draft.value.sections)
 const scenes = computed(() => (editor.editorScenes || []) as { id: string; label?: string; name?: string; section_id?: string | null }[])
@@ -150,6 +152,31 @@ async function generate(section: WorldSection): Promise<void> {
   }
 }
 
+async function drawMap(): Promise<void> {
+  if (isDirty.value) {
+    toast.warn('Save the regions first, then draw the map.')
+    return
+  }
+  drawing.value = true
+  try {
+    await sectionService.generateMapImage(editor.adventureId)
+    await editor.fetchDebugInfo()
+  } catch (error: unknown) {
+    toast.error(error instanceof Error ? error.message : 'Failed to draw the world map.')
+  } finally {
+    drawing.value = false
+  }
+}
+
+async function removeMap(): Promise<void> {
+  try {
+    await sectionService.removeMapImage(editor.adventureId)
+    await editor.fetchDebugInfo()
+  } catch (error: unknown) {
+    toast.error(error instanceof Error ? error.message : 'Failed to remove the world map image.')
+  }
+}
+
 function openAssign(): void {
   if (isDirty.value) {
     toast.warn('Save the regions first, then choose their scenes.')
@@ -193,7 +220,21 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
 
     <template v-else>
       <UiCard title="World map" :description="`Drag a region to move it. ${unassigned} scene(s) belong to no region.`">
-        <RegionWorldMap :sections="sections" :links="links" :selected-id="selectedId" :scene-counts="counts" @select="selectedId = $event" @move="moveRegion" />
+        <template #actions>
+          <UiButton variant="ai" size="sm" :icon="ImageIcon" :loading="drawing" @click="drawMap">
+            {{ mapImage ? 'Redraw map' : 'Draw map' }}
+          </UiButton>
+          <UiButton v-if="mapImage" size="sm" variant="ghost" @click="removeMap">Remove image</UiButton>
+        </template>
+        <RegionWorldMap
+          :sections="sections"
+          :links="links"
+          :selected-id="selectedId"
+          :scene-counts="counts"
+          :image-url="mapImage"
+          @select="selectedId = $event"
+          @move="moveRegion"
+        />
       </UiCard>
 
       <UiCard v-if="selected" :title="selected.label">
