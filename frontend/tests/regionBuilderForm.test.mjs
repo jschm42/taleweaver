@@ -12,7 +12,7 @@ writeFileSync(tempFile, js)
 after(() => { try { unlinkSync(tempFile) } catch {} })
 const {
   formFor, applySimpleDefaults, buildPayload, setContextOn, setAllContext, formatTokens, DEFAULT_CONTEXT,
-  toggleGateway, gatewaysChanged,
+  toggleGateway, gatewaysChanged, setImages, imagesOn,
 } = await import(tempFile.href)
 
 const region = { label: 'Peaks', description: 'Cold.', brief: '  Dwarven ruins.  ' }
@@ -85,4 +85,18 @@ test('gateway picks keep their order, stop at eight and count as a change', () =
   assert.equal(form.gateways.HARBOR[0], 'A')
   assert.equal(gatewaysChanged(form, linked), true)
   assert.deepEqual(buildPayload(form).gateways.HARBOR.length, 7)
+})
+
+test('simple mode sends its media switches with the preset', () => {
+  const form = formFor(region)
+  assert.equal(imagesOn(form), true)
+  setImages(form, false)
+  form.options.auto_validate_and_fix = false
+  form.options.max_quests = 3
+  const options = buildPayload(form).options
+  assert.equal(options.generate_scene_images, false)
+  assert.equal(options.generate_item_images, false)
+  assert.equal(options.auto_validate_and_fix, false)
+  assert.equal(options.automatic_npc_voice_assignment, true)
+  assert.equal(options.max_quests, null)
 })

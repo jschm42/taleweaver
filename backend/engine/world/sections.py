@@ -36,6 +36,7 @@ AUTHOR_ONLY_KEYS = (
     "generation_error",
     "generation_notes",
     "generation_settings",
+    "generated",
 )
 MAX_NOTES = 12
 # Description length in the GM's CURRENT STATE region line.
@@ -156,6 +157,30 @@ def _generation_settings(raw: Any) -> Optional[dict[str, Any]]:
     }
 
 
+_GENERATED_LISTS = (
+    "scene_ids",
+    "entity_ids",
+    "quest_ids",
+    "award_keys",
+    "sequence_ids",
+    "script_ids",
+)
+_MAX_GENERATED_IDS = 500
+
+
+def _generated(raw: Any, own_id: str) -> Optional[dict[str, Any]]:
+    """What the Region Builder added to a region (for "Discard region"), or None."""
+    if not isinstance(raw, dict):
+        return None
+    record: dict[str, Any] = {
+        key: [_text(v, MAX_ID_LENGTH) for v in (raw.get(key) or [])][:_MAX_GENERATED_IDS]
+        for key in _GENERATED_LISTS
+        if isinstance(raw.get(key) or [], list)
+    }
+    record["planned_links"] = _links(raw.get("planned_links"), own_id)
+    return record
+
+
 def _status(raw: Any) -> str:
     status = str(raw or "").strip().lower()
     return status if status in SECTION_STATUSES else DEFAULT_STATUS
@@ -186,6 +211,8 @@ def normalize_section(raw: Any, index: int = 0) -> Optional[dict[str, Any]]:
         "generation_notes": _notes(raw.get("generation_notes")),
         # The Region Builder's last settings of this region (None = never built with it).
         "generation_settings": _generation_settings(raw.get("generation_settings")),
+        # What the Region Builder added (None for regions built or assigned by hand).
+        "generated": _generated(raw.get("generated"), section_id),
     }
 
 

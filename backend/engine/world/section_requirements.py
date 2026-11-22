@@ -17,6 +17,15 @@ FEATURE_KEYS = (
     "text_log_generation_enabled",
     "award_generation_enabled",
 )
+# Media and the follow-up pass (docs/specs/region_builder.md, 7.3): images are opt-in, the
+# voice list is only a prompt requirement and on by default.
+MEDIA_DEFAULTS = {
+    "generate_scene_images": False,
+    "generate_npc_images": False,
+    "generate_item_images": False,
+    "automatic_npc_voice_assignment": True,
+    "auto_validate_and_fix": False,
+}
 MAX_COUNT = 60
 STRICTNESS = ("creative", "strict")
 
@@ -70,6 +79,9 @@ def normalize_options(raw: Any) -> dict[str, Any]:
     """Counts clamped to 0-60 (min never above max), switches default on, strictness."""
     data = raw if isinstance(raw, dict) else {}
     options: dict[str, Any] = {key: data.get(key) is not False for key in FEATURE_KEYS}
+    for key, default in MEDIA_DEFAULTS.items():
+        value = data.get(key)
+        options[key] = value if isinstance(value, bool) else default
     for key in COUNT_KEYS:
         low, high = _count(data.get(f"min_{key}")), _count(data.get(f"max_{key}"))
         if low is not None and high is not None and low > high:
@@ -107,4 +119,19 @@ def requirements_text(options: dict[str, Any]) -> str:
     if not options["scripts_generation_enabled"]:
         lines.append("- Scripts: none. Leave `scripts` empty and write no scene scripts.")
     lines.append(_STRICTNESS_LINES[options["generation_strictness"]])
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    voices = _voice_requirement(options["automatic_npc_voice_assignment"])
+    return f"{text}\n\n{voices}" if voices else text
+
+
+def _voice_requirement(enabled: bool) -> str:
+    """The voice list of new adventures, limited to the region's new characters."""
+    # Lazy import: the world prompt builder pulls in the whole world prompt module tree.
+    from backend.engine.world.world_prompt_builder import _build_voice_assignment_requirement
+
+    text = _build_voice_assignment_requirement(enabled).strip()
+    if not text:
+        return ""
+    return (
+        f"{text}\n- In this region only the NEW characters get a `voice`; the protagonist has one."
+    )

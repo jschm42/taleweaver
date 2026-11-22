@@ -31,6 +31,7 @@ from backend.core.global_settings import apply_global_settings
 from backend.engine.world.section_generator import (
     SectionGenerationError,
     generate_section,
+    normalize_settings,
     plan_sections,
     preview_section_prompt,
 )
@@ -106,6 +107,22 @@ async def _new_findings(db: AsyncSession, template_id: str, baseline: set[Any]) 
     return [f"{f.severity}: {f.message}" for key, f in after.items() if key not in baseline]
 
 
+async def _fix_region(db: AsyncSession, template_id: str, user: User, baseline: set[Any]) -> str:
+    """Validate & fix afterwards, limited to the findings the region introduced (structural
+    checks only; each fix is one LLM call, capped like a new adventure's pass)."""
+    from backend.api.routes.adventures.editing.auto_fix import run_post_generation_auto_fix
+
+    try:
+        report = await run_post_generation_auto_fix(
+            db, template_id, user, include_ai=False, skip_signatures=baseline
+        )
+    except Exception:
+        logger.exception("Region auto-fix failed for %s", template_id)
+        await db.rollback()
+        return "Validate & fix did not finish; check the Validation page."
+    return f"Validate & fix: {report.fixed} of {report.findings_total} new finding(s) fixed."
+
+
 async def run_generation(
     template_id: str, section_id: str, user_id: str, settings: dict[str, Any] | None = None
 ) -> None:
@@ -115,6 +132,8 @@ async def run_generation(
             user = await apply_global_settings(db, await db.get(User, user_id))
             baseline = set(await _findings(db, template_id))
             notes = await generate_section(db, template_id, section_id, user, settings)
+            if normalize_settings(settings)["options"]["auto_validate_and_fix"]:
+                notes.append(await _fix_region(db, template_id, user, baseline))
             notes.extend(await _new_findings(db, template_id, baseline))
             await _store_notes(db, template_id, section_id, notes)
         except Exception as exc:

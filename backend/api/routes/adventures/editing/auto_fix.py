@@ -20,7 +20,10 @@ from backend.api.routes.adventures.editing.auto_fix_log import (
     append_validation_log,
     build_validation_log_entry,
 )
-from backend.api.routes.adventures.editing.validation import execute_validation_run
+from backend.api.routes.adventures.editing.validation import (
+    _finding_signature,
+    execute_validation_run,
+)
 from backend.core.generation_error_log import record_generation_error
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -87,11 +90,24 @@ async def _auto_fix_finding(
 
 
 async def run_post_generation_auto_fix(
-    db: AsyncSession, template_id: str, user: User, include_ai: bool = True
+    db: AsyncSession,
+    template_id: str,
+    user: User,
+    include_ai: bool = True,
+    skip_signatures: Optional[set] = None,
 ) -> AutoFixReport:
-    """Validate the adventure and apply the top AI fix proposal to each finding."""
+    """Validate the adventure and apply the top AI fix proposal to each finding.
+
+    ``skip_signatures``: findings that existed before (a region build fixes only its own)."""
     run = await execute_validation_run(db, template_id, user, include_ai)
-    findings = _prioritized([*run.structural_findings, *run.ai_findings])
+    skip = skip_signatures or set()
+    findings = _prioritized(
+        [
+            f
+            for f in [*run.structural_findings, *run.ai_findings]
+            if _finding_signature(f) not in skip
+        ]
+    )
     report = AutoFixReport(
         findings_total=len(findings),
         errors=sum(1 for f in findings if f.severity == "error"),

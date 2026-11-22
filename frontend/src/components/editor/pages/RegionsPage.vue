@@ -30,6 +30,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
 import RegionForm from '@/components/editor/regions/RegionForm.vue'
 import RegionGenerateControls from '@/components/editor/regions/RegionGenerateControls.vue'
+import RegionDiscardControl from '@/components/editor/regions/RegionDiscardControl.vue'
 import RegionGenerationNotes from '@/components/editor/regions/RegionGenerationNotes.vue'
 import RegionOutlineCard from '@/components/editor/regions/RegionOutlineCard.vue'
 import RegionPlanModal from '@/components/editor/regions/RegionPlanModal.vue'
@@ -141,6 +142,11 @@ async function save(): Promise<void> {
   }
 }
 
+async function onDiscarded(): Promise<void> {
+  await editor.fetchDebugInfo()
+  reset()
+}
+
 function openBuilder(section: WorldSection): void {
   void router.push({
     name: 'adventure-editor-region-build',
@@ -220,6 +226,13 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
             v-if="selected.status === 'built' && selected.generation_notes?.length"
             :notes="selected.generation_notes"
             @dismiss="selected.generation_notes = []"
+          />
+          <RegionDiscardControl
+            v-if="selected.status === 'built' && selected.generated"
+            :adventure-id="editor.adventureId"
+            :section="selected"
+            :dirty="isDirty"
+            @discarded="onDiscarded"
           />
           <RegionGenerateControls
             v-if="selected.status !== 'built'"

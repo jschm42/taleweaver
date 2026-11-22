@@ -432,7 +432,9 @@ with brief, mode, context and options, stored as the region's `generation_settin
 as a background task with its own database session (`section_generation.run_generation`,
 which calls `apply_global_settings`). The section is `generating` meanwhile and the Regions
 page polls the editor data; a failed job puts it back to `stub` with `generation_error`.
-Images are not generated; the editor's visual tools add them later.
+With the builder's media options the region's images are drawn during the merge and its new
+characters get voices; *Validate & fix afterwards* fixes the findings the region introduced, and
+**Discard region...** takes a region the builder built out again ([region_builder.md](region_builder.md), 7.3).
 
 Prompt (`section_prompt.region_blocks`): adventure frame, the chosen context blocks
 (outline, other regions, plot, world rules, chapters with walkthroughs, quests, scenes,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Sticky bottom bar of the Region Builder: the prompt's estimated size (a warning above
- * LARGE_PROMPT_TOKENS), the prompt preview (advanced) and the Build button.
+ * LARGE_PROMPT_TOKENS), the prompt preview (advanced), validate & fix and the Build button.
  */
 import { computed } from 'vue'
 import { Eye, Sparkles } from 'lucide-vue-next'
@@ -9,6 +9,7 @@ import { useRegionBuilderContext } from '@/composables/regionBuilder/regionBuild
 import { LARGE_PROMPT_TOKENS, formatTokens } from '@/composables/regionBuilder/regionBuilderForm'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiToggle from '@/components/ui/UiToggle.vue'
 
 const emit = defineEmits<{ (e: 'show-prompt'): void }>()
 
@@ -35,6 +36,13 @@ const large = computed(() => (total.value ?? 0) > LARGE_PROMPT_TOKENS)
       <p class="wb-hint">
         {{ large ? 'Large prompt: consider compact detail for scenes, characters and items.' : 'An estimate; system prompt included.' }}
       </p>
+      <UiToggle
+        v-if="form"
+        v-model="form.options.auto_validate_and_fix"
+        class="pt-1"
+        label="Validate & fix afterwards"
+        description="Checks the new region and applies the first AI fix per new finding."
+      />
     </div>
     <div class="flex flex-col items-stretch gap-1 sm:items-end">
       <UiButton variant="ai" :icon="Sparkles" :loading="starting" :disabled="!canBuild" @click="build">Build region</UiButton>

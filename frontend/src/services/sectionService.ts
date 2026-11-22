@@ -33,6 +33,22 @@ export interface WorldSection {
   generation_notes?: string[]
   /** The Region Builder's last settings of this region (docs/specs/region_builder.md, 8.3). */
   generation_settings?: StoredRegionSettings | null
+  /** What the Region Builder added; set only on regions it built (they can be discarded). */
+  generated?: GeneratedRecord | null
+}
+
+export interface GeneratedRecord {
+  scene_ids: string[]
+  entity_ids: string[]
+  quest_ids: string[]
+  award_keys: string[]
+  sequence_ids: string[]
+  script_ids: string[]
+}
+
+export interface DiscardResult {
+  status: string
+  removed: Record<string, number>
 }
 
 /** One block of the region prompt as POST .../generate/preview reports it. */
@@ -174,6 +190,16 @@ export const sectionService = {
       body: JSON.stringify(body),
     })
     if (!res.ok) throw await failure(res, 'Failed to start the region generation.')
+  },
+
+  /** Takes a region the Region Builder built out again; it becomes a planned region. */
+  async discardSection(adventureId: string, sectionId: string): Promise<DiscardResult> {
+    const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/${encodeURIComponent(sectionId)}/discard`, {
+      method: 'POST',
+      headers: authHeaders(false),
+    })
+    if (!res.ok) throw await failure(res, 'Failed to discard the region.')
+    return await res.json()
   },
 
   /** The prompt blocks of a region build with token estimates (no LLM call). */

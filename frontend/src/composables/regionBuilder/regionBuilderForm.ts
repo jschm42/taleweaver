@@ -33,7 +33,22 @@ export interface RegionOptions {
   scripts_generation_enabled: boolean
   text_log_generation_enabled: boolean
   award_generation_enabled: boolean
+  generate_scene_images: boolean
+  generate_npc_images: boolean
+  generate_item_images: boolean
+  automatic_npc_voice_assignment: boolean
+  auto_validate_and_fix: boolean
 }
+
+type MediaKey =
+  | 'generate_scene_images'
+  | 'generate_npc_images'
+  | 'generate_item_images'
+  | 'automatic_npc_voice_assignment'
+  | 'auto_validate_and_fix'
+
+export const IMAGE_KEYS = ['generate_scene_images', 'generate_npc_images', 'generate_item_images'] as const
+const MEDIA_KEYS: MediaKey[] = [...IMAGE_KEYS, 'automatic_npc_voice_assignment', 'auto_validate_and_fix']
 
 export interface RegionBuilderForm {
   mode: RegionMode
@@ -132,6 +147,12 @@ export function defaultOptions(): RegionOptions {
     scripts_generation_enabled: true,
     text_log_generation_enabled: true,
     award_generation_enabled: true,
+    // Like the Generate adventure page: images, voices and the fix pass are on by default.
+    generate_scene_images: true,
+    generate_npc_images: true,
+    generate_item_images: true,
+    automatic_npc_voice_assignment: true,
+    auto_validate_and_fix: true,
   }
 }
 
@@ -220,11 +241,24 @@ export function setAllContext(form: RegionBuilderForm, on: boolean): void {
   for (const option of CONTEXT_OPTIONS) setContextOn(form, option.key, on)
 }
 
-/** The options sent: in simple mode the defaults with the size preset's scene range. */
+/**
+ * The options sent: in simple mode the defaults with the size preset's scene range and the
+ * media switches the page shows.
+ */
 export function payloadOptions(form: RegionBuilderForm): RegionOptions {
   if (form.mode === 'advanced') return { ...form.options }
   const [low, high] = SIZE_PRESETS[form.size].scenes
-  return { ...defaultOptions(), min_scenes: low, max_scenes: high }
+  const media = Object.fromEntries(MEDIA_KEYS.map((key) => [key, form.options[key]]))
+  return { ...defaultOptions(), ...media, min_scenes: low, max_scenes: high }
+}
+
+/** Simple mode's single "Generate images" switch: on when any image kind is on. */
+export function imagesOn(form: RegionBuilderForm): boolean {
+  return IMAGE_KEYS.some((key) => form.options[key])
+}
+
+export function setImages(form: RegionBuilderForm, on: boolean): void {
+  for (const key of IMAGE_KEYS) form.options[key] = on
 }
 
 /** Request body of POST .../sections/{id}/generate (and of its preview). */

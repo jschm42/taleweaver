@@ -6,7 +6,9 @@ and its quests, awards, chapters and scripts are appended to the adventure. The 
 becomes ``built`` with its summary, and the campaign outline's threads are updated. The region
 was validated before (``engine/world/section_validation.py``), so its ids are all new.
 
-Images are not generated here; the editor's Visuals tools add them later.
+With the Region Builder's media options the scenes, characters and items get images while
+they are persisted (``section_media``). The section keeps a ``generated`` record of every id the
+region added, so "Discard region" (``section_discard``) can take it out again.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.npcs import persist_npcs
 from backend.engine.manifest_apply.objects import ObjectPlacement, persist_objects
 from backend.engine.manifest_apply.scenes import persist_exits, persist_scenes
+from backend.engine.manifest_apply.section_media import RegionMedia, enable_images, image_notes
 from backend.engine.world.section_outline import apply_thread_updates
 from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
@@ -61,11 +64,29 @@ def _append_story(adventure: AdventureTemplate, region: dict[str, Any]) -> None:
         flag_modified(adventure, column)
 
 
+def _ids(entries: Any, key: str = "id") -> list[str]:
+    return [str(e.get(key)) for e in entries or [] if isinstance(e, dict) and e.get(key)]
+
+
+def generated_record(region: dict[str, Any], planned_links: list[dict[str, Any]]) -> dict[str, Any]:
+    """What the region added, for "Discard region"; ``planned_links`` are restored then."""
+    return {
+        "scene_ids": _ids(region.get("scenes")),
+        "entity_ids": [*_ids(region.get("npcs")), *_ids(region.get("objects"))],
+        "quest_ids": _ids(region.get("quests")),
+        "award_keys": _ids(region.get("awards"), "key"),
+        "sequence_ids": _ids(region.get("sequences")),
+        "script_ids": _ids(region.get("scripts")),
+        "planned_links": deepcopy(planned_links),
+    }
+
+
 def _mark_built(adventure: AdventureTemplate, section_id: str, region: dict[str, Any]) -> None:
     sections = normalize_sections(adventure.world_sections)
     for section in sections:
         if section["id"] == section_id:
             section.update(status="built", summary=str(region.get("summary") or "")[:4000])
+            section["generated"] = generated_record(region, section["planned_links"])
             section["planned_links"] = []
             section.pop("generation_error", None)
     adventure.world_sections = sections  # type: ignore[assignment]
@@ -103,8 +124,10 @@ async def merge_section(
     section_id: str,
     region: dict[str, Any],
     user: Optional[User],
-) -> None:
-    """Writes the validated region into the template and marks the section built (commits)."""
+    media: Optional[RegionMedia] = None,
+) -> list[str]:
+    """Writes the validated region into the template and marks the section built (commits).
+    Returns notes about images that were skipped, blocked or failed."""
     adventure = await db.get(AdventureTemplate, template_id)
     if adventure is None:
         raise ValueError(f"Adventure '{template_id}' not found.")
@@ -112,8 +135,10 @@ async def merge_section(
     ctx = ApplyContext(
         db=db, template_id=template_id, manifest=region, user=user, adventure=adventure
     )
+    notes = enable_images(ctx, media or RegionMedia())
     await _persist_world(ctx, region)
     adventure = await db.get(AdventureTemplate, template_id)
     _append_story(adventure, region)
     _mark_built(adventure, section_id, region)
     await db.commit()
+    return [*notes, *image_notes(ctx)]

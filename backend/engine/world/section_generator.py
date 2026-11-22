@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.blueprint.region_mode import RegionBlueprint
+from backend.engine.manifest_apply.section_media import RegionMedia
 from backend.engine.manifest_apply.section_merge import merge_section
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.engine.world.section_blueprint import (
@@ -216,7 +217,8 @@ async def generate_section(
         notes += prepare_section(region, section_id, prompt.ledger)
         errors = validate_section(region, prompt.ledger, prompt.neighbour_ids)
         if not errors:
-            await merge_section(db, template_id, section_id, region, user)
+            media = RegionMedia.from_options(normalize_settings(settings)["options"])
+            notes += await merge_section(db, template_id, section_id, region, user, media)
             return notes
     raise SectionGenerationError(errors)
 

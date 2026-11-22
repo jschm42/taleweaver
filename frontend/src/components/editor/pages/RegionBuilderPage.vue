@@ -17,6 +17,7 @@ import PromptPreviewModal from '@/components/editor/region-builder/PromptPreview
 import RegionBuildBar from '@/components/editor/region-builder/RegionBuildBar.vue'
 import RegionIdeaCard from '@/components/editor/region-builder/RegionIdeaCard.vue'
 import RegionInfoCard from '@/components/editor/region-builder/RegionInfoCard.vue'
+import RegionMediaCard from '@/components/editor/region-builder/RegionMediaCard.vue'
 import RegionSizeCard from '@/components/editor/region-builder/RegionSizeCard.vue'
 import PageHeader from '@/components/workbench/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -76,6 +77,7 @@ const mode = computed({
       <RegionIdeaCard />
       <ContextOptionsCard />
       <RegionSizeCard />
+      <RegionMediaCard />
       <InheritedSettingsCard />
       <RegionBuildBar @show-prompt="promptOpen = true" />
       <PromptPreviewModal v-model:open="promptOpen" />

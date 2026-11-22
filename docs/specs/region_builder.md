@@ -1,6 +1,6 @@
 # Region Builder (Concept)
 
-Status: phases A, B and C implemented; D open (section 13). Replaces the generation UI of
+Status: implemented (phases A-D, section 13). Replaces the generation UI of
 [world_sections.md](world_sections.md) section 9.4 (brief field + **Generate region** button).
 Planning (9.3), validation and merge (9.5), the blueprint `Section` kind (9.6) and the
 expansion of running sessions (9.7) stay as they are, apart from the changes listed here.
@@ -64,7 +64,7 @@ stream).
 Page header: *Build <region>*, the **Simple / Advanced** switch and a way back to Regions.
 Sticky bottom bar (`RegionBuildBar.vue`): estimated prompt size (warning above 40k tokens),
 *Preview prompt* (advanced) and **Build region** with the reason when it is disabled.
-*Validate & fix afterwards* joins the bar in phase D.
+The bar also holds *Validate & fix afterwards*.
 
 Cards, top to bottom:
 
@@ -78,7 +78,8 @@ Cards, top to bottom:
    shared `LimitRow`), event scripts and strictness.
 5. **Inherited from the adventure** (read-only, collapsed): the global attributes of 4.3,
    with a link to the page where each is changed.
-6. **Images & voices**: scene, NPC and item images, NPC voice assignment. Phase D.
+6. **Images & voices** (`RegionMediaCard.vue`): simple mode one *Generate images* switch,
+   advanced mode scene, portrait and item switches; *Assign voices* in both.
 
 ### 4.2 Simple vs. advanced
 
@@ -268,16 +269,16 @@ and `POST .../generate` answers 400 before the job starts; the job itself refuse
 
 ```
 Build region
-  -> save region fields (card 1) and generation_settings
-  -> status generating, progress stream starts
-  -> build ledger (full) + context blocks (chosen options)
-  -> parse blueprint (region mode)
-  -> LLM: SectionManifest
+  -> save region fields (card 1, gateway picks); POST .../generate stores generation_settings
+  -> blueprint errors? 400, nothing starts
+  -> status generating; the Regions page polls
+  -> build ledger (full) + context blocks (chosen options) + region blueprint
+  -> LLM: SectionManifest (voices assigned in the prompt when switched on)
   -> apply_blueprint -> prepare_section (incl. id renames) -> validate_section
-       on errors: one retry with the errors (as today)
-  -> merge_section
-  -> media phase (optional): scene, NPC, item images; voice assignment
-  -> validate & fix (optional): whole-template validators, AI fix limited to the new ids
+       on errors: one retry with the errors
+  -> merge_section, images drawn while scenes, characters and items are persisted;
+     the section records what it added (`generated`)
+  -> validate & fix (optional): structural findings the region introduced, first AI fix each
   -> status built, generation_notes
 ```
 
@@ -297,10 +298,33 @@ region's prefix (`section_prompt.id_prefix`: `GLOOM_PEAKS` -> `GP_`, `PEAKS` -> 
 
 ### 7.3 Media
 
-Today a region gets no images. The media phase calls the same image and voice steps that run
-after a new adventure is generated, limited to the region's new scenes and entities, in the
-adventure's image style. An image error does not undo the region; it becomes a generation
-note and the editor's visual tools can retry it.
+Images use the same steps as a new adventure: `merge_section` sets the `ApplyContext` image
+flags (`engine/manifest_apply/section_media.py`), so `persist_scenes`, `persist_npcs` and
+`persist_objects` draw the region's pictures in the adventure's image style. Image generation
+that is not set up (no image settings, missing key) skips the images with a note instead of
+failing the build; blocked and failed images become notes too, and the editor's visual tools
+can redo them. Voices are a prompt requirement: with *Assign voices* the REGION REQUIREMENTS
+carry the voice list of new adventures, limited to the new characters.
+
+The raw API defaults are images off, voices on, validate & fix off; the builder form starts
+with all of them on, like the Generate adventure page.
+
+**Validate & fix afterwards** reuses the post-generation pass of new adventures
+(`run_post_generation_auto_fix`) with `include_ai=False` and the findings that existed before
+the build as `skip_signatures`, so only the region's own structural findings get one AI fix
+each (capped at 12). Its result is a generation note.
+
+### 7.3a Discard region
+
+A region the builder built carries `generated` (scene, entity, quest, award, chapter and script
+ids plus its old planned links; author-only, kept by export). **Discard region...** on the
+Regions page (`RegionDiscardControl.vue`, confirmation) calls `POST .../sections/{id}/discard`
+(`editing/section_discard_routes.py`, `engine/manifest_apply/section_discard.py`): it deletes
+those scenes, every exit touching them, those characters and items plus any other entity
+placed in the scenes, removes the quests, awards, chapters and scripts (remaining chapters
+are renumbered 1..n), and makes the section a planned region with its old links again. Only
+the template changes: sessions that already took in the region keep their copy; outline
+thread updates are not undone. Regions built or assigned by hand cannot be discarded (409).
 
 ### 7.4 Additive only
 
@@ -427,9 +451,8 @@ need them. Workbench UI rules apply (`.claude/rules/frontend-ui.md`); `region-bu
 
 ## 11. Open points
 
-1. **Undo a region.** A built region can only be removed by hand today. A "Discard region"
-   action (delete rows with its `section_id`, remove appended quests, awards, chapters and
-   scripts, back to `stub`) would make experimenting cheap. Proposed as phase D.
+1. **Discarding a region taken in by sessions**: sessions keep their copy, and a session
+   that took in the old build is not offered the rebuilt one (it counts as taken in).
 2. **Blueprint edits of existing content** (7.4): out of scope; could later produce a change
    set the author reviews.
 3. **Token estimate accuracy**: characters / 4 is rough for non-English text. Good enough
@@ -459,7 +482,7 @@ need them. Workbench UI rules apply (`.claude/rules/frontend-ui.md`); `region-bu
   Gateway scenes can be picked by hand per linked region (`gateway_scene_ids`, 5.2a).
 * **C: blueprint region mode. Done.** Parser mode, live validation in the preview, `apply_blueprint`
   in the job.
-* **D: media phase and discard region.**
+* **D: media and discard region. Done.** Images, voices, validate & fix, Discard region.
 
 Acceptance for A-C: a region built with all options off except gateways still merges without
 id collisions; a region blueprint with three fixed scenes and one gateway exit produces

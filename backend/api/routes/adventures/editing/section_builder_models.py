@@ -56,6 +56,11 @@ class RegionOptionsRequest(BaseModel):
     scripts_generation_enabled: bool = True
     text_log_generation_enabled: bool = True
     award_generation_enabled: bool = True
+    generate_scene_images: bool = False
+    generate_npc_images: bool = False
+    generate_item_images: bool = False
+    automatic_npc_voice_assignment: bool = True
+    auto_validate_and_fix: bool = False
 
 
 class SectionGenerateRequest(BaseModel):
