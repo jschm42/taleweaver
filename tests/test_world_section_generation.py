@@ -207,9 +207,7 @@ async def test_ledger_lists_existing_content_by_region(setup_test_db):
     # Assert
     assert ledger.taken_ids >= {"SQUARE", "KEY"} and ledger.sequence_orders == {1}
     assert ledger.scenes_of("HARBOR") == ["SQUARE"]
-    assert "- HARBOR: SQUARE (Square)" in ledger.text
-    assert "opens with item KEY" in ledger.text
-    assert "PEAKS Peaks [planned]" in ledger.text
+    assert ledger.item_ids == {"KEY"}
 
 
 class _FakeLLM:

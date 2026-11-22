@@ -403,8 +403,10 @@ never stored and never written by an LLM. Contents:
 * items that unlock something, with where they are found and what they open
 * the `summary` of every built section
 
-It serves two purposes: prompt context (a few thousand tokens for 100 scenes) and the
-validation reference in 9.5.
+It is the validation reference in 9.5 and is always built in full. The prompt context is
+built separately, one block per context option the author chose (`engine/world/
+section_context.py`, `section_context_world.py`; see [region_builder.md](region_builder.md),
+section 5), so leaving a list out of the prompt never weakens the checks.
 
 ### 9.3 Planning regions
 
@@ -419,6 +421,10 @@ when its scenes are assigned to one), then planned here.
 
 ### 9.4 Section generation in the editor
 
+> Being replaced by the Region Builder ([region_builder.md](region_builder.md)): Simple /
+> Advanced options, context options and blueprint input. Phase A (backend: context options,
+> requirements, preview, id renames) is implemented; the page below is still the current UI.
+
 The author selects a planned region, optionally edits its brief, saves and clicks **Generate
 region** (`POST /{template_id}/editor/sections/{section_id}/generate {brief}`). The job runs
 as a background task with its own database session (`section_generation.run_generation`,
@@ -426,8 +432,14 @@ which calls `apply_global_settings`). The section is `generating` meanwhile and 
 page polls the editor data; a failed job puts it back to `stub` with `generation_error`.
 Images are not generated; the editor's visual tools add them later.
 
-Prompt: outline + ledger + brief + the full gateway scenes of built neighbours (from
-`planned_links`).
+Prompt (`section_prompt.region_blocks`): adventure frame, the chosen context blocks
+(outline, other regions, plot, world rules, chapters with walkthroughs, quests, scenes,
+characters, items), the gateway scenes (always; `section_gateways.py`), the region with its
+id prefix and brief, and the REGION REQUIREMENTS (`section_requirements.py`: counts, feature
+switches, strictness). The request body may carry `context` and `options`
+([region_builder.md](region_builder.md), 8.1); a body with only `brief` uses the defaults
+(all context on). `POST .../sections/{section_id}/generate/preview` returns the blocks with
+token estimates without an LLM call.
 
 Output schema `SectionManifest` (`engine/world/section_schemas.py`, `extra="forbid"`):
 scenes, exits, NPCs, objects, quests, awards, sequences, scripts, `summary`, and the
@@ -448,8 +460,9 @@ Deterministic, before anything is written:
 * items required by locks are obtainable in this section or already exist
 * scripts pass `script_validator`
 
-Before the checks, `prepare_section` fixes what needs no retry: every scene gets the
-region's `section_id`, new chapters are numbered after the existing ones, `on_init`
+Before the checks, `prepare_section` fixes what needs no retry: ids that already exist in the
+adventure are renamed to the next free `<ID>_2` with all references in the region
+(`section_id_renames.py`), every scene gets the region's `section_id`, new chapters are numbered after the existing ones, `on_init`
 scripts are dropped. On any error the job retries once with the errors in the prompt, then
 gives up: nothing is applied and the section returns to `stub`. On success the region is
 merged, the section becomes `built` with its `summary`, `planned_links` is cleared and the

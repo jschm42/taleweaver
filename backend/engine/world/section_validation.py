@@ -1,7 +1,7 @@
 """Deterministic checks and fix-ups of a generated region before anything is written.
 
-``prepare_section`` fixes what can be fixed without asking (scene regions, chapter numbers,
-init scripts); ``validate_section`` returns the errors that make the region unusable. With
+``prepare_section`` fixes what can be fixed without asking (ids that already exist, scene
+regions, chapter numbers, init scripts); ``validate_section`` returns the errors that make the region unusable. With
 errors the generator retries once with them in the prompt, then gives up and nothing is
 applied. Spec: docs/specs/world_sections.md (9.5).
 """
@@ -12,6 +12,7 @@ from collections import defaultdict, deque
 from typing import Any
 
 from backend.engine.scripting.sandbox import SafeAstInterpreter
+from backend.engine.world.section_id_renames import rename_collisions
 from backend.engine.world.section_ledger import Ledger
 
 # Inventory pseudo-scenes an item may start in instead of a scene.
@@ -25,7 +26,7 @@ def _ids(entries: list[dict[str, Any]], key: str = "id") -> list[str]:
 
 def prepare_section(manifest: dict[str, Any], section_id: str, ledger: Ledger) -> list[str]:
     """Fixes the region in place; returns notes about what was changed."""
-    notes: list[str] = []
+    notes = rename_collisions(manifest, ledger)
     for scene in manifest.get("scenes") or []:
         scene["section_id"] = section_id
     for quest in manifest.get("quests") or []:

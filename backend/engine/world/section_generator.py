@@ -1,37 +1,44 @@
 """Generates one planned region of an adventure, and plans new regions.
 
-``generate_section``: outline + ledger + brief -> ``SectionManifest`` -> fix-ups -> validation;
-on errors one retry with the errors in the prompt, then ``SectionGenerationError``. A valid
-region is merged into the template (``manifest_apply/section_merge.py``).
+``generate_section``: chosen world context + gateways + brief + requirements -> LLM
+``SectionManifest`` -> fix-ups -> validation; on errors one retry with the errors in the
+prompt, then ``SectionGenerationError``. A valid region is merged into the template
+(``manifest_apply/section_merge.py``). ``preview_section_prompt`` builds the same prompt
+without an LLM call and reports its blocks with token estimates.
 
 ``plan_sections``: returns a reviewable proposal (outline and planned regions); nothing is
 stored until the author applies it in the editor.
-Spec: docs/specs/world_sections.md (9.3-9.5).
+Spec: docs/specs/world_sections.md (9.3-9.5), docs/specs/region_builder.md (5, 7, 8).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.llm_router import GameMasterLLM
 from backend.engine.manifest_apply.section_merge import merge_section
-from backend.engine.world.section_ledger import build_ledger
+from backend.engine.sessions.start_scene import resolve_initial_scene_id
+from backend.engine.world.section_context import ContextBlock, ContextSource, normalize_context
+from backend.engine.world.section_gateways import built_neighbours
+from backend.engine.world.section_ledger import Ledger, ledger_from_rows, load_world_rows
 from backend.engine.world.section_outline import normalize_outline
 from backend.engine.world.section_prompt import (
     PLAN_SYSTEM_PROMPT,
     SECTION_SYSTEM_PROMPT,
     build_plan_prompt,
     build_section_prompt,
+    region_blocks,
+    total_tokens,
 )
+from backend.engine.world.section_requirements import normalize_options
 from backend.engine.world.section_schemas import CampaignPlan, SectionManifest
 from backend.engine.world.section_validation import prepare_section, validate_section
-from backend.engine.world.sections import is_stub, normalize_sections
+from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
-from backend.models.world_entity import WorldScene
 
 MAX_ATTEMPTS = 2
 
@@ -44,6 +51,27 @@ class SectionGenerationError(Exception):
         self.errors = errors
 
 
+@dataclass
+class RegionPrompt:
+    """The assembled prompt of one region plus what validation needs."""
+
+    blocks: list[ContextBlock]
+    ledger: Ledger
+    neighbour_ids: list[str]
+
+    def user_prompt(self, errors: list[str]) -> str:
+        return build_section_prompt(self.blocks, errors)
+
+
+def normalize_settings(raw: Any) -> dict[str, Any]:
+    """``{context, options}`` of a generation request with all defaults filled in."""
+    data = raw if isinstance(raw, dict) else {}
+    return {
+        "context": normalize_context(data.get("context")),
+        "options": normalize_options(data.get("options")),
+    }
+
+
 def _llm(user: User) -> tuple[GameMasterLLM, str]:
     # Lazy import: world_generator imports the manifest applier, which imports this package.
     from backend.engine.world.world_generator import _resolve_generator_provider_and_model
@@ -52,42 +80,92 @@ def _llm(user: User) -> tuple[GameMasterLLM, str]:
     return GameMasterLLM(user, provider=provider, model_category="generator"), model
 
 
-def _built_neighbours(
-    section: dict[str, Any], sections: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    built = {s["id"] for s in sections if not is_stub(s)}
-    return [link for link in section["planned_links"] if link["to_section_id"] in built]
-
-
-async def _template_scenes(db: AsyncSession, template_id: str) -> dict[str, WorldScene]:
-    res = await db.execute(
-        select(WorldScene).where(
-            WorldScene.template_id == template_id, WorldScene.session_id.is_(None)
-        )
-    )
-    return {scene.id: scene for scene in res.scalars().all()}
-
-
-async def generate_section(
-    db: AsyncSession, template_id: str, section_id: str, user: User
-) -> list[str]:
-    """Generates, validates and merges one planned region; returns fix-up notes."""
+async def _region(
+    db: AsyncSession, template_id: str, section_id: str
+) -> tuple[AdventureTemplate, dict[str, Any], list[dict[str, Any]]]:
     adventure = await db.get(AdventureTemplate, template_id)
     sections = normalize_sections(adventure.world_sections if adventure else None)
     section = next((s for s in sections if s["id"] == section_id), None)
     if adventure is None or section is None:
         raise SectionGenerationError([f"Region '{section_id}' not found."])
-    ledger = await build_ledger(db, adventure)
-    neighbours = _built_neighbours(section, sections)
-    scenes = await _template_scenes(db, template_id)
+    return adventure, section, sections
+
+
+async def build_region_prompt(
+    db: AsyncSession,
+    adventure: AdventureTemplate,
+    section: dict[str, Any],
+    sections: list[dict[str, Any]],
+    settings: Optional[dict[str, Any]] = None,
+) -> RegionPrompt:
+    """The region prompt for the given settings (``None`` = all defaults)."""
+    chosen = normalize_settings(settings)
+    rows = await load_world_rows(db, adventure.id)
+    neighbours = built_neighbours(section, sections)
+    source = ContextSource(
+        adventure=adventure,
+        section=section,
+        sections=sections,
+        rows=rows,
+        walkthroughs=chosen["context"]["walkthroughs"],
+        start_scene_id=await resolve_initial_scene_id(db, adventure.id) if rows.scenes else None,
+    )
+    return RegionPrompt(
+        blocks=region_blocks(source, chosen["context"], chosen["options"], neighbours),
+        ledger=ledger_from_rows(adventure, rows),
+        neighbour_ids=[n["to_section_id"] for n in neighbours],
+    )
+
+
+async def preview_section_prompt(
+    db: AsyncSession,
+    template_id: str,
+    section_id: str,
+    settings: Optional[dict[str, Any]],
+    brief: Optional[str] = None,
+    include_prompt: bool = False,
+) -> dict[str, Any]:
+    """The prompt's blocks with token estimates, without an LLM call."""
+    adventure, section, sections = await _region(db, template_id, section_id)
+    if brief is not None:
+        section = {**section, "brief": brief.strip()}
+    prompt = await build_region_prompt(db, adventure, section, sections, settings)
+    result: dict[str, Any] = {
+        "blocks": [
+            {
+                "id": b.id,
+                "tokens": b.tokens,
+                "items": b.count,
+                "empty": not b.text,
+                "always": b.always,
+                "included": b.included,
+                "detail": b.detail,
+            }
+            for b in prompt.blocks
+        ],
+        "total_tokens": total_tokens(prompt.blocks),
+    }
+    if include_prompt:
+        result["prompt"] = prompt.user_prompt([])
+    return result
+
+
+async def generate_section(
+    db: AsyncSession,
+    template_id: str,
+    section_id: str,
+    user: User,
+    settings: Optional[dict[str, Any]] = None,
+) -> list[str]:
+    """Generates, validates and merges one planned region; returns fix-up notes."""
+    adventure, section, sections = await _region(db, template_id, section_id)
+    prompt = await build_region_prompt(db, adventure, section, sections, settings)
     llm, model = _llm(user)
     errors: list[str] = []
     for _attempt in range(MAX_ATTEMPTS):
         result: SectionManifest = await llm.aexecute_complex_task(
             system_prompt=SECTION_SYSTEM_PROMPT,
-            user_prompt=build_section_prompt(
-                adventure, section, ledger, neighbours, scenes, errors
-            ),
+            user_prompt=prompt.user_prompt(errors),
             response_model=SectionManifest,
             model=model,
             adventure_id=template_id,
@@ -95,8 +173,8 @@ async def generate_section(
             phase="analysis",
         )
         region = result.model_dump()
-        notes = prepare_section(region, section_id, ledger)
-        errors = validate_section(region, ledger, [n["to_section_id"] for n in neighbours])
+        notes = prepare_section(region, section_id, prompt.ledger)
+        errors = validate_section(region, prompt.ledger, prompt.neighbour_ids)
         if not errors:
             await merge_section(db, template_id, section_id, region, user)
             return notes

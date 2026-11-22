@@ -3,10 +3,12 @@
 - ``POST /{template_id}/editor/sections/{section_id}/generate``: builds a planned region in the
   background. The section is ``generating`` meanwhile; afterwards it is ``built``, or back to
   ``stub`` with its ``generation_error``. The editor polls its assets to see the result.
+- ``POST /{template_id}/editor/sections/{section_id}/generate/preview``: the prompt's blocks with
+  token estimates for the given context options, without an LLM call.
 - ``POST /{template_id}/editor/sections/plan``: returns a proposal (campaign outline plus
   planned regions). Nothing is stored; the author reviews and saves it on the Regions page.
 
-Spec: docs/specs/world_sections.md (9.3-9.4).
+Spec: docs/specs/world_sections.md (9.3-9.4), docs/specs/region_builder.md (8).
 """
 
 from __future__ import annotations
@@ -15,11 +17,12 @@ import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.routes.adventures.editing.common import _get_owned_adventure_or_404
+from backend.api.routes.adventures.editing.section_builder_models import SectionGenerateRequest
 from backend.api.routes.adventures.editing.section_crud import store_sections
 from backend.core import database
 from backend.core.auth import get_current_user
@@ -29,6 +32,7 @@ from backend.engine.world.section_generator import (
     SectionGenerationError,
     generate_section,
     plan_sections,
+    preview_section_prompt,
 )
 from backend.engine.world.sections import normalize_sections, section_id_or_none
 from backend.models.adventure_template import AdventureTemplate
@@ -40,10 +44,6 @@ router = APIRouter(tags=["Editor"])
 # Running generations (template id, section id); keeps the tasks referenced.
 _RUNNING: dict[tuple[str, str], asyncio.Task[Any]] = {}
 MAX_ERROR_LENGTH = 600
-
-
-class SectionGenerateRequest(BaseModel):
-    brief: str | None = Field(default=None, max_length=4000)
 
 
 class SectionPlanRequest(BaseModel):
@@ -99,13 +99,15 @@ async def _new_findings(db: AsyncSession, template_id: str, baseline: set[Any]) 
     return [f"{f.severity}: {f.message}" for key, f in after.items() if key not in baseline]
 
 
-async def run_generation(template_id: str, section_id: str, user_id: str) -> None:
+async def run_generation(
+    template_id: str, section_id: str, user_id: str, settings: dict[str, Any] | None = None
+) -> None:
     """The background job: generate and merge, or put the region back to planned."""
     async with session_factory()() as db:
         try:
             user = await apply_global_settings(db, await db.get(User, user_id))
             baseline = set(await _findings(db, template_id))
-            notes = await generate_section(db, template_id, section_id, user)
+            notes = await generate_section(db, template_id, section_id, user, settings)
             notes.extend(await _new_findings(db, template_id, baseline))
             await _store_notes(db, template_id, section_id, notes)
         except Exception as exc:
@@ -151,9 +153,29 @@ async def start_section_generation(
         raise HTTPException(status_code=409, detail="This region is already being generated.")
     _set_status(adv, section_key, "generating", brief=payload.brief)
     await db.commit()
-    task = asyncio.create_task(run_generation(template_id, section_key, current_user.id))
+    task = asyncio.create_task(
+        run_generation(template_id, section_key, current_user.id, payload.settings())
+    )
     _RUNNING[(template_id, section_key)] = task
     return {"status": "generating", "section_id": section_key}
+
+
+@router.post("/{template_id}/editor/sections/{section_id}/generate/preview")
+async def preview_section_generation(
+    template_id: str,
+    section_id: str,
+    payload: SectionGenerateRequest,
+    include_prompt: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Blocks and token estimates of the region prompt for these settings (no LLM call)."""
+    adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
+    section_key = section_id_or_none(section_id) or ""
+    _planned_section(adv, section_key)
+    return await preview_section_prompt(
+        db, template_id, section_key, payload.settings(), payload.brief, include_prompt
+    )
 
 
 @router.post("/{template_id}/editor/sections/plan")
