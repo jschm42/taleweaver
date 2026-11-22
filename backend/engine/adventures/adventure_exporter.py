@@ -14,6 +14,7 @@ from backend.core.adventure_format import CURRENT_VERSION
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
+from backend.core.npc_extensions import split_npc_extensions
 from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.models.adventure_template import AdventureTemplate
@@ -338,10 +339,14 @@ def _normalize_exported_object_metadata(filtered: dict[str, Any]) -> None:
         filtered.pop("metadata_json", None)
 
 
-def _normalize_exported_npc_metadata(filtered: dict[str, Any]) -> None:
+def _normalize_exported_npc_metadata(filtered: dict[str, Any], raw_metadata: Any) -> None:
     if not isinstance(filtered.get("metadata_json"), dict):
         return
-    metadata = dict(filtered["metadata_json"])
+    # Extension namespaces are exported as stored: `_prune_none` must not drop their nulls.
+    settings, extensions = split_npc_extensions(raw_metadata)
+    pruned = filtered["metadata_json"]
+    metadata = {key: pruned[key] for key in settings if key in pruned}
+    metadata.update(extensions)
     for script_key in (
         "on_defeat_script",
         "on_defeat_text",
@@ -395,7 +400,7 @@ def _serialize_world_entity(entity: WorldEntity) -> dict[str, Any]:
         if str(filtered.get("item_type") or "").upper() == "CONSTRUCTABLE":
             filtered.pop("image_url", None)
     elif entity_type == "NPC":
-        _normalize_exported_npc_metadata(filtered)
+        _normalize_exported_npc_metadata(filtered, raw.get("metadata_json"))
 
     return filtered
 

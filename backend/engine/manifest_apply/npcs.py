@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.core.config import settings
+from backend.core.npc_extensions import normalize_npc_metadata_extensions
 from backend.engine.audio.elevenlabs_voices import (
     VoiceOption,
     custom_voice_id,
@@ -89,7 +90,7 @@ def inventory_item_id(entry: Any) -> Optional[str]:
 
 def npc_metadata(npc: dict[str, Any]) -> dict[str, Any]:
     """Keeps every stored NPC setting (so new fields survive export/import) and normalizes the known ones."""
-    stored = dict(npc["metadata_json"]) if isinstance(npc.get("metadata_json"), dict) else {}
+    stored = normalize_npc_metadata_extensions(npc.get("metadata_json"))
     metadata = dict(stored)
     for key in _METADATA_FIELDS:
         value = npc.get(key)
