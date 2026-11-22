@@ -221,3 +221,6 @@ backend/brain/
 # Editor
 .vscode/
 data-docker/
+
+.playwright-mcp
+
