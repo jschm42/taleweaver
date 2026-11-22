@@ -421,12 +421,14 @@ when its scenes are assigned to one), then planned here.
 
 ### 9.4 Section generation in the editor
 
-> Being replaced by the Region Builder ([region_builder.md](region_builder.md)): Simple /
-> Advanced options, context options and blueprint input. Phase A (backend: context options,
-> requirements, preview, id renames) is implemented; the page below is still the current UI.
+> The UI is the Region Builder ([region_builder.md](region_builder.md)): **Build region...**
+> on a planned region opens a page with Simple / Advanced options and the context options;
+> it starts the job described below and returns to the Regions page. Blueprint input
+> follows in phase C.
 
-The author selects a planned region, optionally edits its brief, saves and clicks **Generate
-region** (`POST /{template_id}/editor/sections/{section_id}/generate {brief}`). The job runs
+The author selects a planned region, saves and clicks **Build region...**, which opens the
+Region Builder; its **Build region** starts the job (`POST /{template_id}/editor/sections/{section_id}/generate`
+with brief, mode, context and options, stored as the region's `generation_settings`). The job runs
 as a background task with its own database session (`section_generation.run_generation`,
 which calls `apply_global_settings`). The section is `generating` meanwhile and the Regions
 page polls the editor data; a failed job puts it back to `stub` with `generation_error`.

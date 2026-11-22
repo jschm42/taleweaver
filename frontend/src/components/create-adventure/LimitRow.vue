@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * One category of the world size section: optional on/off switch, "AI decides" and a min/max
- * range. min and max null mean the AI decides; a min above max pulls max along and vice versa.
+ * One category of a size section: optional on/off switch, "AI decides" and a min/max range.
+ * min and max null mean the AI decides; a min above max pulls max along and vice versa.
+ * `form` holds `min_<limit>`, `max_<limit>` and the switch; shared by the Generate adventure
+ * page and the Region Builder.
  */
 import { computed } from 'vue'
-import { useCreateAdventureContext } from '@/composables/createAdventure/createAdventureContext'
-import type { CreateAdventureForm, LimitKey } from '@/composables/createAdventure/createAdventureForm'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiToggle from '@/components/ui/UiToggle.vue'
@@ -13,25 +13,26 @@ import UiToggle from '@/components/ui/UiToggle.vue'
 type EnabledKey = 'quest_generation_enabled' | 'container_generation_enabled' | 'text_log_generation_enabled' | 'award_generation_enabled'
 
 const props = defineProps<{
+  /** The reactive form object the row reads and writes. */
+  form: object
   label: string
   description: string
-  limit: LimitKey
+  limit: string
   bounds: [number, number]
   defaults: [number, number]
   enabledKey?: EnabledKey
 }>()
 
-const { form } = useCreateAdventureContext()
-
-const minKey = computed(() => `min_${props.limit}` as keyof CreateAdventureForm)
-const maxKey = computed(() => `max_${props.limit}` as keyof CreateAdventureForm)
-const minValue = computed(() => form.value[minKey.value] as number | null)
-const maxValue = computed(() => form.value[maxKey.value] as number | null)
-const enabled = computed(() => !props.enabledKey || form.value[props.enabledKey])
+const fields = computed(() => props.form as Record<string, unknown>)
+const minKey = computed(() => `min_${props.limit}`)
+const maxKey = computed(() => `max_${props.limit}`)
+const minValue = computed(() => fields.value[minKey.value] as number | null)
+const maxValue = computed(() => fields.value[maxKey.value] as number | null)
+const enabled = computed(() => !props.enabledKey || Boolean(fields.value[props.enabledKey]))
 const isAuto = computed(() => minValue.value === null && maxValue.value === null)
 
-function write(key: keyof CreateAdventureForm, value: number | null): void {
-  ;(form.value as unknown as Record<string, unknown>)[key] = value
+function write(key: string, value: unknown): void {
+  fields.value[key] = value
 }
 
 function setAuto(auto: boolean): void {
@@ -58,12 +59,12 @@ function setMax(value: unknown): void {
 }
 
 function setEnabled(value: boolean): void {
-  if (props.enabledKey) form.value[props.enabledKey] = value
+  if (props.enabledKey) write(props.enabledKey, value)
 }
 </script>
 
 <template>
-  <div class="grid grid-cols-1 items-center gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+  <div class="grid grid-cols-1 items-center gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_13rem]">
     <div class="flex min-w-0 items-start gap-3">
       <UiToggle
         v-if="enabledKey"
@@ -83,7 +84,7 @@ function setEnabled(value: boolean): void {
       :disabled="!enabled"
       @update:model-value="setAuto"
     />
-    <div class="flex items-center gap-2" :class="{ invisible: isAuto || !enabled }">
+    <div class="flex items-center gap-2 sm:justify-end" :class="{ invisible: isAuto || !enabled }">
       <UiInput
         type="number"
         size="sm"

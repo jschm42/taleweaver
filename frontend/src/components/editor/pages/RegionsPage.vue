@@ -2,10 +2,12 @@
 /**
  * Regions (world sections): spatial groups of scenes on a world map, for large adventures.
  * Regions and the campaign outline are edited as one draft and saved through the save bar;
- * choosing scenes, planning regions and generating a planned region run immediately.
+ * choosing scenes and planning regions run immediately; a planned region is built on the
+ * Region Builder page (RegionBuilderPage).
  * Spec: docs/specs/world_sections.md.
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Globe2, Plus, Sparkles } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
 import { useConfirm, usePrompt } from '@/composables/useDialogs'
@@ -46,6 +48,7 @@ const editor = useEditor()
 const confirm = useConfirm()
 const prompt = usePrompt()
 const toast = useToast()
+const router = useRouter()
 
 const { draft, isDirty, changedCount, isSaving, reset, commit } = useDraft<RegionsDraft>(() => ({
   sections: sectionsOf(editor.debugData?.adventure),
@@ -57,7 +60,6 @@ const selectedId = ref<string | null>(null)
 const assignOpen = ref(false)
 const planOpen = ref(false)
 const assigning = ref(false)
-const starting = ref(false)
 const mapLayout = computed(() => layoutOf(editor.debugData?.adventure))
 
 const sections = computed(() => draft.value.sections)
@@ -139,17 +141,11 @@ async function save(): Promise<void> {
   }
 }
 
-async function generate(section: WorldSection): Promise<void> {
-  starting.value = true
-  try {
-    await sectionService.generateSection(editor.adventureId, section.id, section.brief)
-    await editor.fetchDebugInfo()
-    toast.info(`Building ${section.label}...`)
-  } catch (error: unknown) {
-    toast.error(error instanceof Error ? error.message : 'Failed to start the region generation.')
-  } finally {
-    starting.value = false
-  }
+function openBuilder(section: WorldSection): void {
+  void router.push({
+    name: 'adventure-editor-region-build',
+    params: { adventureId: editor.adventureId, sectionId: section.id },
+  })
 }
 
 function openAssign(): void {
@@ -229,8 +225,7 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
             v-if="selected.status !== 'built'"
             :section="selected"
             :dirty="isDirty"
-            :starting="starting"
-            @generate="generate(selected)"
+            @build="openBuilder(selected)"
           />
         </div>
       </UiCard>

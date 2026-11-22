@@ -3,6 +3,7 @@
  * Spec: docs/specs/world_sections.md.
  */
 import { API_BASE, authHeaders } from '@/services/http'
+import type { StoredRegionSettings } from '@/composables/regionBuilder/regionBuilderForm'
 import type { MapLayout } from '@/types'
 
 export type SectionStatus = 'built' | 'stub' | 'generating'
@@ -28,6 +29,25 @@ export interface WorldSection {
   generation_error?: string
   /** What to check after a generation: fix-ups and new validation findings. */
   generation_notes?: string[]
+  /** The Region Builder's last settings of this region (docs/specs/region_builder.md, 8.3). */
+  generation_settings?: StoredRegionSettings | null
+}
+
+/** One block of the region prompt as POST .../generate/preview reports it. */
+export interface RegionPromptBlock {
+  id: string
+  tokens: number
+  items: number
+  empty: boolean
+  always: boolean
+  included: boolean
+  detail: string
+}
+
+export interface RegionPromptPreview {
+  blocks: RegionPromptBlock[]
+  total_tokens: number
+  prompt?: string
 }
 
 export interface OutlineSection {
@@ -128,14 +148,33 @@ export const sectionService = {
     if (!res.ok) throw await failure(res, 'Failed to save the campaign outline.')
   },
 
-  /** Starts building a planned region in the background; poll the editor assets for the result. */
-  async generateSection(adventureId: string, sectionId: string, brief: string): Promise<void> {
+  /**
+   * Starts building a planned region in the background; poll the editor assets for the result.
+   * `body` is the Region Builder payload (brief, mode, context, options).
+   */
+  async generateSection(adventureId: string, sectionId: string, body: Record<string, unknown>): Promise<void> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/${encodeURIComponent(sectionId)}/generate`, {
       method: 'POST',
       headers: authHeaders(true),
-      body: JSON.stringify({ brief }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) throw await failure(res, 'Failed to start the region generation.')
+  },
+
+  /** The prompt blocks of a region build with token estimates (no LLM call). */
+  async previewSection(
+    adventureId: string,
+    sectionId: string,
+    body: Record<string, unknown>,
+    includePrompt = false,
+  ): Promise<RegionPromptPreview> {
+    const query = includePrompt ? '?include_prompt=true' : ''
+    const res = await fetch(
+      `${API_BASE}/adventures/${adventureId}/editor/sections/${encodeURIComponent(sectionId)}/generate/preview${query}`,
+      { method: 'POST', headers: authHeaders(true), body: JSON.stringify(body) },
+    )
+    if (!res.ok) throw await failure(res, 'Failed to measure the region prompt.')
+    return await res.json()
   },
 
   /** A proposal of planned regions and an outline from the World-Builder (nothing is stored). */

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * Building a planned region with the World-Builder: the button, the running state and the
- * reason of a failed attempt. The generation runs in the background on the server; the
- * Regions page polls until the region is built or planned again.
+ * Building a planned region: opens the Region Builder, shows the running state and the reason
+ * of a failed attempt. The generation runs in the background on the server; the Regions page
+ * polls until the region is built or planned again.
  */
 import { Sparkles } from 'lucide-vue-next'
 import type { WorldSection } from '@/services/sectionService'
@@ -14,10 +14,9 @@ defineProps<{
   section: WorldSection
   /** Unsaved region changes: the server must know the region before it can build it. */
   dirty: boolean
-  starting: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'generate'): void }>()
+const emit = defineEmits<{ (e: 'build'): void }>()
 </script>
 
 <template>
@@ -31,11 +30,11 @@ const emit = defineEmits<{ (e: 'generate'): void }>()
         {{ section.generation_error }}
       </UiNotice>
       <div class="flex flex-wrap items-center gap-3">
-        <UiButton variant="ai" :icon="Sparkles" :loading="starting" :disabled="dirty" @click="emit('generate')">
-          Generate region
+        <UiButton variant="ai" :icon="Sparkles" :disabled="dirty" @click="emit('build')">
+          {{ section.generation_error ? 'Retry…' : 'Build region…' }}
         </UiButton>
         <span class="wb-hint">
-          {{ dirty ? 'Save your changes first.' : 'Builds 6-10 scenes with characters and items from the brief, the outline and the neighbouring regions.' }}
+          {{ dirty ? 'Save your changes first.' : 'Choose the size and which parts of your world the World-Builder reads.' }}
         </span>
       </div>
     </template>

@@ -1,6 +1,6 @@
 # Region Builder (Concept)
 
-Status: phase A (backend) implemented; phases B-D open (section 13). Replaces the generation UI of
+Status: phases A (backend) and B (page) implemented; C and D open (section 13). Replaces the generation UI of
 [world_sections.md](world_sections.md) section 9.4 (brief field + **Generate region** button).
 Planning (9.3), validation and merge (9.5), the blueprint `Section` kind (9.6) and the
 expansion of running sessions (9.7) stay as they are, apart from the changes listed here.
@@ -39,37 +39,46 @@ several regions in one job, editing the campaign outline from the builder.
 | Where | Action | Result |
 | --- | --- | --- |
 | Regions page, planned region | **Build region...** (replaces *Generate region*) | Builder opens for that region |
-| Regions page, header | **New region...** | Creates a stub (existing CRUD), then opens the builder for it |
 | Region card after a failed job | **Retry...** | Builder opens with the stored settings and the error shown |
+
+A new region is added with **Add region** and saved as before, then built with *Build
+region...*; a separate *New region...* button would only duplicate that. The button is
+disabled while the Regions page has unsaved changes, because the builder reads the saved
+region.
 
 **Plan regions** stays as it is. The brief it writes is the builder's starting idea text.
 
-The builder is a full workbench page, `/editor/:templateId/regions/:sectionId/build`, not a
-modal: it has as many cards as the Generate adventure page, and a modal would hide the
-progress stream when closed. **Back** returns to the Regions page; a running job keeps
-running and the region card shows `generating`.
+The builder is a sub-page of the editor (`RegionBuilderPage.vue`, route
+`/adventures/:adventureId/editor/regions/:sectionId/build`, name
+`adventure-editor-region-build`), like the character and item detail pages: it keeps the
+editor sidebar with *Regions* marked, reads the editor data and has no shell save bar. It is
+not a modal, because it has as many cards as the Generate adventure page. **Build region**
+saves the name and description with the region list, starts the job and returns to the
+Regions page, which polls until the region is built (region generation has no progress
+stream).
 
 ## 4. Builder options
 
 ### 4.1 Layout
 
-`WorkbenchShell` with a sidebar that jumps to the cards (same as the Generate adventure
-page). Header: region name, **Simple / Advanced** switch. Sticky bottom bar (`GenerateBar`):
-total context estimate, *Validate & fix afterwards*, **Generate region**.
+Page header: *Build <region>*, the **Simple / Advanced** switch and a way back to Regions.
+Sticky bottom bar (`RegionBuildBar.vue`): estimated prompt size (warning above 40k tokens),
+*Preview prompt* (advanced) and **Build region** with the reason when it is disabled.
+*Validate & fix afterwards* joins the bar in phase D.
 
 Cards, top to bottom:
 
-1. **Region**: name, description, map position (read-only preview, edited on the map),
-   links to neighbouring regions with travel time (`planned_links`). Editable here; saved
-   with the region before the job starts.
-2. **Region idea**: free text or blueprint (section 6). Pre-filled with the brief.
-3. **World context**: the injection options (section 5).
-4. **Region size**: scenes, items, quests, chapters, containers, text logs, awards.
-5. **Content**: feature switches (quests, containers, scripts, text logs, awards) and
-   strictness.
-6. **Images & voices**: scene, NPC and item images, NPC voice assignment.
-7. **Inherited from the adventure** (read-only, collapsed): the global attributes of 4.3,
+1. **Region**: name and description (saved with the region before the job starts), links
+   to neighbouring regions with travel time, read-only (drawn on the Regions map).
+2. **Region idea**: the region's brief. Free text now; blueprint input in phase C.
+3. **World context**: the injection options (section 5), *All on* / *All off*, a token badge
+   per option and the always-included gateway scenes.
+4. **Region size**: simple mode a preset; advanced mode the ranges of scenes, items,
+   chapters, side quests, containers, readable texts and awards (with their switches, the
+   shared `LimitRow`), event scripts and strictness.
+5. **Inherited from the adventure** (read-only, collapsed): the global attributes of 4.3,
    with a link to the page where each is changed.
+6. **Images & voices**: scene, NPC and item images, NPC voice assignment. Phase D.
 
 ### 4.2 Simple vs. advanced
 
@@ -392,18 +401,18 @@ the same way.
 
 | Module | Content |
 | --- | --- |
-| `views/RegionBuilderView.vue` | Composes the cards; no logic |
-| `composables/regionBuilder/regionBuilderForm.ts` | Form state, defaults, simple reset, size presets, payload (pure, tested) |
-| `composables/regionBuilder/useRegionBuilder.ts` | Load region and stored settings, debounced preview, start job, poll / stream |
-| `components/region-builder/ContextOptionsSection.vue` | Option rows with switch, detail select (advanced), token badge, cost note, total |
-| `components/region-builder/RegionInfoSection.vue` | Card 1 |
-| `components/region-builder/InheritedSettingsSection.vue` | Card 7 |
-| reused from `components/create-adventure/` | `StorySection` (region variant without title and language), `WorldSizeSection`, `MediaSection`, `LimitRow`, `GenerateBar`, `BlueprintSyntaxHelp` |
-| reused from `components/game/generator/` | `GeneratorProgressStream`, `GeneratorErrorCard`, `AutoValidateFixToggle` |
-| `RegionsPage.vue` | *Build region...*, *New region...*, *Retry...* open the builder |
+| `components/editor/pages/RegionBuilderPage.vue` | Composes the cards; no logic |
+| `composables/regionBuilder/regionBuilderForm.ts` | Form state, defaults, stored settings, simple reset, size presets, payload, token labels (pure; `frontend/tests/regionBuilderForm.test.mjs`) |
+| `composables/regionBuilder/useRegionBuilder.ts` | Region and stored settings, debounced preview, saving name and description, starting the job |
+| `composables/regionBuilder/regionBuilderContext.ts` | provide / inject of the page state |
+| `components/editor/region-builder/` | `RegionInfoCard`, `RegionIdeaCard`, `ContextOptionsCard` + `ContextOptionRow`, `RegionSizeCard`, `InheritedSettingsCard`, `RegionBuildBar`, `PromptPreviewModal` |
+| reused from `components/create-adventure/` | `LimitRow` (now takes the form as a prop) |
+| `RegionsPage.vue`, `regions/RegionGenerateControls.vue` | *Build region...* / *Retry...* open the builder |
 
-Shared cards get a `scope: 'adventure' | 'region'` prop instead of copies. Workbench UI rules
-apply (`.claude/rules/frontend-ui.md`), and the new folder goes into the UI check
+The cards of the Generate adventure page read that page's form through injection, so only
+`LimitRow` is shared; `StorySection` and `MediaSection` become shareable when phases C and D
+need them. Workbench UI rules apply (`.claude/rules/frontend-ui.md`); `region-builder/`,
+`regions/` and `composables/regionBuilder/` are in the UI check
 (`frontend/scripts/check_workbench_ui.mjs`).
 
 ## 11. Open points
@@ -430,13 +439,14 @@ apply (`.claude/rules/frontend-ui.md`), and the new folder goes into the UI chec
 | Validators | none new |
 | Docs and skills | `world_sections.md` 9.4 points here; `world-builder-blueprint-manual.md` gets a region-mode chapter; `taleweaver-adventure-concept-creator` learns region blueprints; rebuild bundled skills |
 | Autocomplete | not affected |
-| Tests | context blocks per option and detail; preview totals; collision renames; blueprint region mode (allowed kinds, references, existing-id error); request defaults for the old body; form logic in `regionBuilderForm.spec.ts` |
+| Tests | context blocks per option and detail; preview totals; collision renames; blueprint region mode (allowed kinds, references, existing-id error); request defaults for the old body; form logic in `frontend/tests/regionBuilderForm.test.mjs` |
 
 ## 13. Phases
 
 * **A: context options (backend first). Done.** `section_context.py`, extended request, preview
   endpoint, id renames. The current Regions page sends all-on and keeps working.
-* **B: Region Builder page.** Simple / Advanced, cards, token badges, stored settings.
+* **B: Region Builder page. Done.** Simple / Advanced, cards, token badges, stored settings.
+  Still open from B: choosing gateway scenes by hand (`gateway_scene_ids`, 5.2a item 1).
 * **C: blueprint region mode.** Parser mode, live validation in the preview, `apply_blueprint`
   in the job.
 * **D: media phase and discard region.**

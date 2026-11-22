@@ -34,7 +34,7 @@ const ROWS: {
     description="Larger worlds take longer to build. Regions are added later in the World-Editor (Regions page)."
   >
     <div class="divide-y divide-wb-line">
-      <LimitRow v-for="row in ROWS" :key="row.limit" v-bind="row" />
+      <LimitRow v-for="row in ROWS" :key="row.limit" :form="form" v-bind="row" />
     </div>
     <div class="mt-2 border-t border-wb-line pt-4">
       <UiToggle

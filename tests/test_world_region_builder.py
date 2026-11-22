@@ -289,3 +289,34 @@ async def test_old_request_body_still_works(auth_client, setup_test_db, monkeypa
     # Assert
     assert resp.status_code == 202, resp.text
     assert SimpleNamespace(**resp.json()).status == "generating"
+
+
+@pytest.mark.asyncio
+async def test_the_region_keeps_its_builder_settings_but_sessions_never_see_them(
+    auth_client, setup_test_db, monkeypatch
+):
+    from backend.engine.world.sections import player_sections
+
+    async def _job(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(section_generation, "run_generation", _job)
+    monkeypatch.setattr(section_generation, "_RUNNING", {})
+    await _owned_template()
+
+    # Act
+    resp = await auth_client.post(
+        "/api/adventures/campaign/editor/sections/PEAKS/generate",
+        json={"brief": "Ice.", "mode": "advanced", "context": {"scenes": "full"}},
+    )
+
+    # Assert
+    assert resp.status_code == 202, resp.text
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, "campaign")
+    peaks = next(s for s in normalize_sections(adv.world_sections) if s["id"] == "PEAKS")
+    stored = peaks["generation_settings"]
+    assert stored["mode"] == "advanced" and stored["context"]["scenes"] == "full"
+    assert stored["options"]["quest_generation_enabled"] is True
+    built = [{**peaks, "status": "built"}]
+    assert "generation_settings" not in player_sections(built)[0]

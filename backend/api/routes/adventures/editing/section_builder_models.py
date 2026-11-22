@@ -60,8 +60,14 @@ class RegionOptionsRequest(BaseModel):
 
 class SectionGenerateRequest(BaseModel):
     brief: Optional[str] = Field(default=None, max_length=4000)
+    # Which form the builder showed; stored with the settings so it reopens the same way.
+    mode: Literal["simple", "advanced"] = "simple"
     context: RegionContextRequest = Field(default_factory=RegionContextRequest)
     options: RegionOptionsRequest = Field(default_factory=RegionOptionsRequest)
 
     def settings(self) -> dict[str, Any]:
         return {"context": self.context.model_dump(), "options": self.options.model_dump()}
+
+    def stored_settings(self) -> dict[str, Any]:
+        """What the region keeps as ``generation_settings`` for the next build."""
+        return {"mode": self.mode, **self.settings()}

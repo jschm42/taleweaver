@@ -35,6 +35,7 @@ AUTHOR_ONLY_KEYS = (
     "planned_links",
     "generation_error",
     "generation_notes",
+    "generation_settings",
 )
 MAX_NOTES = 12
 # Description length in the GM's CURRENT STATE region line.
@@ -106,6 +107,38 @@ def _notes(raw: Any) -> list[str]:
     return [n for n in (_text(v, MAX_NOTE_LENGTH * 2) for v in raw) if n][:MAX_NOTES]
 
 
+_MAX_SETTING_KEYS = 32
+
+
+def _setting_value(value: Any) -> Any:
+    """A JSON scalar of a stored generation setting, or None when it is not one."""
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        return int(value)
+    return value[:20] if isinstance(value, str) else None
+
+
+def _setting_map(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    items = [(str(k)[:40], _setting_value(v)) for k, v in list(raw.items())[:_MAX_SETTING_KEYS]]
+    return {key: value for key, value in items if key}
+
+
+def _generation_settings(raw: Any) -> Optional[dict[str, Any]]:
+    """The Region Builder's last settings ({mode, context, options}); the generator
+    normalizes their values when it uses them (docs/specs/region_builder.md, 8.3)."""
+    if not isinstance(raw, dict):
+        return None
+    mode = raw.get("mode") if raw.get("mode") in ("simple", "advanced") else "simple"
+    return {
+        "mode": mode,
+        "context": _setting_map(raw.get("context")),
+        "options": _setting_map(raw.get("options")),
+    }
+
+
 def _status(raw: Any) -> str:
     status = str(raw or "").strip().lower()
     return status if status in SECTION_STATUSES else DEFAULT_STATUS
@@ -134,6 +167,8 @@ def normalize_section(raw: Any, index: int = 0) -> Optional[dict[str, Any]]:
         "generation_error": _text(raw.get("generation_error"), MAX_NOTE_LENGTH * 3),
         # What the author should check after a generation (fix-ups, new validation findings).
         "generation_notes": _notes(raw.get("generation_notes")),
+        # The Region Builder's last settings of this region (None = never built with it).
+        "generation_settings": _generation_settings(raw.get("generation_settings")),
     }
 
 

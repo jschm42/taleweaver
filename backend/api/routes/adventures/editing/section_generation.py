@@ -57,7 +57,12 @@ def session_factory() -> Any:
 
 
 def _set_status(
-    adv: AdventureTemplate, section_id: str, status: str, error: str = "", brief: str | None = None
+    adv: AdventureTemplate,
+    section_id: str,
+    status: str,
+    error: str = "",
+    brief: str | None = None,
+    settings: dict[str, Any] | None = None,
 ) -> None:
     sections = normalize_sections(adv.world_sections)
     for section in sections:
@@ -67,6 +72,8 @@ def _set_status(
         section["generation_error"] = error[:MAX_ERROR_LENGTH]
         if brief is not None:
             section["brief"] = brief.strip()
+        if settings is not None:
+            section["generation_settings"] = settings
     store_sections(adv, sections)
 
 
@@ -151,7 +158,9 @@ async def start_section_generation(
     _planned_section(adv, section_key)
     if (template_id, section_key) in _RUNNING:
         raise HTTPException(status_code=409, detail="This region is already being generated.")
-    _set_status(adv, section_key, "generating", brief=payload.brief)
+    _set_status(
+        adv, section_key, "generating", brief=payload.brief, settings=payload.stored_settings()
+    )
     await db.commit()
     task = asyncio.create_task(
         run_generation(template_id, section_key, current_user.id, payload.settings())
