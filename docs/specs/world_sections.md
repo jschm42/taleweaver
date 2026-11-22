@@ -131,7 +131,7 @@ those paths. The snapshot keeps only built sections without the author fields
 | `status` | String(20) | `stub`, `generating`, `built` |
 | `brief` | Text, nullable | author directions for generation |
 | `summary` | Text, nullable | compressed description of the built content, for later prompts |
-| `planned_links` | JSON, nullable | stubs only: `[{"to_section_id", "travel_minutes", "note"}]` |
+| `planned_links` | JSON, nullable | stubs only: `[{"to_section_id", "travel_minutes", "note", "gateway_scene_ids"}]`; `gateway_scene_ids` are up to 8 scenes of the target region the Region Builder connects to first |
 
 ### 4.2 Changed tables
 

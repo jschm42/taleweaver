@@ -12,6 +12,8 @@ export interface PlannedLink {
   to_section_id: string
   travel_minutes: number | null
   note: string
+  /** Scenes of the target region a new region connects to first (Region Builder). */
+  gateway_scene_ids?: string[]
 }
 
 export interface WorldSection {
@@ -44,9 +46,22 @@ export interface RegionPromptBlock {
   detail: string
 }
 
+export interface BlueprintIssue {
+  line: number
+  message: string
+  severity: 'error' | 'warning'
+}
+
+/** The region blueprint as the preview reports it (null for a plain-text idea). */
+export interface RegionBlueprintReport {
+  issues: BlueprintIssue[]
+  kinds: Record<string, number>
+}
+
 export interface RegionPromptPreview {
   blocks: RegionPromptBlock[]
   total_tokens: number
+  blueprint?: RegionBlueprintReport | null
   prompt?: string
 }
 

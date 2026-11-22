@@ -43,6 +43,8 @@ export interface RegionBuilderForm {
   size: SizePreset
   context: RegionContext
   options: RegionOptions
+  /** Picked gateway scenes per linked region id (saved with the region's links). */
+  gateways: Record<string, string[]>
 }
 
 /** What a region stores as `generation_settings` (POST .../generate keeps it). */
@@ -57,7 +59,11 @@ export interface RegionSource {
   description: string
   brief: string
   generation_settings?: StoredRegionSettings | null
+  planned_links?: { to_section_id: string; gateway_scene_ids?: string[] }[]
 }
+
+/** At most this many gateway scenes per link (backend MAX_GATEWAY_SCENES). */
+export const MAX_GATEWAY_SCENES = 8
 
 export interface ContextOptionInfo {
   key: ContextKey
@@ -171,7 +177,26 @@ export function formFor(region: RegionSource): RegionBuilderForm {
     size: presetOf(options),
     context: storedContext(stored?.context),
     options,
+    gateways: Object.fromEntries((region.planned_links || []).map((l) => [l.to_section_id, [...(l.gateway_scene_ids || [])]])),
   }
+}
+
+/** Adds or removes a picked gateway scene of one link (keeps the pick order, max 8). */
+export function toggleGateway(form: RegionBuilderForm, regionId: string, sceneId: string, on: boolean): void {
+  const current = form.gateways[regionId] || []
+  if (!on) {
+    form.gateways[regionId] = current.filter((id) => id !== sceneId)
+    return
+  }
+  if (current.includes(sceneId) || current.length >= MAX_GATEWAY_SCENES) return
+  form.gateways[regionId] = [...current, sceneId]
+}
+
+/** True when the picked gateways differ from the region's saved links. */
+export function gatewaysChanged(form: RegionBuilderForm, region: RegionSource): boolean {
+  return (region.planned_links || []).some(
+    (l) => (form.gateways[l.to_section_id] || []).join('|') !== (l.gateway_scene_ids || []).join('|'),
+  )
 }
 
 /** Simple mode: every option back to its default, context keeps on / off at default detail. */
@@ -209,6 +234,7 @@ export function buildPayload(form: RegionBuilderForm): Record<string, unknown> {
     mode: form.mode,
     context: { ...form.context },
     options: payloadOptions(form),
+    gateways: Object.fromEntries(Object.entries(form.gateways).map(([id, scenes]) => [id, [...scenes]])),
   }
 }
 

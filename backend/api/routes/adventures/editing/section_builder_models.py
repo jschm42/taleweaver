@@ -59,11 +59,14 @@ class RegionOptionsRequest(BaseModel):
 
 
 class SectionGenerateRequest(BaseModel):
-    brief: Optional[str] = Field(default=None, max_length=4000)
+    brief: Optional[str] = Field(default=None, max_length=20000)
     # Which form the builder showed; stored with the settings so it reopens the same way.
     mode: Literal["simple", "advanced"] = "simple"
     context: RegionContextRequest = Field(default_factory=RegionContextRequest)
     options: RegionOptionsRequest = Field(default_factory=RegionOptionsRequest)
+    # Unsaved gateway picks per linked region id; only the preview uses them (the builder
+    # saves them with the region list before it starts a build).
+    gateways: Optional[dict[str, list[str]]] = Field(default=None, max_length=12)
 
     def settings(self) -> dict[str, Any]:
         return {"context": self.context.model_dump(), "options": self.options.model_dump()}

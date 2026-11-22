@@ -279,6 +279,8 @@ A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the 
 ### `[Section: ID] Label`
 A region of the world map that groups scenes of a large world (alias `[Region: ID]`). The body text is its description; the Game Master sees it while the player is in the region. Keys: `position` (`x, y` in percent of the world map, 0-100), `status` (`built` default, or `stub`/`planned`: a region without scenes yet, hidden from players), `brief` (directions for building a planned region later), `links` (planned routes of a planned region with an optional travel time, e.g. `HARBOR_TOWN 8h, MINES 2d`). Scenes join a region with `section: ID`. Regions gate nothing; locks stay on exits. See [World sections](specs/world_sections.md).
 
+**Region mode.** In the Region Builder's region idea a blueprint describes one new region of an existing adventure: existing ids may be referenced but not declared again, an exit must touch a new scene, scenes may not name another region, `[World]`, `[Protagonist]`, `[Audio]` and `[Section]` blocks are ignored, and chapters are numbered from 1 within the region. See [Region Builder](specs/region_builder.md), section 6.
+
 ### `[Award: KEY] Title`
 `tier` (bronze, silver, gold, negative), `requires`, `goal_item`, `goal_scene`, `defeat`, `guard`.
 

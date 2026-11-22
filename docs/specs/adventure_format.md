@@ -140,7 +140,8 @@ before. Regions are purely spatial: they gate nothing; locks stay on exits. Spec
 | `status` | `"built"` \| `"stub"` \| `"generating"` | `built` (default): the region holds scenes. `stub`: a planned region without scenes, visible to authors only. Sessions never receive stub regions or the author fields below. |
 | `brief` | `string` | Optional author directions for building a planned region. |
 | `summary` | `string` | Optional short summary of the region's content, used by later generation steps. |
-| `planned_links` | `array` | Planned routes of a planned region, whose exits do not exist yet: `[{"to_section_id", "travel_minutes", "note"}]`. Links between built regions come from exits whose two scenes lie in different regions. |
+| `planned_links` | `array` | Planned routes of a planned region, whose exits do not exist yet: `[{"to_section_id", "travel_minutes", "note", "gateway_scene_ids"}]` (`gateway_scene_ids`: up to 8 scenes of the target region a generated region connects to first). Links between built regions come from exits whose two scenes lie in different regions. |
+| `generation_settings` | `object` \| `null` | The Region Builder's last settings of a planned region (`{mode, context, options}`), so the region can be built again the same way. Author field. |
 
 Exports always contain all regions, planned ones included, so a campaign can be continued
 from the file. A session copies the built regions into its adventure snapshot at start.

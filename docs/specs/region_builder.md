@@ -1,6 +1,6 @@
 # Region Builder (Concept)
 
-Status: phases A (backend) and B (page) implemented; C and D open (section 13). Replaces the generation UI of
+Status: phases A, B and C implemented; D open (section 13). Replaces the generation UI of
 [world_sections.md](world_sections.md) section 9.4 (brief field + **Generate region** button).
 Planning (9.3), validation and merge (9.5), the blueprint `Section` kind (9.6) and the
 expansion of running sessions (9.7) stay as they are, apart from the changes listed here.
@@ -147,7 +147,8 @@ The builder chooses them like this:
 
 1. Scenes the author picked in card 1 per link (new optional `gateway_scene_ids` on a
    planned link; the blueprint sets it implicitly through an `Exit` from an existing scene).
-   Phase B.
+   Implemented: `GatewayScenePicker.vue` in card 1; picks are saved with the region list
+   before the build, and the preview request carries unsaved picks (`gateways`).
 2. Otherwise (implemented in `engine/world/section_gateways.py`) the neighbour's scenes that already have an exit leading out of the region or
    are fast travel points, then the rest, up to 8.
 
@@ -200,60 +201,66 @@ Two consequences need engine changes:
 
 ### 6.1 Syntax
 
-The region idea field is the same component as the Story Idea field (`StorySection`,
-`BlueprintSyntaxHelp`, live validation). Plain text is a free brief; text with blueprint tags
-is parsed with `analyze_blueprint` in **region mode**.
+The region idea (`RegionIdeaCard.vue`, up to 20,000 characters, stored as the region's
+`brief`) takes the same syntax as the Story Idea, with the same `BlueprintSyntaxHelp`. Plain
+text is a free brief; text with blueprint tags is parsed in **region mode**
+(`engine/blueprint/region_mode.py`, `analyze_region_blueprint`). The text before the first
+tag becomes the brief the prompt shows; the blocks become a prompt block of their own
+(`blueprint`, between the region and the requirements). The user manual's example
+("A blueprint for one region") is checked against the region-mode validator.
 
-```
-A frozen dwarven ruin above the harbor. The surveyor's trail ends here.
+```text
+Frozen dwarven ruins above the harbor. The surveyor's trail ends at a collapsed gatehouse.
 
 [Scene: GP_GATEHOUSE] Ruined Gatehouse
-Description: Ice-crusted gate, a broken winch.
-Fast travel: yes
+fast_travel: yes
+Ice-crusted gate, a broken winch.
 
-[Exit: HARBOR_GATE -> GP_GATEHOUSE] the mountain path
-Travel: 8h
+[Exit: HARBOR_SQUARE -> GP_GATEHOUSE] the mountain road
+travel: 8h
 
 [NPC: GP_HERMIT] Old Brann
-Scene: GP_GATEHOUSE
-Hint: knows where the surveyor went, wants the drowned bell first
-
-[Item: GP_BELL_CLAPPER] Bell clapper
-Scene: GP_ICE_HALL
-Locked: yes
+in: GP_GATEHOUSE
 
 [Sequence: 1] Into the peaks
-Goal: Find the surveyor's last camp.
+goal_scene: GP_GATEHOUSE
 ```
 
 ### 6.2 Region mode rules
 
 | Kind | In region mode |
 | --- | --- |
-| `Scene`, `Exit`, `NPC`, `Item`, `Switch`, `Script`, `Sidequest`, `Award`, `Rule` | allowed, as in a new adventure |
-| `Sequence` | allowed; numbers are local (1, 2, ...) and are appended after the existing chapters (as `prepare_section` does today) |
-| `Section` | only the target region; its keys update card 1 |
-| `World`, `Protagonist` | not allowed (global); warning, block ignored |
+| `Scene`, `Exit`, `NPC`, `Item`, `Switch`, `Script`, `Sidequest`, `Award` (with their `Rule`, `Ability` children) | allowed, as in a new adventure |
+| `Sequence` | allowed; numbers are local (1, 2, ...) and are appended after the existing chapters (`prepare_section`) |
+| `World`, `Protagonist`, `Audio` | global; warning, block ignored |
+| `Section` | warning, block ignored: the region is edited in the builder's Region card |
 
-* `Section:` on scenes may be left out; it defaults to the target region. Another region is
-  an error.
-* `fixed` / `hint` / `open` keys work as for a new adventure; fixed values are written over
-  the LLM output with `apply_blueprint` before `prepare_section`.
-* Strictness `strict` means: build exactly the blueprint's scenes and characters, add only
-  what the size settings demand beyond them.
+* `section:` on scenes may be left out; it defaults to the region being built. Another
+  region is an error.
+* `fixed` / `hint` / `open` keys work as for a new adventure. After the LLM call the fixed
+  values are written over the region with `apply_blueprint(region, blueprint,
+  known_scene_ids=ledger.scene_ids)` (exits may join existing scenes), then
+  `prepare_section` runs. Entries the LLM left out and the merge cannot create become
+  generation notes (`Blueprint: ...`).
+* Strictness `strict` uses the blueprint's strict wording: keep its structure and add only
+  what makes it playable or what the counts demand.
+* The prompt section starts with REGION BLUEPRINT NOTES (existing ids are references, local
+  chapter numbers).
 
 ### 6.3 References to existing content
 
-A blueprint may **reference** existing ids, never redefine them:
+A blueprint may **reference** existing ids, never redefine them: exit ends, keys, quest and
+chapter requirements, relations. Referenced ids of the adventure are not reported as
+missing (only ids that exist nowhere are, and the LLM is told to create them).
 
-* an `Exit` from or to an existing scene (a gateway exit; it must be a built neighbour's
-  scene, otherwise a warning that the link is not in `planned_links`);
-* an existing item as `item_to_unlock`, `required_item_id` or ingredient;
-* an existing NPC in `relations` or a quest's `required_defeated_npc_id`.
+* A block whose id already exists (`[NPC: HARBORMASTER]`) is an error: "exists already; the
+  Region Builder only adds content".
+* An exit whose both ends are existing scenes is an error ("only joins existing scenes").
+* An exit to an existing scene outside the linked regions is a warning (only when the region
+  has links; without links any existing scene is a fitting gateway).
 
-A block whose id already exists (`[NPC: HARBORMASTER]`) is an error: "exists already; the
-Region Builder only adds content". Live validation needs the template's ledger for this,
-so the region-mode validation call carries the template and region id (section 8.2).
+Errors block the build: the preview reports them (8.2), the page disables **Build region**,
+and `POST .../generate` answers 400 before the job starts; the job itself refuses them too.
 
 ## 7. Generation job
 
@@ -360,7 +367,7 @@ without an LLM call:
      "included": true, "detail": "full"}
   ],
   "total_tokens": 11830,
-  "blueprint": {"issues": [], "kinds": {"Scene": 4, "NPC": 2}},
+  "blueprint": {"issues": [{"line": 4, "message": "...", "severity": "warning"}], "kinds": {"scene": 4, "npc": 2}},
   "prompt": "..."
 }
 ```
@@ -370,8 +377,9 @@ Blocks in prompt order: `system`, `frame`, the nine options, `gateway`, `region`
 (`included: false`), so the page can show what turning it on would cost; `total_tokens`
 counts only included blocks, the system prompt among them. `prompt` (the full user prompt) only when `?include_prompt=true`, for the advanced
 **Preview prompt** button. The page calls preview debounced on every context or blueprint
-change. Blueprint validation in region mode will be part of this call (phase C), so the
-existing `blueprint_routes.py` stays for new adventures only.
+change. `blueprint` is null for a plain-text idea; with tags it is the region-mode report,
+so the existing `blueprint_routes.py` stays for new adventures only. The body may carry
+`gateways` (unsaved gateway picks per linked region), which only the preview uses.
 
 ### 8.3 Stored settings
 
@@ -392,7 +400,9 @@ the same way.
 | `engine/world/section_gateways.py` (new) | Gateway choice (5.2a) and the GATEWAY SCENES block |
 | `engine/world/section_id_renames.py` (new) | Collision renames (5.5) |
 | `engine/world/section_validation.py` | `prepare_section` renames colliding ids (5.5) |
-| `engine/blueprint/` | Region mode: allowed kinds, ledger-aware reference and collision checks, local sequence numbers |
+| `engine/blueprint/region_mode.py` (new) | Region mode: dropped global blocks, ledger-aware reference, redefinition, scene-region and exit checks, prompt notes |
+| `engine/blueprint/merge.py` | `apply_blueprint(..., known_scene_ids)`: exits may join scenes outside the manifest |
+| `engine/world/section_blueprint.py` (new) | Region blueprint from the brief and the ledger, write-back, preview report |
 | `engine/world/section_media.py` (new) | Image and voice phase for the new ids |
 | `api/routes/adventures/editing/section_builder_models.py` (new) | Request / preview models |
 | `api/routes/adventures/editing/section_generation.py` | Extended generate body, preview endpoint, progress events |
@@ -446,8 +456,8 @@ need them. Workbench UI rules apply (`.claude/rules/frontend-ui.md`); `region-bu
 * **A: context options (backend first). Done.** `section_context.py`, extended request, preview
   endpoint, id renames. The current Regions page sends all-on and keeps working.
 * **B: Region Builder page. Done.** Simple / Advanced, cards, token badges, stored settings.
-  Still open from B: choosing gateway scenes by hand (`gateway_scene_ids`, 5.2a item 1).
-* **C: blueprint region mode.** Parser mode, live validation in the preview, `apply_blueprint`
+  Gateway scenes can be picked by hand per linked region (`gateway_scene_ids`, 5.2a).
+* **C: blueprint region mode. Done.** Parser mode, live validation in the preview, `apply_blueprint`
   in the job.
 * **D: media phase and discard region.**
 

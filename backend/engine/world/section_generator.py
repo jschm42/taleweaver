@@ -19,8 +19,14 @@ from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.llm_router import GameMasterLLM
+from backend.engine.blueprint.region_mode import RegionBlueprint
 from backend.engine.manifest_apply.section_merge import merge_section
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
+from backend.engine.world.section_blueprint import (
+    apply_region_blueprint,
+    blueprint_summary,
+    region_blueprint,
+)
 from backend.engine.world.section_context import ContextBlock, ContextSource, normalize_context
 from backend.engine.world.section_gateways import built_neighbours
 from backend.engine.world.section_ledger import Ledger, ledger_from_rows, load_world_rows
@@ -58,6 +64,7 @@ class RegionPrompt:
     blocks: list[ContextBlock]
     ledger: Ledger
     neighbour_ids: list[str]
+    blueprint: Optional[RegionBlueprint] = None
 
     def user_prompt(self, errors: list[str]) -> str:
         return build_section_prompt(self.blocks, errors)
@@ -102,19 +109,40 @@ async def build_region_prompt(
     chosen = normalize_settings(settings)
     rows = await load_world_rows(db, adventure.id)
     neighbours = built_neighbours(section, sections)
+    ledger = ledger_from_rows(adventure, rows)
+    blueprint = region_blueprint(section, ledger)
+    strictness = chosen["options"]["generation_strictness"]
     source = ContextSource(
         adventure=adventure,
-        section=section,
+        # With a blueprint the brief is its premise; the blocks follow as their own part.
+        section={**section, "brief": blueprint.premise} if blueprint else section,
         sections=sections,
         rows=rows,
         walkthroughs=chosen["context"]["walkthroughs"],
         start_scene_id=await resolve_initial_scene_id(db, adventure.id) if rows.scenes else None,
     )
+    blueprint_text = blueprint.prompt_section(strictness) if blueprint else ""
     return RegionPrompt(
-        blocks=region_blocks(source, chosen["context"], chosen["options"], neighbours),
-        ledger=ledger_from_rows(adventure, rows),
+        blocks=region_blocks(
+            source, chosen["context"], chosen["options"], neighbours, blueprint_text
+        ),
+        ledger=ledger,
         neighbour_ids=[n["to_section_id"] for n in neighbours],
+        blueprint=blueprint,
     )
+
+
+def _with_gateways(
+    section: dict[str, Any], sections: list[dict[str, Any]], gateways: dict[str, list[str]]
+) -> dict[str, Any]:
+    links = [
+        {**link, "gateway_scene_ids": gateways.get(link["to_section_id"], [])}
+        for link in section["planned_links"]
+    ]
+    # Normalized like a saved region, so the picks are cleaned the same way.
+    others = [s for s in sections if s["id"] != section["id"]]
+    normalized = normalize_sections([*others, {**section, "planned_links": links}])
+    return next(s for s in normalized if s["id"] == section["id"])
 
 
 async def preview_section_prompt(
@@ -124,11 +152,15 @@ async def preview_section_prompt(
     settings: Optional[dict[str, Any]],
     brief: Optional[str] = None,
     include_prompt: bool = False,
+    gateways: Optional[dict[str, list[str]]] = None,
 ) -> dict[str, Any]:
-    """The prompt's blocks with token estimates, without an LLM call."""
+    """The prompt's blocks with token estimates, without an LLM call. ``brief`` and
+    ``gateways`` (picked gateway scenes per linked region) override the saved values."""
     adventure, section, sections = await _region(db, template_id, section_id)
     if brief is not None:
         section = {**section, "brief": brief.strip()}
+    if gateways is not None:
+        section = _with_gateways(section, sections, gateways)
     prompt = await build_region_prompt(db, adventure, section, sections, settings)
     result: dict[str, Any] = {
         "blocks": [
@@ -144,6 +176,7 @@ async def preview_section_prompt(
             for b in prompt.blocks
         ],
         "total_tokens": total_tokens(prompt.blocks),
+        "blueprint": blueprint_summary(prompt.blueprint),
     }
     if include_prompt:
         result["prompt"] = prompt.user_prompt([])
@@ -160,6 +193,8 @@ async def generate_section(
     """Generates, validates and merges one planned region; returns fix-up notes."""
     adventure, section, sections = await _region(db, template_id, section_id)
     prompt = await build_region_prompt(db, adventure, section, sections, settings)
+    if prompt.blueprint and prompt.blueprint.errors:
+        raise SectionGenerationError(prompt.blueprint.errors)
     llm, model = _llm(user)
     errors: list[str] = []
     for _attempt in range(MAX_ATTEMPTS):
@@ -173,7 +208,12 @@ async def generate_section(
             phase="analysis",
         )
         region = result.model_dump()
-        notes = prepare_section(region, section_id, prompt.ledger)
+        notes = (
+            apply_region_blueprint(region, prompt.blueprint, prompt.ledger)
+            if prompt.blueprint
+            else []
+        )
+        notes += prepare_section(region, section_id, prompt.ledger)
         errors = validate_section(region, prompt.ledger, prompt.neighbour_ids)
         if not errors:
             await merge_section(db, template_id, section_id, region, user)

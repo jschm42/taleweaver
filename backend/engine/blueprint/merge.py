@@ -115,8 +115,13 @@ _CHILD_COLLECTIONS = {
 }
 
 
-def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]:
-    """Write fixed blueprint values into ``manifest``. Returns human-readable violations."""
+def apply_blueprint(
+    manifest: dict[str, Any], blueprint: Blueprint, known_scene_ids: set[str] | None = None
+) -> list[str]:
+    """Write fixed blueprint values into ``manifest``. Returns human-readable violations.
+
+    ``known_scene_ids``: scenes outside ``manifest`` that exits may join (a region's gateway
+    scenes of the existing adventure)."""
     violations: list[str] = []
     world = blueprint.first("world")
     if world:
@@ -129,7 +134,9 @@ def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]
     for kind, collection in COLLECTIONS.items():
         entries = manifest.setdefault(collection, [])
         for block in blueprint.of_kind(kind):
-            if kind == "exit" and not _exit_scenes_exist(manifest, block, violations):
+            if kind == "exit" and not _exit_scenes_exist(
+                manifest, block, violations, known_scene_ids or set()
+            ):
                 continue
             entry = _find_or_insert(entries, block, violations)
             if entry is not None:
@@ -176,9 +183,10 @@ def _is_dynamic_exit_block(block: BlueprintBlock) -> bool:
 
 
 def _exit_scenes_exist(
-    manifest: dict[str, Any], block: BlueprintBlock, violations: list[str]
+    manifest: dict[str, Any], block: BlueprintBlock, violations: list[str], known: set[str]
 ) -> bool:
     scene_ids = {str(scene.get("id") or "").upper() for scene in manifest.get("scenes") or []}
+    scene_ids |= {scene_id.upper() for scene_id in known}
     ends = (block.fixed().get("from_scene_id"), block.fixed().get("to_scene_id"))
     if _is_dynamic_exit_block(block):
         if ends[0] in scene_ids:

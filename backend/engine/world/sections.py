@@ -22,7 +22,7 @@ MAX_SECTIONS = 64
 MAX_ID_LENGTH = 50
 MAX_LABEL_LENGTH = 100
 MAX_DESCRIPTION_LENGTH = 2000
-MAX_BRIEF_LENGTH = 4000
+MAX_BRIEF_LENGTH = 20000
 MAX_SUMMARY_LENGTH = 4000
 MAX_LINKS = 12
 MAX_NOTE_LENGTH = 200
@@ -77,6 +77,21 @@ def _travel_minutes(raw: Any) -> Optional[int]:
     return min(minutes, MAX_TRAVEL_MINUTES) if minutes > 0 else None
 
 
+MAX_GATEWAY_SCENES = 8
+
+
+def _scene_ids(raw: Any) -> list[str]:
+    """Scene ids the author picked as gateways of a link (docs/specs/region_builder.md, 5.2a)."""
+    if not isinstance(raw, list):
+        return []
+    ids: list[str] = []
+    for value in raw:
+        scene_id = _text(value, MAX_ID_LENGTH).upper()
+        if scene_id and scene_id not in ids:
+            ids.append(scene_id)
+    return ids[:MAX_GATEWAY_SCENES]
+
+
 def _link(raw: Any, own_id: str) -> Optional[dict[str, Any]]:
     if not isinstance(raw, dict):
         return None
@@ -87,6 +102,8 @@ def _link(raw: Any, own_id: str) -> Optional[dict[str, Any]]:
         "to_section_id": target,
         "travel_minutes": _travel_minutes(raw.get("travel_minutes")),
         "note": _text(raw.get("note"), MAX_NOTE_LENGTH),
+        # Scenes of the target region the new region connects to first (author's pick).
+        "gateway_scene_ids": _scene_ids(raw.get("gateway_scene_ids")),
     }
 
 

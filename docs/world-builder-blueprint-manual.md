@@ -641,6 +641,37 @@ on_use: |
 
 On the world map (Map and Regions pages), **Map images** paints the map from the regions and their positions, with an editable prompt and, if you like, the adventure's image style and tone; you can also upload your own image or download it. A large map is built from several images: add tiles to the right or below (up to 6 x 6); each tile's prompt names the regions on it. The map is the background of the editor's and the players' world map (no lettering; the names are drawn on top); zoom with the mouse wheel or the buttons and drag the map to move it. **Connect regions** draws a new route: between two built regions it creates an exit between a scene of each, with a planned region it plans a route. Click a route's time chip to change its travel time (or estimate it from the map distance). The Map page and the players' map open on the world map; a click on a region shows its scenes. A planned region does not have to be written by hand. **Generate adventure** builds one connected world without regions (the page says so); regions are added afterwards in the World-Editor. On the **Regions** page, **Plan regions** proposes new planned regions and a campaign outline from the plot; **Build region...** then opens the Region Builder for one planned region: name, description and region idea, which parts of your world the World-Builder reads (other regions, campaign outline, chapters with walkthroughs, quests, plot, world rules, characters, scenes, items; all on by default, each shows its estimated token cost), and the region's size (Simple: small, medium or large; Advanced: every count, event scripts, strictness and the detail of each context part). **Build region** creates the scenes with characters, items, exits to its neighbours and fast travel points in the background; the builder remembers the settings for the next build of that region. A generated id that already exists in the adventure is renamed (`KEY` becomes `KEY_2`, with every reference inside the region) and listed in the region's notes. Players who started the adventure earlier are offered the new region when they open their session. While regions are still planned, finishing the last chapter does not end the adventure: players get a *To be continued* notice and keep exploring (a win guard or `tw.game.win()` still ends it).
 
+### A blueprint for one region
+
+The Region Builder's **Region idea** accepts the same blueprint syntax, in *region mode*: the blueprint describes only the new region and is checked against the adventure that already exists.
+
+```text
+Frozen dwarven ruins above the harbor. The surveyor's trail ends at a collapsed gatehouse.
+
+[Scene: GP_GATEHOUSE] Ruined Gatehouse
+fast_travel: yes
+Ice-crusted gate, a broken winch.
+
+[Exit: HARBOR_SQUARE -> GP_GATEHOUSE] the mountain road
+travel: 8h
+
+[NPC: GP_HERMIT] Old Brann
+in: GP_GATEHOUSE
+~ Knows where the surveyor went, but wants the drowned bell first.
+
+[Sequence: 1] Into the peaks
+goal_scene: GP_GATEHOUSE
+```
+
+- Text before the first tag is the region's brief; the blocks pin scenes, characters, items, exits, chapters, scripts, side quests and awards.
+- Ids that already exist may be **referenced** (an exit from `HARBOR_SQUARE`, an existing key item, a quest requirement) but never declared again; a block such as `[NPC: HARBORMASTER]` for an existing character is an error. The builder only adds content.
+- An exit must touch at least one new scene. An exit to a scene outside the region's linked regions works, but you get a note.
+- Scenes belong to the region being built; `section:` naming another region is an error.
+- `[World]`, `[Protagonist]` and `[Audio]` are global and ignored; `[Section]` too, because the region is edited in the builder's Region card.
+- Chapters are numbered from 1 within the region and follow the existing chapters after the build.
+
+The builder checks the blueprint while you type: the Region idea card lists its errors and notes, and **Build region** stays disabled while there are errors.
+
 ### Long journeys and fast travel
 
 A way between distant places can cost in-game time: `travel` on an exit moves the clock when the player uses it. Mark central places with `fast_travel: yes`; once the player has been there, the map offers to travel back from anywhere (the route is walked with all its events and travel time). A waystone that must be activated first uses `fast_travel_unlock: script` and a script that unlocks it.

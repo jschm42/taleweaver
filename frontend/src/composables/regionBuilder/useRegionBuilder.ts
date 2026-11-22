@@ -12,6 +12,7 @@ import {
   applySimpleDefaults,
   buildPayload,
   formFor,
+  gatewaysChanged,
   type RegionBuilderForm,
   type RegionMode,
 } from '@/composables/regionBuilder/regionBuilderForm'
@@ -62,12 +63,14 @@ export function useRegionBuilder(sectionId: Ref<string>): RegionBuilderState {
   )
 
   const blocks = computed(() => Object.fromEntries((preview.value?.blocks || []).map((b) => [b.id, b])))
+  const blueprintErrors = computed(() => (preview.value?.blueprint?.issues || []).filter((i) => i.severity === 'error'))
 
   const blockReason = computed(() => {
     if (!section.value) return 'This region does not exist (any more).'
     if (section.value.status === 'built') return 'This region is already built.'
     if (section.value.status === 'generating') return 'The World-Builder is building this region.'
     if (!form.value?.label.trim()) return 'Give the region a name.'
+    if (blueprintErrors.value.length) return 'Fix the blueprint errors in the region idea first.'
     return ''
   })
   const canBuild = computed(() => !blockReason.value && !starting.value)
@@ -105,12 +108,17 @@ export function useRegionBuilder(sectionId: Ref<string>): RegionBuilderState {
     if (mode === 'simple') applySimpleDefaults(form.value)
   }
 
-  /** Name and description belong to the region list; save them before the build reads them. */
+  /**
+   * Name, description and picked gateway scenes belong to the region list; save them before
+   * the build reads them.
+   */
   async function saveRegionFields(value: RegionBuilderForm, target: WorldSection): Promise<void> {
     const label = value.label.trim()
     const description = value.description.trim()
-    if (label === target.label && description === target.description) return
-    const next = sections.value.map((s) => (s.id === target.id ? { ...s, label, description } : s))
+    const sameText = label === target.label && description === target.description
+    if (sameText && !gatewaysChanged(value, target)) return
+    const planned_links = target.planned_links.map((l) => ({ ...l, gateway_scene_ids: value.gateways[l.to_section_id] || [] }))
+    const next = sections.value.map((s) => (s.id === target.id ? { ...s, label, description, planned_links } : s))
     await sectionService.saveSections(editor.adventureId, next)
   }
 

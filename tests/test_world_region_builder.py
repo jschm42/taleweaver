@@ -25,7 +25,13 @@ from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldExit, WorldScene
 from tests.conftest import TestSessionLocal
-from tests.test_world_section_generation import _FakeLLM, _ledger, _region, _seed_template
+from tests.test_world_section_generation import (
+    HARBOR,
+    _FakeLLM,
+    _ledger,
+    _region,
+    _seed_template,
+)
 
 
 def _blocks(prompt):
@@ -320,3 +326,55 @@ async def test_the_region_keeps_its_builder_settings_but_sessions_never_see_them
     assert stored["options"]["quest_generation_enabled"] is True
     built = [{**peaks, "status": "built"}]
     assert "generation_settings" not in player_sections(built)[0]
+
+
+@pytest.mark.asyncio
+async def test_gateway_scenes_picked_by_the_author_come_first(setup_test_db):
+    async with TestSessionLocal() as db:
+        # Arrange
+        await _seed_template(db)
+        db.add(WorldScene(id="ZZ_GATE", template_id="campaign", label="Gate", description="d",
+                          section_id="HARBOR"))  # fmt: skip
+        await db.commit()
+        adv = await db.get(AdventureTemplate, "campaign")
+        sections = normalize_sections(adv.world_sections)
+        peaks = next(s for s in sections if s["id"] == "PEAKS")
+        peaks["planned_links"][0]["gateway_scene_ids"] = ["ZZ_GATE", "GONE"]
+
+        # Act
+        prompt = await build_region_prompt(db, adv, peaks, sections)
+
+    # Assert
+    lines = _blocks(prompt)["gateway"].text.splitlines()
+    assert lines[2].startswith("- ZZ_GATE") and lines[3].startswith("- SQUARE")
+    assert normalize_sections([HARBOR, PEAKS_LINKED])[1]["planned_links"][0][
+        "gateway_scene_ids"
+    ] == ["ZZ_GATE"]
+
+
+PEAKS_LINKED = {
+    "id": "PEAKS",
+    "label": "Peaks",
+    "planned_links": [{"to_section_id": "HARBOR", "gateway_scene_ids": [" zz_gate ", "ZZ_GATE"]}],
+}
+
+
+@pytest.mark.asyncio
+async def test_preview_uses_unsaved_gateway_picks(auth_client, setup_test_db):
+    # Arrange
+    await _owned_template()
+    async with TestSessionLocal() as db:
+        db.add(WorldScene(id="ZZ_GATE", template_id="campaign", label="Gate", description="d",
+                          section_id="HARBOR"))  # fmt: skip
+        await db.commit()
+
+    # Act
+    resp = await auth_client.post(
+        "/api/adventures/campaign/editor/sections/PEAKS/generate/preview?include_prompt=true",
+        json={"gateways": {"HARBOR": ["ZZ_GATE"]}},
+    )
+
+    # Assert
+    assert resp.status_code == 200, resp.text
+    prompt = resp.json()["prompt"]
+    assert prompt.index("- ZZ_GATE") < prompt.index("- SQUARE (Square):")

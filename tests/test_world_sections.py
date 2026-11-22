@@ -62,7 +62,7 @@ def test_normalize_sections_cleans_ids_positions_and_links():
     assert (sections[0]["map_x"], sections[0]["map_y"]) == (100.0, 0.0)
     assert sections[0]["status"] == "built"
     assert sections[1]["planned_links"] == [
-        {"to_section_id": "HARBOR_TOWN", "travel_minutes": 480, "note": ""}
+        {"to_section_id": "HARBOR_TOWN", "travel_minutes": 480, "note": "", "gateway_scene_ids": []}
     ]
     assert section_id_or_none("  ") is None
 

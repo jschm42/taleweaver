@@ -5,6 +5,7 @@
  */
 import { computed } from 'vue'
 import { useRegionBuilderContext } from '@/composables/regionBuilder/regionBuilderContext'
+import GatewayScenePicker from '@/components/editor/region-builder/GatewayScenePicker.vue'
 import UiBadge from '@/components/ui/UiBadge.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiField from '@/components/ui/UiField.vue'
@@ -33,7 +34,7 @@ const links = computed(() =>
 </script>
 
 <template>
-  <UiCard v-if="form" title="Region" description="Name and description are saved with the region when the build starts.">
+  <UiCard v-if="form" title="Region" description="Name, description and gateway scenes are saved with the region when the build starts.">
     <div class="space-y-4">
       <UiField label="Name" required>
         <UiInput v-model="form.label" placeholder="e.g. Gloom Peaks" />
@@ -43,11 +44,14 @@ const links = computed(() =>
       </UiField>
       <div>
         <p class="wb-label">Links to other regions</p>
-        <ul v-if="links.length" class="mt-2 space-y-1.5">
-          <li v-for="link in links" :key="link.id" class="flex flex-wrap items-center gap-2 wb-body">
-            <span class="text-wb-strong">{{ link.label }}</span>
-            <UiBadge :tone="link.built ? 'accent' : 'neutral'">{{ link.built ? 'built' : 'planned' }}</UiBadge>
-            <span v-if="link.travel" class="wb-hint">{{ link.travel }} travel</span>
+        <ul v-if="links.length" class="mt-2 space-y-3">
+          <li v-for="link in links" :key="link.id" class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2 wb-body">
+              <span class="text-wb-strong">{{ link.label }}</span>
+              <UiBadge :tone="link.built ? 'accent' : 'neutral'">{{ link.built ? 'built' : 'planned' }}</UiBadge>
+              <span v-if="link.travel" class="wb-hint">{{ link.travel }} travel</span>
+            </div>
+            <GatewayScenePicker v-if="link.built" :region-id="link.id" :region-label="link.label" />
           </li>
         </ul>
         <p class="wb-hint mt-1">

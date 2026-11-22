@@ -110,14 +110,17 @@ def region_blocks(
     context: dict[str, Any],
     options: dict[str, Any],
     neighbours: list[dict[str, Any]],
+    blueprint_text: str = "",
 ) -> list[ContextBlock]:
-    """Every block of the region prompt in order; switched-off options are not ``included``."""
+    """Every block of the region prompt in order; switched-off options are not ``included``.
+    ``blueprint_text`` is the region blueprint's prompt section (empty for a plain brief)."""
     return [
         ContextBlock("system", SECTION_SYSTEM_PROMPT, always=True),
         ContextBlock("frame", region_frame(src.adventure), always=True),
         *option_blocks(src, context),
         gateway_block(src, neighbours),
         ContextBlock("region", target_text(src.section), always=True),
+        ContextBlock("blueprint", blueprint_text.strip(), always=True),
         ContextBlock("requirements", requirements_text(options), always=True),
     ]
 

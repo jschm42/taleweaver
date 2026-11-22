@@ -56,6 +56,8 @@ The Story Idea is a **blueprint**. The backend parses it deterministically and c
 | `[Award: KEY] Title` | `tier`, `requires`, `guard` |
 | `[Section: ID] Label` (or `[Region: ID]`) | Region of a large world; body = description; `position: x, y` (0-100), `status` (`built` default / `planned`: no scenes yet, hidden from players), `brief`, `links` (`HARBOR_TOWN 8h, MINES`). Only for worlds with many scenes; regions gate nothing |
 | `[Sidequest: ID] Title` region hint | `region: ID` names the `[Section]` where the quest continues |
+
+**One region of an existing adventure** (the editor's Region Builder, region mode): write only the new region. Existing ids may be referenced (an exit from an existing gateway scene, an existing key item) but never declared again; every exit touches a new scene; scenes name no other region; `[World]`, `[Protagonist]`, `[Audio]` and `[Section]` are ignored; chapters start at `[Sequence: 1]` within the region. Prefix new ids with the region's initials (`GLOOM_PEAKS` -> `GP_`). Details: `docs/world-builder-blueprint-manual.md`, "A blueprint for one region".
 | `[Audio: ID] Name` | `prompt` (English music prompt: genre, instruments, tempo, mood; instrumental, no artist names; scenes that share a mood share a track) |
 | `[Talent: ID] Name` (inside the Protagonist) | `target` (`none`/`npc`/`item`/`any`), `cost` (`mana 10`), `uses`, `gm` (what the GM reveals/narrates), `locked`, `unlock_*`, `on_use` (`talent` dict in scope). Non-combat; the player types `use <talent>` / `cast <talent> on <target>` |
 | `[Ability: ID] Name` | `kind`, `category`, `cost` (`mana 10`), `damage`, `locked`, `unlock_item`, `area` (`splash 1` / `all`, protagonist only), `save` (`dex`), `spare_passive` |

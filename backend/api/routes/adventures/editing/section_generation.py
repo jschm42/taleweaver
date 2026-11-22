@@ -144,6 +144,19 @@ def _planned_section(adv: AdventureTemplate, section_id: str) -> dict[str, Any]:
     return section
 
 
+async def _reject_blueprint_errors(
+    db: AsyncSession, template_id: str, section_id: str, payload: SectionGenerateRequest
+) -> None:
+    """A region blueprint with errors is refused before the job starts (400)."""
+    report = await preview_section_prompt(db, template_id, section_id, None, payload.brief)
+    issues = (report.get("blueprint") or {}).get("issues") or []
+    errors = [f"line {i['line']}: {i['message']}" for i in issues if i["severity"] == "error"]
+    if errors:
+        raise HTTPException(
+            status_code=400, detail="The region blueprint has errors: " + "; ".join(errors[:5])
+        )
+
+
 @router.post("/{template_id}/editor/sections/{section_id}/generate", status_code=202)
 async def start_section_generation(
     template_id: str,
@@ -158,6 +171,7 @@ async def start_section_generation(
     _planned_section(adv, section_key)
     if (template_id, section_key) in _RUNNING:
         raise HTTPException(status_code=409, detail="This region is already being generated.")
+    await _reject_blueprint_errors(db, template_id, section_key, payload)
     _set_status(
         adv, section_key, "generating", brief=payload.brief, settings=payload.stored_settings()
     )
@@ -183,7 +197,13 @@ async def preview_section_generation(
     section_key = section_id_or_none(section_id) or ""
     _planned_section(adv, section_key)
     return await preview_section_prompt(
-        db, template_id, section_key, payload.settings(), payload.brief, include_prompt
+        db,
+        template_id,
+        section_key,
+        payload.settings(),
+        payload.brief,
+        include_prompt,
+        gateways=payload.gateways,
     )
 
 

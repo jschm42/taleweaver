@@ -12,6 +12,7 @@ writeFileSync(tempFile, js)
 after(() => { try { unlinkSync(tempFile) } catch {} })
 const {
   formFor, applySimpleDefaults, buildPayload, setContextOn, setAllContext, formatTokens, DEFAULT_CONTEXT,
+  toggleGateway, gatewaysChanged,
 } = await import(tempFile.href)
 
 const region = { label: 'Peaks', description: 'Cold.', brief: '  Dwarven ruins.  ' }
@@ -71,4 +72,17 @@ test('token labels are short estimates', () => {
   assert.equal(formatTokens(840), '≈ 840 tokens')
   assert.equal(formatTokens(1234), '≈ 1.2k tokens')
   assert.equal(formatTokens(48210), '≈ 48k tokens')
+})
+
+test('gateway picks keep their order, stop at eight and count as a change', () => {
+  const linked = { ...region, planned_links: [{ to_section_id: 'HARBOR', gateway_scene_ids: ['GATE'] }] }
+  const form = formFor(linked)
+  assert.deepEqual(form.gateways, { HARBOR: ['GATE'] })
+  assert.equal(gatewaysChanged(form, linked), false)
+  for (const id of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']) toggleGateway(form, 'HARBOR', id, true)
+  assert.deepEqual(form.gateways.HARBOR, ['GATE', 'A', 'B', 'C', 'D', 'E', 'F', 'G'])
+  toggleGateway(form, 'HARBOR', 'GATE', false)
+  assert.equal(form.gateways.HARBOR[0], 'A')
+  assert.equal(gatewaysChanged(form, linked), true)
+  assert.deepEqual(buildPayload(form).gateways.HARBOR.length, 7)
 })
