@@ -3,7 +3,8 @@
 When a move leads into a scene of another world section, the top-level and active-sequence
 scripts with these triggers run: first ``on_leave_section`` with the old region as target, then
 ``on_enter_section`` with the new one (scripts without a target run for every region). A move
-between two scenes of the same region, or of scenes without a region, triggers nothing.
+between two scenes of the same region, or into or out of a scene without a region (scenes
+created at runtime, such as dynamic zones), triggers nothing.
 
 Called next to the global ``on_enter_scene`` scripts of a move: exit traversal, each fast
 travel step, Game Master transitions, the respawn and ``/debug goto``. Script teleports do not
@@ -41,11 +42,10 @@ async def run_section_change_scripts(
     """Runs the leave/enter region scripts when the move crosses a region border."""
     before = await _section_of(manager, from_scene_id)
     after = await _section_of(manager, to_scene_id)
-    if before == after:
+    # Scenes created at runtime (dynamic zones) have no region; they never cross a border.
+    if not before or not after or before == after:
         return []
-    messages: list[Any] = []
-    if before:
-        messages.extend(await run_global_scene_scripts(manager, LEAVE_TRIGGER, before))
-    if after:
-        messages.extend(await run_global_scene_scripts(manager, ENTER_TRIGGER, after))
-    return messages
+    return [
+        *await run_global_scene_scripts(manager, LEAVE_TRIGGER, before),
+        *await run_global_scene_scripts(manager, ENTER_TRIGGER, after),
+    ]

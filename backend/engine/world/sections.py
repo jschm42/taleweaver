@@ -1,8 +1,11 @@
 """World sections (regions): spatial groups of scenes on the adventure's world map.
 
 An adventure stores its sections as a JSON list (``AdventureTemplate.world_sections``, like the
-audio library) and each scene names its section in ``WorldScene.section_id`` (``None`` = no
-section). An adventure without sections behaves exactly as before.
+audio library) and each scene names its section in ``WorldScene.section_id``. Every adventure
+has at least one built section: a new adventure starts with the default region
+(:func:`default_section`), and every template scene belongs to a section (only scenes created at
+runtime, such as dynamic zones, have none). The world map and the GM's region line appear
+only from two built sections on (:func:`world_map_enabled`).
 
 Sections are purely spatial: they gate nothing, gating stays on exits. A section's ``status`` is
 ``stub`` (planned, no scenes yet, visible to authors only), ``generating`` or ``built``. Sessions
@@ -17,6 +20,8 @@ from copy import deepcopy
 from typing import Any, Optional
 
 SECTION_STATUSES = ("stub", "generating", "built")
+DEFAULT_SECTION_ID = "MAIN"
+DEFAULT_SECTION_LABEL = "Main region"
 DEFAULT_STATUS = "built"
 MAX_SECTIONS = 64
 MAX_ID_LENGTH = 50
@@ -292,7 +297,10 @@ def session_manifest(manifest: Any) -> dict[str, Any]:
 
 
 def region_line(sections: Any, section_id: Any) -> str:
-    """``Region: <label>: <description>`` for the GM's CURRENT STATE, or "" without a section."""
+    """``Region: <label>: <description>`` for the GM's CURRENT STATE; "" without a section or
+    while the adventure has only one built region."""
+    if not world_map_enabled(sections):
+        return ""
     section = find_section(sections, section_id)
     if section is None or is_stub(section):
         return ""
@@ -302,3 +310,54 @@ def region_line(sections: Any, section_id: Any) -> str:
         if description
         else (f"Region: {section['label']}")
     )
+
+
+def built_sections(raw: Any) -> list[dict[str, Any]]:
+    return [s for s in normalize_sections(raw) if not is_stub(s)]
+
+
+def world_map_enabled(raw: Any) -> bool:
+    """True from two built sections on: one region alone needs no world map or region line."""
+    return len(built_sections(raw)) >= 2
+
+
+def default_section(label: Any = None, taken: Any = ()) -> dict[str, Any]:
+    """The default region of an adventure: built, in the middle of the world map."""
+    section_id, number = DEFAULT_SECTION_ID, 1
+    while section_id in set(taken):
+        number += 1
+        section_id = f"{DEFAULT_SECTION_ID}_{number}"
+    section = normalize_section(
+        {
+            "id": section_id,
+            "label": _text(label, MAX_LABEL_LENGTH) or DEFAULT_SECTION_LABEL,
+            "map_x": 50,
+            "map_y": 50,
+            "status": "built",
+        }
+    )
+    if section is None:
+        raise ValueError(f"Invalid default region id '{section_id}'.")
+    return section
+
+
+def ensure_sections(raw: Any, label: Any = None) -> list[dict[str, Any]]:
+    """The section list with at least one built section (the default region is added)."""
+    sections = normalize_sections(raw)
+    if any(not is_stub(s) for s in sections):
+        return sections
+    return normalize_sections([*sections, default_section(label, {s["id"] for s in sections})])
+
+
+def fallback_section_id(raw: Any) -> Optional[str]:
+    """The section a scene without a (known) section goes into: the first built one."""
+    built = built_sections(raw)
+    return built[0]["id"] if built else None
+
+
+def scene_section_id(raw_sections: Any, raw_section_id: Any) -> Optional[str]:
+    """A scene's section: its own when it is a known built section, else the fallback."""
+    wanted = section_id_or_none(raw_section_id)
+    if any(s["id"] == wanted for s in built_sections(raw_sections)):
+        return wanted
+    return fallback_section_id(raw_sections)

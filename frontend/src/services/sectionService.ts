@@ -106,8 +106,15 @@ export interface RegionPlan {
   sections: WorldSection[]
 }
 
+/** Saving the region list: scenes of deleted regions moved to the first built region. */
+export interface SectionSaveResult {
+  sections: WorldSection[]
+  moved_scene_ids: string[]
+  moved_to_section_id: string | null
+}
+
 export interface SectionAssignResult {
-  section_id: string | null
+  section_id: string
   scene_ids: string[]
   sections: WorldSection[]
 }
@@ -125,7 +132,7 @@ export function sectionsOf(adventure: Record<string, unknown> | null | undefined
 
 export const sectionService = {
   /** Replaces the section list; scenes of deleted sections lose their section. */
-  async saveSections(adventureId: string, sections: WorldSection[]): Promise<{ sections: WorldSection[]; cleared_scene_ids: string[] }> {
+  async saveSections(adventureId: string, sections: WorldSection[]): Promise<SectionSaveResult> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections`, {
       method: 'PUT',
       headers: authHeaders(true),
@@ -251,7 +258,7 @@ export const sectionService = {
   },
 
   /** Moves scenes into a section (a planned one becomes built), or out of all with null. */
-  async assignScenes(adventureId: string, sectionId: string | null, sceneIds: string[]): Promise<SectionAssignResult> {
+  async assignScenes(adventureId: string, sectionId: string, sceneIds: string[]): Promise<SectionAssignResult> {
     const res = await fetch(`${API_BASE}/adventures/${adventureId}/editor/sections/assign`, {
       method: 'POST',
       headers: authHeaders(true),

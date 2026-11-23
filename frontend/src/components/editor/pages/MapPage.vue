@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * The adventure's map. With regions it opens on the world map; clicking a region shows that
- * region's scene graph (scenes one exit away are shown dimmed as the way out). Scenes without a
- * region have their own entry. Without regions the scene graph shows every scene, as before.
+ * The adventure's map. From two regions on it opens on the world map; clicking a region shows
+ * that region's scene graph (scenes one exit away are shown dimmed as the way out). With only the
+ * one region every adventure has, the scene graph shows every scene.
  */
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft } from 'lucide-vue-next'
@@ -13,7 +13,7 @@ import ExitRoutePanel from '@/components/editor/ExitRoutePanel.vue'
 import MapTab from '@/components/editor/MapTab.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import RegionMapCard from '@/components/editor/regions/RegionMapCard.vue'
-import { UNASSIGNED, regionLinks, regionSceneIds, sceneCount } from '@/components/editor/regions/regionGraph'
+import { regionLinks, regionSceneIds, sceneCount } from '@/components/editor/regions/regionGraph'
 import { sceneRegionMap } from '@/components/editor/regions/regionExits'
 
 // The open region per adventure survives a trip to a scene's editor and back.
@@ -28,16 +28,14 @@ const exits = computed(() => editor.debugData?.exits || [])
 const regionId = ref<string | null>(lastRegion.get(editor.adventureId) ?? null)
 watch(regionId, (value) => lastRegion.set(editor.adventureId, value))
 
-const hasRegions = computed(() => sections.value.length > 0)
-const unassigned = computed(() => scenes.value.filter((s) => !s.section_id).length)
+// One region alone needs no world map: the scene graph shows every scene.
+const hasRegions = computed(() => sections.value.length > 1)
 const counts = computed(() => Object.fromEntries(sections.value.map((s) => [s.id, sceneCount(scenes.value, s.id)])))
 const links = computed(() => regionLinks(sections.value, scenes.value, exits.value))
 const sceneOptions = computed(() =>
   scenes.value.map((s) => ({ id: s.id, label: s.label || s.name || s.id, sectionId: s.section_id || null })),
 )
-const regionLabel = computed(() =>
-  regionId.value === UNASSIGNED ? 'Scenes without a region' : sections.value.find((s) => s.id === regionId.value)?.label || regionId.value,
-)
+const regionLabel = computed(() => sections.value.find((s) => s.id === regionId.value)?.label || regionId.value)
 
 const filtered = computed(() => (hasRegions.value && regionId.value ? regionSceneIds(regionId.value, scenes.value, exits.value) : null))
 const mapScenes = computed(() => {
@@ -46,11 +44,8 @@ const mapScenes = computed(() => {
   return scenes.value.filter((s) => ids.inside.has(s.id) || ids.border.has(s.id))
 })
 const sceneRegions = computed(() => (hasRegions.value ? sceneRegionMap(scenes.value, sections.value) : undefined))
-// The open region as MapTab expects it: null = scenes without a region, undefined = none open.
-const currentRegionId = computed(() => {
-  if (!hasRegions.value || !regionId.value) return undefined
-  return regionId.value === UNASSIGNED ? null : regionId.value
-})
+// The open region as MapTab expects it (undefined = none open).
+const currentRegionId = computed(() => (hasRegions.value && regionId.value ? regionId.value : undefined))
 const dimmedSceneIds = computed(() => [...(filtered.value?.border || [])])
 const showWorld = computed(() => hasRegions.value && !regionId.value)
 
@@ -93,9 +88,6 @@ function openRegion(id: string): void {
         @open-region="openRegion"
         @refresh="editor.fetchDebugInfo"
       />
-      <UiButton v-if="unassigned" variant="secondary" @click="regionId = UNASSIGNED">
-        Scenes without a region ({{ unassigned }})
-      </UiButton>
     </template>
 
     <template v-else>

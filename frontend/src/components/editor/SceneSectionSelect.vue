@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Editor select for WorldScene.section_id: the region (world section) the scene belongs to.
-// Choosing a planned region makes it built. Regions are managed on the Regions page.
+// Every scene has a region, so there is no "no region" choice; the select appears from two
+// regions on. Choosing a planned region makes it built. Regions are managed on the Regions page.
 import { computed, ref, watch } from 'vue'
 import { entityService } from '@/services/entityService'
 import type { WorldSection } from '@/services/sectionService'
@@ -27,13 +28,13 @@ watch(() => props.value, (value) => {
   current.value = value || ''
 })
 
-const options = computed(() => [
-  { value: '', label: 'No region' },
-  ...props.sections.map((s) => ({ value: s.id, label: s.status === 'built' ? s.label : `${s.label} (planned)` })),
-])
+const options = computed(() =>
+  props.sections.map((s) => ({ value: s.id, label: s.status === 'built' ? s.label : `${s.label} (planned)` })),
+)
 
 async function change(next: string | number | null): Promise<void> {
   const sectionId = String(next || '')
+  if (!sectionId) return
   const previous = current.value
   current.value = sectionId
   isSaving.value = true
@@ -54,7 +55,7 @@ async function change(next: string | number | null): Promise<void> {
 </script>
 
 <template>
-  <UiField v-if="sections.length" label="Region" hint="The world section this scene lies in.">
+  <UiField v-if="sections.length > 1" label="Region" hint="The world section this scene lies in.">
     <UiSelect :model-value="current" :options="options" :disabled="isSaving" @update:model-value="change" />
   </UiField>
 </template>

@@ -73,7 +73,6 @@ const selectedScenes = computed(() =>
     .filter((s) => selected.value && s.section_id === selected.value.id)
     .map((s) => ({ id: s.id, label: s.label || s.name || s.id, imageUrl: s.image_url })),
 )
-const unassigned = computed(() => scenes.value.filter((s) => !s.section_id).length)
 const generating = computed(() => sectionsOf(editor.debugData?.adventure).some((s) => s.status === 'generating'))
 
 // While a region is generated on the server, reload the editor data until it is done.
@@ -101,11 +100,21 @@ async function addRegion(): Promise<void> {
   selectedId.value = id
 }
 
+/** Where the scenes of a deleted region go: the first remaining built region (as the server does). */
+function moveTarget(section: WorldSection): WorldSection | null {
+  return sections.value.find((s) => s.id !== section.id && s.status === 'built') || null
+}
+
 async function deleteRegion(section: WorldSection): Promise<void> {
+  const target = moveTarget(section)
+  if (!target) {
+    toast.warn('Every adventure keeps at least one built region. Rename this one instead.')
+    return
+  }
   const count = counts.value[section.id] || 0
   const ok = await confirm({
     title: `Delete ${section.label}?`,
-    message: count ? `Its ${count} scene(s) stay in the adventure but no longer belong to a region.` : 'The region is removed when you save.',
+    message: count ? `Its ${count} scene(s) move to ${target.label} when you save.` : 'The region is removed when you save.',
     confirmLabel: 'Delete region',
     danger: true,
   })
@@ -132,7 +141,8 @@ async function save(): Promise<void> {
   try {
     await commit(async (value) => {
       const result = await sectionService.saveSections(editor.adventureId, value.sections)
-      if (result.cleared_scene_ids.length) toast.info(`${result.cleared_scene_ids.length} scene(s) no longer belong to a region.`)
+      const movedTo = sections.value.find((s) => s.id === result.moved_to_section_id)?.label || result.moved_to_section_id
+      if (result.moved_scene_ids.length) toast.info(`${result.moved_scene_ids.length} scene(s) moved to ${movedTo}.`)
       await editor.fetchDebugInfo()
     })
     toast.success('Regions saved.')
@@ -161,13 +171,12 @@ function openAssign(): void {
   assignOpen.value = true
 }
 
-async function applyAssignment(added: string[], removed: string[]): Promise<void> {
+async function applyAssignment(added: string[]): Promise<void> {
   const id = selectedId.value
-  if (!id) return
+  if (!id || !added.length) return
   assigning.value = true
   try {
-    if (added.length) await sectionService.assignScenes(editor.adventureId, id, added)
-    if (removed.length) await sectionService.assignScenes(editor.adventureId, null, removed)
+    await sectionService.assignScenes(editor.adventureId, id, added)
     await editor.fetchDebugInfo()
     assignOpen.value = false
   } catch (error: unknown) {
@@ -180,7 +189,7 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
 
 <template>
   <div class="space-y-6">
-    <PageHeader title="Regions" description="Group the scenes of a large world into regions on a world map. Small adventures need none.">
+    <PageHeader title="Regions" description="Every adventure starts with one region. Add more to spread a large world over a world map.">
       <template #actions>
         <UiButton variant="ai" :icon="Sparkles" @click="planOpen = true">Plan regions</UiButton>
         <UiButton variant="primary" :icon="Plus" @click="addRegion">Add region</UiButton>
@@ -190,8 +199,8 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
     <UiEmptyState
       v-if="!sections.length"
       :icon="Globe2"
-      title="No regions yet"
-      description="Without regions all scenes share one map, which works well for up to about 15 scenes."
+      title="No region yet"
+      description="Every adventure needs one region. Add it; all scenes are placed in it when you save."
     />
 
     <template v-else>
@@ -205,7 +214,7 @@ async function applyAssignment(added: string[], removed: string[]): Promise<void
         :layout="mapLayout"
         :selected-id="selectedId"
         :blocked="isDirty"
-        :description="`Drag a region to move it, click it to edit it. ${unassigned} scene(s) belong to no region.`"
+        description="Drag a region to move it, click it to edit it."
         @open-region="selectedId = $event"
         @move="moveRegion"
         @refresh="editor.fetchDebugInfo"

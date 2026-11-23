@@ -20,7 +20,7 @@ from backend.engine.rules.fast_travel import normalize_unlock_mode
 from backend.engine.rules.travel_time import normalize_travel_label, normalize_travel_minutes
 from backend.engine.world.dynamic_scene_schemas import normalize_dynamic_zone
 from backend.engine.world.scene_fields import SCENE_SCRIPT_FIELDS
-from backend.engine.world.sections import section_id_or_none
+from backend.engine.world.sections import scene_section_id, section_id_or_none
 from backend.models.world_entity import WorldExit, WorldScene
 
 MAX_DECORATIVE_OBJECTS = 7
@@ -95,6 +95,17 @@ async def _scene_image(
     return await placeholder_image(ctx, scene["id"], category="SCENE", subdir="scenes")
 
 
+def _section_of(ctx: ApplyContext, scene: dict[str, Any]) -> Any:
+    """The scene's region: its own built section, else the first built one. A manifest without
+    a section list (a merged region) keeps the scene's own section. The manifest entry gets the
+    result too, so the stored manifest matches the rows."""
+    sections = ctx.manifest.get("sections")
+    if not sections:
+        return section_id_or_none(scene.get("section_id"))
+    scene["section_id"] = scene_section_id(sections, scene.get("section_id"))
+    return scene["section_id"]
+
+
 async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> None:
     filtered_scenes = [
         scene
@@ -125,7 +136,7 @@ async def persist_scenes(ctx: ApplyContext, scenes: list[dict[str, Any]]) -> Non
                     scene.get("audio_track_id") or scene.get("music_track_id")
                 ),
                 is_respawn_point=scene.get("is_respawn_point") is True,
-                section_id=section_id_or_none(scene.get("section_id")),
+                section_id=_section_of(ctx, scene),
                 is_fast_travel_point=scene.get("is_fast_travel_point") is True,
                 fast_travel_unlock=normalize_unlock_mode(scene.get("fast_travel_unlock")),
             )

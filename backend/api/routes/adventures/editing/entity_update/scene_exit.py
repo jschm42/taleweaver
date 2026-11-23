@@ -178,7 +178,8 @@ def _update_scene_places(
     """Revival point, region and fast travel point of a scene."""
     if given(payload, "is_respawn_point"):
         scene.is_respawn_point = payload.is_respawn_point is True
-    if given(payload, "section_id"):
+    # Every scene keeps a region: an empty value leaves the current one.
+    if given(payload, "section_id") and (payload.section_id or "").strip():
         scene.section_id = resolve_target_section(adv, payload.section_id)
     if given(payload, "is_fast_travel_point"):
         scene.is_fast_travel_point = payload.is_fast_travel_point is True

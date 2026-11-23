@@ -95,7 +95,7 @@ class EntityUpdateRequest(BaseModel):
     decorative_objects: Optional[list[str]] = None
     audio_track_id: Optional[str] = Field(default=None, max_length=50)
     is_respawn_point: Optional[bool] = None
-    # World section (region) of a scene; "" takes the scene out of its section.
+    # World section (region) of a scene; every scene has one, so "" keeps the current one.
     section_id: Optional[str] = Field(default=None, max_length=50)
     on_pickup_script: Optional[str] = None
     on_pickup_text: Optional[str] = None
@@ -182,7 +182,7 @@ class SceneCreateRequest(BaseModel):
     image_url: Optional[str] = None
     decorative_objects: Optional[list[str]] = None
     dynamic_zone: Optional[dict[str, Any]] = None
-    # World section (region) the new scene belongs to.
+    # World section (region) the new scene belongs to (empty: the first built region).
     section_id: Optional[str] = Field(default=None, max_length=50)
 
 

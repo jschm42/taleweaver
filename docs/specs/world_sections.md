@@ -1,14 +1,27 @@
 # World Sections, Travel Time and Fast Travel (Concept)
 
-Status (2026-11-21): **phases 1-4 implemented.** Planning regions is an editor action
-instead of a toggle in the creation wizard (9.3).
+Status (2026-11-23): **phases 1-4 implemented.** Planning regions is an editor action
+instead of a toggle in the creation wizard (9.3). Every adventure has at least one region
+(decision 4): the default region; the world map and the region line start at two built
+regions.
+
+| Default region piece | Where |
+| --- | --- |
+| Helpers `default_section`, `ensure_sections`, `fallback_section_id`, `scene_section_id`, `world_map_enabled` | `engine/world/sections.py` |
+| New adventures, generation, import | `adventure_creation.py`, `adventure_generator_service.py` (default region at creation); `manifest_apply/adventure_meta._apply_sections` and `manifest_apply/scenes._section_of` (default region added, scenes without a known built region go to the first built one) |
+| Editor | `editing/section_crud.py`: `resolve_target_section` (empty = first built region, creates the default region when none exists), `PUT /editor/sections` moves the scenes of deleted regions to the first remaining built one and refuses a list without a built region, `POST /editor/sections/assign` requires a region; a scene update with an empty region keeps the current one |
+| Runtime | `sections.region_line` and `interaction/map_sections.attach_sections` (no region line, no player world map below two built regions); `section_triggers.py` (a scene without a region, i.e. a runtime dynamic scene, crosses no border) |
+| Validators | `core/world_validation/sections.py`: with a region list, a scene without a region (`scene_without_section`) and a list without a built region (`no_built_section`) are errors; a generated manifest without a region list reports nothing (applying it adds the default region) |
+| Migration `b5d7f9a1c3e6` | adds the default region (id `MAIN`, named after the adventure) to every adventure without a built region, or a built region "Other places" for scenes without a region next to existing regions; backfills template scenes, session scene copies and session snapshots; runtime `DYN_` scenes keep none |
+| Editor UI | Regions page (last built region cannot be deleted, deleting moves the scenes), scene assignment only moves scenes in, scene region select without "No region", list region filter and editor world map only from two regions |
+| Tests | `tests/test_world_sections.py`, `tests/test_fast_travel.py` |
 
 | Phase 4 piece | Where |
 | --- | --- |
 | Player world map | `frontend/src/components/game/PlayerRegionMap.vue` (map dialog's travel strip) |
 | Triggers `on_enter_section` / `on_leave_section` | `api/routes/adventures/section_triggers.py`; fired after an exit, each fast travel step, GM transitions and the respawn (not for script teleports or `/debug goto`) |
 | World map tiles (`AdventureTemplate.world_map_layout` = `{cols, rows, tiles: [{col, row, url}]}`, migrations `e8a0c2d4f6b7`, `f1b3d5e7a9c2` converts the old single image into a 1 x 1 layout) | `engine/world/world_map_layout.py` (normalize, place/remove tile, rescale regions, per-tile prompt); `editing/section_map_routes.py`: `GET .../map-image/prompt?col&row` (default prompt of that tile, style, tone), `POST .../map-image {col, row, prompt, use_style, use_tone}`, `POST .../map-image/upload` (form `col`, `row`, `file`), `DELETE .../map-image?col&row`. A new tile must touch the map: one column right or one row below, at most 6 x 6. Growing or shrinking the grid rescales the region positions so they stay over the same spot. Map API field `world_map_layout`; export, import and cloning keep every tile. Editor: **Map images** dialog (tile grid, draw, upload, download, remove); both world maps (`components/worldmap/WorldMapViewport.vue`) zoom with the wheel or buttons and pan by dragging the background, markers keep their screen size |
-| Map views | Editor Map page and players' map dialog open on the world map; a region opens its scene graph (`utils/regionMapView.ts`, `regionGraph.regionSceneIds`), scenes without a region have an own entry; no view of all scenes at once |
+| Map views | Editor Map page and players' map dialog open on the world map from two regions on; a region opens its scene graph (`utils/regionMapView.ts`, `regionGraph.regionSceneIds`); with one region the scene graph shows every scene |
 | Connections and travel times on the world map | `RegionMapCard.vue`: **Connect regions** creates a gateway exit between two built regions (scene of each, name, two-way, travel time) or a planned route with a planned region; a route's chip opens its travel time (the gateway exits' `travel_minutes`, or the planned route's), with an estimate from the map distance (hours per 10 % of the map) |
 | Quest region hint (quest `section_id`, blueprint `region:`) | `agent_objectives.py` ("continues in ..."), region generation fills it, quest dialog |
 | Several travel points per section | already possible: any number of scenes can be fast travel points (decision 7) |
@@ -94,8 +107,13 @@ Naming: the backend calls them sections (`world_sections`). The frontend already
 3. **No new session state for discovery.** A section is discovered when one of its scenes
    was visited (`WorldMap.nodes`). Templates stay immutable; there is no `is_unlocked`
    column.
-4. **`section_id` is nullable.** `NULL` means "this adventure has no sections" and
-   everything behaves as today. No `SECTION_MAIN` backfill, no world map in the UI.
+4. **Every adventure has a region.** A new adventure starts with the default region (id
+   `MAIN`, named after the adventure, in the middle of the world map), and every template
+   scene belongs to a built region; only scenes created at runtime (dynamic zones) have
+   `section_id` `NULL`. The author turns the default region into a real one by renaming it
+   and adds more next to it. With a single built region there is no world map and no region
+   line, so a small adventure plays as before; both appear from two built regions on
+   (`world_map_enabled`). Existing adventures were backfilled by migration `b5d7f9a1c3e6`.
 5. **Stubs never reach players.** They are not copied into sessions and not returned by the
    session map API.
 6. **Fast travel is automated walking.** It walks the known route hop by hop with all hooks
@@ -338,8 +356,8 @@ Needs `docs/scripting_engine.md`, `world_scripting_prompt.py` and
   marker on the scene node in the Region tab. Clicking one opens a confirmation ("Travel
   to Harbor Square, about 8 h") and sends `/fast_travel`. Unavailable points are greyed
   out with their reason.
-* In an adventure without sections there is no World tab; the points are markers on the
-  scene graph plus a "Travel" list.
+* With a single region there is no World tab; the points are markers on the scene graph
+  plus a "Travel" list.
 * The region tab can switch to any discovered section for viewing.
 * Map API (`backend/api/routes/map_api.py`, `GET /adventures/{template_id}/map`): the
   response gains `sections` and `section_links`. With a `session_id` it returns discovered
@@ -356,8 +374,9 @@ Needs `docs/scripting_engine.md`, `world_scripting_prompt.py` and
 * Bulk action "move scenes to section" for restructuring existing adventures.
 * List filters (`components/editor/filters/`): the Scenes list filters by region, the
   Characters and Items lists by region and scene (the scene select narrows to the chosen
-  region; "No region" keeps scenes without a section, entries without a known scene show only
-  under "All regions" or their own scene option). The choice is kept per adventure and list.
+  region; entries without a known scene show only under "All regions" or their own scene
+  option). The region filter appears from two regions on. The choice is kept per adventure
+  and list.
 * CRUD in a new `editing/section_crud.py`, not in `world_crud.py`.
 * The change-set tool (`scripts/edit_adventure.py`, skill `taleweaver-adventure-editor`)
   learns sections and the new exit fields.
@@ -602,7 +621,8 @@ region filter, validators, map API fields, `Region:` line in CURRENT STATE. Done
 
 Accepted when:
 
-* an adventure without sections behaves and exports exactly as before
+* an adventure with only its default region plays like before regions existed (no world
+  map, no region line)
 * export → import → export keeps sections, stubs and `section_id`
 * a session of an adventure with one stub contains no trace of the stub (rows, map API)
 * the editor shows one section at a time and the world level with planned links
@@ -623,7 +643,7 @@ Accepted when:
   locked until `tw.game.unlock_fast_travel`; `lock_fast_travel` removes it; a checkpoint
   restores the unlocked list
 * an unmarked scene and a locked point are refused as destinations
-* fast travel works in an adventure without sections
+* fast travel works in an adventure with a single region
 * fast travel over three hops runs every `on_enter_scene` once, produces one narration and
   one checkpoint
 * a choice dialog opened by an intermediate scene stops the trip in that scene

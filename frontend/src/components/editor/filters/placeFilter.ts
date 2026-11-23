@@ -1,7 +1,7 @@
 /**
  * Region and scene filter of the editor's lists (Scenes, Characters, Items). A list hands in
- * its entries per scene (`PlaceGroup`); the filter keeps one region (or the scenes without a
- * region) and, within that, one scene. Entries without a known scene form the `ELSEWHERE`
+ * its entries per scene (`PlaceGroup`); the filter keeps one region and, within that, one
+ * scene. The region filter appears only from two regions on (every scene has a region). Entries without a known scene form the `ELSEWHERE`
  * group, which only "All regions" shows. The choice per adventure and list survives a trip
  * to another page and back. Spec: docs/specs/world_sections.md.
  */
@@ -9,7 +9,6 @@ import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type { WorldSection } from '@/services/sectionService'
 
 export const ALL = ''
-export const NO_REGION = '__none__'
 export const ELSEWHERE = '__UNASSIGNED__'
 
 /** The entries of one scene; `sceneId` null holds the entries without a known scene. */
@@ -28,7 +27,7 @@ export interface PlaceFilterSource {
   /** Key of the remembered choice, e.g. "items:<adventure id>". */
   memoryKey: () => string
   sections: () => WorldSection[]
-  /** Region id of each scene id (null: no region). */
+  /** Region id of each scene id (null only for scenes created at runtime). */
   sectionOfScene: () => Map<string, string | null>
   groups: () => PlaceGroup[]
 }
@@ -61,7 +60,7 @@ export function usePlaceFilter(source: PlaceFilterSource): PlaceFilter {
   const sceneFilter = ref<string>(saved?.scene ?? ALL)
   watch([regionFilter, sceneFilter], ([region, scene]) => lastChoice.set(source.memoryKey(), { region, scene }))
 
-  const hasRegions = computed(() => source.sections().length > 0)
+  const hasRegions = computed(() => source.sections().length > 1)
   const isActive = computed(() => Boolean(regionFilter.value || sceneFilter.value))
 
   const regionByKey = computed<Map<string, string | null>>(() => {
@@ -75,7 +74,7 @@ export function usePlaceFilter(source: PlaceFilterSource): PlaceFilter {
     const key = placeKey(sceneId)
     if (key === ELSEWHERE) return false
     const sectionId = regionByKey.value.get(key) ?? null
-    return region === NO_REGION ? !sectionId : sectionId === region
+    return sectionId === region
   }
 
   const regionOptions = computed<FilterOption[]>(() => {
@@ -84,7 +83,6 @@ export function usePlaceFilter(source: PlaceFilterSource): PlaceFilter {
     return [
       { value: ALL, label: `All regions (${total(ALL)})` },
       ...source.sections().map((s) => ({ value: s.id, label: `${s.label || s.id} (${total(s.id)})` })),
-      { value: NO_REGION, label: `No region (${total(NO_REGION)})` },
     ]
   })
 

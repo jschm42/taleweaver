@@ -53,7 +53,9 @@ def check_scene_sections(ctx: ValidationContext) -> list[ValidationFinding]:
 
 
 def check_section_coverage(ctx: ValidationContext) -> list[ValidationFinding]:
-    """With sections, every built section has scenes and every scene has a section."""
+    """There is a built region, every built region has scenes and every scene has a region.
+    Without any region list (a generated manifest before it is applied) nothing is reported:
+    applying it adds the default region and places every scene in it."""
     sections = normalize_sections(ctx.adventure.get("world_sections"))
     if not sections:
         return []
@@ -68,8 +70,17 @@ def check_section_coverage(ctx: ValidationContext) -> list[ValidationFinding]:
             section_id=section["id"],
         )
         for section in sections
-        if not is_stub(section) and section["id"] not in used
+        if not is_stub(section) and section["id"] not in used and scene_sections
     ]
+    if not any(not is_stub(section) for section in sections):
+        findings.append(
+            finding(
+                "error",
+                "no_built_section",
+                "The adventure has no built region. Every adventure needs at least one; "
+                "add one on the Regions page and give it the scenes.",
+            )
+        )
     unassigned = sorted(sid for sid, section_id in scene_sections.items() if section_id is None)
     if unassigned:
         listed = ", ".join(unassigned[:_LISTED_SCENES])
@@ -77,10 +88,11 @@ def check_section_coverage(ctx: ValidationContext) -> list[ValidationFinding]:
         suffix = f" and {more} more" if more > 0 else ""
         findings.append(
             finding(
-                "warn",
+                "error",
                 "scene_without_section",
-                f"{len(unassigned)} scene(s) belong to no section: {listed}{suffix}. "
-                "They do not appear on the world map.",
+                f"{len(unassigned)} scene(s) belong to no region: {listed}{suffix}. "
+                "Every scene needs a region; choose one in the scene editor or on the "
+                "Regions page.",
                 scene_ids=unassigned,
             )
         )

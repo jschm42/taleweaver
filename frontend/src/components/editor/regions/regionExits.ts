@@ -3,7 +3,7 @@
  * and names the regions in the exit and scene tooltips; MapPage provides every scene's region.
  */
 
-/** The region a scene belongs to; `id: null` = no region. */
+/** The region a scene belongs to; `id: null` only for scenes created at runtime. */
 export interface SceneRegion {
   id: string | null
   label: string
@@ -25,8 +25,8 @@ export function sceneRegionMap(
 
 /**
  * The region an exit between `fromId` and `toId` leads into, or null when both scenes share a
- * region. Seen from `currentRegionId` (null = the scenes without a region, undefined = no
- * region open), it is the end outside that region; else the `to` end.
+ * region. Seen from `currentRegionId` (undefined = no region open), it is the end outside that
+ * region; else the `to` end.
  */
 export function exitTargetRegion(
   fromId: string,

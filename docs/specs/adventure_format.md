@@ -124,9 +124,12 @@ The baseline state and attributes of the player character.
 
 ### 2.2a World sections (`sections`)
 
-Optional regions that group the scenes of a large world on a world map (a town, a mine, a
-mountain range). Without `sections` (or with `[]`) the adventure has no regions and behaves as
-before. Regions are purely spatial: they gate nothing; locks stay on exits. Spec and phases:
+Regions that group the scenes of a large world on a world map (a town, a mine, a mountain
+range). Every adventure has at least one built region: a manifest without `sections` (or with
+`[]`) gets the default region on import (id `MAIN`, named after the adventure), and scenes
+without a known built region are placed in the first built one. With a single region the
+adventure plays without a world map; it appears from two built regions on. Regions are purely
+spatial: they gate nothing; locks stay on exits. Spec and phases:
 [World sections](world_sections.md).
 
 | Field | Type | Description |
@@ -180,7 +183,7 @@ The physical locations composing the world map.
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `audio_track_id` | `string` \| `null` | Optional `id` of the `adventure.audio_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the audio fades out. |
 | `is_respawn_point` | `boolean` | Optional, default `false`. A revival point: in respawn mode a protagonist who falls to 0 HP wakes up at the last one reached (see [Respawn](#respawn)). *(since 1.4.0)* |
-| `section_id` | `string` \| `null` | Optional `id` of the `sections` entry (region) the scene lies in. `null`: no region. A scene may not belong to a planned (`stub`) region. *(since 1.5.0)* |
+| `section_id` | `string` \| `null` | `id` of the `sections` entry (region) the scene lies in. Missing, `null` or unknown: the first built region on import. A scene may not belong to a planned (`stub`) region. *(since 1.5.0)* |
 | `is_fast_travel_point` | `boolean` | Optional, default `false`. A fast travel point: once unlocked, the player can travel here from anywhere (see [Fast travel](#fast-travel)). *(since 1.5.0)* |
 | `fast_travel_unlock` | `"visit"` \| `"script"` | Optional, default `"visit"`: the point unlocks on first entry; `"script"`: only `tw.game.unlock_fast_travel(scene_id)` unlocks it. *(since 1.5.0)* |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |

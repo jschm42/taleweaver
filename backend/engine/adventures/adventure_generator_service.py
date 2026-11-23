@@ -14,6 +14,7 @@ from backend.core.generation_error_log import (
 from backend.core.style_catalog import default_image_styles_catalog
 from backend.engine.adventures.license_defaults import default_license_fields
 from backend.engine.rules.rule_engine import AdventureGenerationRequest
+from backend.engine.world.sections import default_section
 from backend.engine.world.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -41,6 +42,7 @@ def _create_initial_template(
         origin_id=new_origin_id(),
         title=request.title,
         original_prompt=request.prompt,
+        world_sections=[default_section(request.title)],
         min_scenes=request.min_scenes,
         max_scenes=request.max_scenes,
         min_items=getattr(request, "min_items", None),

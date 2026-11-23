@@ -20,7 +20,7 @@ const props = defineProps<{
   dimmedSceneIds?: string[]
   /** Region of every scene (raw scene id); exits between regions are marked. */
   sceneRegions?: Record<string, SceneRegion>
-  /** The open region (null = scenes without a region); its neighbours' scenes show their region. */
+  /** The open region (undefined = none); exits leading out of it name the region beyond. */
   currentRegionId?: string | null
 }>()
 

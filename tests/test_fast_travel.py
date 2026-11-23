@@ -424,3 +424,33 @@ async def test_crossing_a_region_border_runs_the_section_triggers(setup_test_db,
     assert script_vars.get("left") == "HARBOR"
     assert script_vars.get("entered") == "WILDS"
     assert "wrong" not in script_vars
+
+
+@pytest.mark.asyncio
+async def test_a_scene_without_a_region_crosses_no_border(setup_test_db, monkeypatch):
+    monkeypatch.setattr(
+        "backend.api.routes.adventures.turn_interactions.narrate_arrival", _no_narration
+    )
+    async with TestSessionLocal() as db:
+        # Arrange: ROAD has no region, like a scene created at runtime (dynamic zone).
+        user = await _seed_world(db)
+        adv = await db.get(AdventureTemplate, "adv-enc")
+        adv.original_manifest = {
+            "scripts": [
+                {"id": "LEAVE", "trigger": "on_leave_section",
+                 "code": "tw.vars.set('left', True)"},
+                {"id": "ENTER", "trigger": "on_enter_section",
+                 "code": "tw.vars.set('entered', True)"},
+            ]
+        }  # fmt: skip
+        scenes = (await db.execute(select(WorldScene))).scalars().all()
+        for scene in scenes:
+            scene.section_id = {"START": "HARBOR", "ROAD": None, "TOWN": "HARBOR"}[scene.id]
+        await db.commit()
+
+        # Act
+        manager, _chunks = await _travel(user, db, "/traverse_exit x1")
+
+        # Assert
+        script_vars = manager.state.entity_states.get("__script_vars__", {})
+    assert "left" not in script_vars and "entered" not in script_vars

@@ -10,7 +10,7 @@ const js = ts.transpileModule(source, {
 const tempFile = new URL('./__temp_placeFilter.mjs', import.meta.url)
 writeFileSync(tempFile, js)
 after(() => { try { unlinkSync(tempFile) } catch {} })
-const { usePlaceFilter, groupsByScene, sectionMapOf, NO_REGION, ELSEWHERE } = await import(tempFile.href)
+const { usePlaceFilter, groupsByScene, sectionMapOf, ELSEWHERE } = await import(tempFile.href)
 
 const scenes = [
   { id: 'gate', name: 'City Gate', section_id: 'city' },
@@ -47,7 +47,7 @@ test('groups entries per scene case-insensitively; unknown scenes go to the else
 
 test('region options count the entries of each region', () => {
   const filter = makeFilter()
-  assert.deepEqual(filter.regionOptions.value.map((o) => o.label), ['All regions (6)', 'City (3)', 'Wilds (1)', 'No region (1)'])
+  assert.deepEqual(filter.regionOptions.value.map((o) => o.label), ['All regions (6)', 'City (3)', 'Wilds (1)'])
 })
 
 test('a region keeps only its scenes, and the scene options narrow to that region', () => {
@@ -59,12 +59,12 @@ test('a region keeps only its scenes, and the scene options narrow to that regio
   assert.deepEqual(filter.sceneOptions.value.map((o) => o.value), ['', 'GATE', 'MARKET'])
 })
 
-test('no region keeps scenes without a region, all regions also keeps unknown scenes', () => {
+test('all regions also keeps unknown scenes', () => {
   const filter = makeFilter()
-  filter.setRegion(NO_REGION)
-  assert.equal(filter.matches('void'), true)
-  assert.equal(filter.matches('gate'), false)
+  filter.setRegion('wilds')
+  assert.equal(filter.matches('void'), false)
   filter.clear()
+  assert.equal(filter.matches('void'), true)
   assert.equal(filter.matches(null), true)
   assert.equal(filter.isActive.value, false)
 })
@@ -77,4 +77,16 @@ test('a scene filter keeps one scene; the elsewhere group is selectable too', ()
   filter.setScene(ELSEWHERE)
   assert.equal(filter.matches(null), true)
   assert.equal(filter.matches('void'), false)
+})
+
+test('one region alone needs no region filter', () => {
+  const filter = usePlaceFilter({
+    memoryKey: () => 'test:single',
+    sections: () => [sections[0]],
+    sectionOfScene: () => sectionMapOf(scenes),
+    groups: () => groupsByScene(items, scenes),
+  })
+  assert.equal(filter.hasRegions.value, false)
+  filter.setRegion('city')
+  assert.equal(filter.matches('cave'), true)
 })

@@ -37,9 +37,6 @@ interface ExitLike {
   travel_minutes?: number | null
 }
 
-/** "UNASSIGNED" filter key for scenes without a region. */
-export const UNASSIGNED = '__unassigned__'
-
 export function sceneSections(scenes: SceneLike[]): Map<string, string | null> {
   return new Map(scenes.filter((s) => s.id).map((s) => [String(s.id), s.section_id || null]))
 }
@@ -89,8 +86,7 @@ export function regionLinks(sections: WorldSection[], scenes: SceneLike[], exits
  */
 export function regionSceneIds(filter: string, scenes: SceneLike[], exits: ExitLike[]): { inside: Set<string>; border: Set<string> } | null {
   if (!filter) return null
-  const wanted = filter === UNASSIGNED ? null : filter
-  const inside = new Set(scenes.filter((s) => s.id && (s.section_id || null) === wanted).map((s) => String(s.id)))
+  const inside = new Set(scenes.filter((s) => s.id && s.section_id === filter).map((s) => String(s.id)))
   const border = new Set<string>()
   for (const exit of exits) {
     const from = String(exit.from_scene_id || '')

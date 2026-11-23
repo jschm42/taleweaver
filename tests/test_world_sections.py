@@ -18,11 +18,16 @@ from backend.engine.interaction.location_context import build_location_context
 from backend.engine.interaction.map_sections import attach_sections
 from backend.engine.world.scene_fields import scene_content_from_dict
 from backend.engine.world.sections import (
+    DEFAULT_SECTION_ID,
+    default_section,
+    ensure_sections,
     normalize_sections,
     player_sections,
     region_line,
+    scene_section_id,
     section_id_or_none,
     session_manifest,
+    world_map_enabled,
 )
 from backend.engine.world.world_manifest_applier import apply_manifest
 from backend.engine.world.world_schemas import WorldManifesto, WorldSceneSchema
@@ -33,6 +38,7 @@ from backend.models.world_entity import WorldScene
 from tests.conftest import TestSessionLocal
 
 HARBOR = {"id": "HARBOR_TOWN", "label": "Harbor Town", "description": "A fishing port."}
+WILDS = {"id": "WILDS", "label": "Wilds", "description": "Moor and forest."}
 PEAKS = {
     "id": "GLOOM_PEAKS",
     "label": "Gloom Peaks",
@@ -91,9 +97,41 @@ def test_session_manifest_drops_stub_sections():
 
 def test_region_line_names_built_sections_only():
     # Act / Assert
-    assert region_line([HARBOR], "HARBOR_TOWN") == "Region: Harbor Town: A fishing port."
-    assert region_line([HARBOR, PEAKS], "GLOOM_PEAKS") == ""
-    assert region_line([HARBOR], None) == ""
+    assert region_line([HARBOR, WILDS], "HARBOR_TOWN") == "Region: Harbor Town: A fishing port."
+    assert region_line([HARBOR, WILDS, PEAKS], "GLOOM_PEAKS") == ""
+    assert region_line([HARBOR, WILDS], None) == ""
+
+
+def test_one_built_region_needs_no_region_line_or_world_map():
+    # Act / Assert: a planned region does not count, the line appears from two built ones.
+    assert region_line([HARBOR, PEAKS], "HARBOR_TOWN") == ""
+    assert world_map_enabled([HARBOR, PEAKS]) is False
+    assert world_map_enabled([HARBOR, WILDS]) is True
+
+
+def test_every_adventure_gets_a_default_region():
+    # Act
+    fresh = ensure_sections(None, "Chapel of Ash")
+    planned_only = ensure_sections([PEAKS], "Campaign")
+    kept = ensure_sections([HARBOR], "Campaign")
+
+    # Assert
+    assert [(s["id"], s["label"], s["status"]) for s in fresh] == [
+        (DEFAULT_SECTION_ID, "Chapel of Ash", "built")
+    ]
+    assert (fresh[0]["map_x"], fresh[0]["map_y"]) == (50.0, 50.0)
+    assert [s["id"] for s in planned_only] == ["GLOOM_PEAKS", DEFAULT_SECTION_ID]
+    assert [s["id"] for s in kept] == ["HARBOR_TOWN"]
+    assert default_section(None, {"MAIN"})["id"] == "MAIN_2"
+
+
+def test_a_scene_without_a_known_built_region_goes_to_the_first_built_one():
+    # Act / Assert
+    sections = [PEAKS, HARBOR, WILDS]
+    assert scene_section_id(sections, "WILDS") == "WILDS"
+    assert scene_section_id(sections, None) == "HARBOR_TOWN"
+    assert scene_section_id(sections, "GLOOM_PEAKS") == "HARBOR_TOWN"
+    assert scene_section_id(sections, "NOWHERE") == "HARBOR_TOWN"
 
 
 # --- authoring paths -------------------------------------------------------------------------
@@ -263,6 +301,18 @@ def test_map_without_sections_stays_unchanged():
     assert result["current_section_id"] is None
 
 
+def test_map_with_only_the_default_region_shows_no_world_map():
+    # Act
+    result = attach_sections(
+        {"nodes": {"A": {"id": "A"}}, "edges": [], "current_scene_id": "A"},
+        {"A": DEFAULT_SECTION_ID},
+        [default_section("Chapel"), PEAKS],
+    )
+
+    # Assert
+    assert result["sections"] == [] and result["section_links"] == []
+
+
 # --- editor endpoints ------------------------------------------------------------------------
 
 
@@ -319,33 +369,37 @@ async def test_assigning_scenes_makes_a_planned_section_built(auth_client, setup
 
 
 @pytest.mark.asyncio
-async def test_deleting_a_section_frees_its_scenes(auth_client, setup_test_db):
+async def test_deleting_a_section_moves_its_scenes_to_the_first_built_one(
+    auth_client, setup_test_db
+):
     # Arrange
-    template_id = await _seed_template([HARBOR])
+    template_id = await _seed_template([HARBOR, PEAKS, WILDS])
     await auth_client.post(
         f"/api/adventures/{template_id}/editor/sections/assign",
         json={"section_id": "HARBOR_TOWN", "scene_ids": ["SQUARE", "TRAIL"]},
     )
+    url = f"/api/adventures/{template_id}/editor/sections"
 
     # Act
-    resp = await auth_client.put(
-        f"/api/adventures/{template_id}/editor/sections", json={"sections": [PEAKS]}
-    )
+    resp = await auth_client.put(url, json={"sections": [PEAKS, WILDS]})
+    last = await auth_client.put(url, json={"sections": [PEAKS]})
 
     # Assert
     assert resp.status_code == 200, resp.text
-    assert resp.json()["cleared_scene_ids"] == ["SQUARE", "TRAIL"]
-    assert await _scene_sections(template_id) == {"SQUARE": None, "TRAIL": None}
+    assert resp.json()["moved_scene_ids"] == ["SQUARE", "TRAIL"]
+    assert resp.json()["moved_to_section_id"] == "WILDS"
+    assert await _scene_sections(template_id) == {"SQUARE": "WILDS", "TRAIL": "WILDS"}
+    assert last.status_code == 400 and "at least one built region" in last.json()["detail"]
     async with TestSessionLocal() as db:
         adv = await db.get(AdventureTemplate, template_id)
-    assert [s["id"] for s in adv.world_sections] == ["GLOOM_PEAKS"]
-    assert [s["id"] for s in adv.original_manifest["sections"]] == ["GLOOM_PEAKS"]
+    assert [s["id"] for s in adv.world_sections] == ["GLOOM_PEAKS", "WILDS"]
+    assert [s["id"] for s in adv.original_manifest["sections"]] == ["GLOOM_PEAKS", "WILDS"]
 
 
 @pytest.mark.asyncio
 async def test_a_section_with_scenes_cannot_become_planned(auth_client, setup_test_db):
     # Arrange
-    template_id = await _seed_template([HARBOR])
+    template_id = await _seed_template([HARBOR, WILDS])
     await auth_client.post(
         f"/api/adventures/{template_id}/editor/sections/assign",
         json={"section_id": "HARBOR_TOWN", "scene_ids": ["SQUARE"]},
@@ -354,7 +408,7 @@ async def test_a_section_with_scenes_cannot_become_planned(auth_client, setup_te
     # Act
     resp = await auth_client.put(
         f"/api/adventures/{template_id}/editor/sections",
-        json={"sections": [{**HARBOR, "status": "stub"}]},
+        json={"sections": [{**HARBOR, "status": "stub"}, WILDS]},
     )
 
     # Assert
@@ -363,7 +417,7 @@ async def test_a_section_with_scenes_cannot_become_planned(auth_client, setup_te
 
 
 @pytest.mark.asyncio
-async def test_scene_update_sets_and_clears_the_section(auth_client, setup_test_db):
+async def test_scene_update_sets_the_section_and_never_clears_it(auth_client, setup_test_db):
     # Arrange
     template_id = await _seed_template([HARBOR])
     url = f"/api/adventures/{template_id}/editor/entity"
@@ -385,7 +439,7 @@ async def test_scene_update_sets_and_clears_the_section(auth_client, setup_test_
     assert after_set["SQUARE"] == "HARBOR_TOWN"
     assert bad_resp.status_code == 404
     assert clear_resp.status_code == 200
-    assert (await _scene_sections(template_id))["SQUARE"] is None
+    assert (await _scene_sections(template_id))["SQUARE"] == "HARBOR_TOWN"
 
 
 # --- export / import round trip --------------------------------------------------------------
@@ -420,7 +474,8 @@ async def test_sections_survive_export_and_import(auth_client, setup_test_db, mo
         exported_again = await AdventureExporter.build_full_manifest(db, "copy")
     assert sections["GLOOM_PEAKS"]["status"] == "stub"
     assert sections["GLOOM_PEAKS"]["brief"] == "Dwarven ruins."
-    assert await _scene_sections("copy") == {"SQUARE": "HARBOR_TOWN", "TRAIL": None}
+    # TRAIL had no region: the import places it in the first built one.
+    assert await _scene_sections("copy") == {"SQUARE": "HARBOR_TOWN", "TRAIL": "HARBOR_TOWN"}
     assert exported_again["sections"] == manifest["sections"]
 
 
@@ -598,3 +653,73 @@ def test_imported_layout_keeps_only_tiles_with_files():
 
     # Assert
     assert layout["tiles"] == [{"col": 0, "row": 0, "url": "/data/adventures/library/new/a.png"}]
+
+
+@pytest.mark.asyncio
+async def test_assigning_scenes_needs_a_region(auth_client, setup_test_db):
+    # Arrange
+    template_id = await _seed_template([HARBOR])
+
+    # Act
+    resp = await auth_client.post(
+        f"/api/adventures/{template_id}/editor/sections/assign",
+        json={"section_id": "", "scene_ids": ["SQUARE"]},
+    )
+
+    # Assert
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_manifest_without_regions_gets_the_default_region(
+    auth_client, setup_test_db, monkeypatch
+):
+    monkeypatch.setattr(
+        "backend.engine.media.media_engine.MediaEngine.generate_placeholder",
+        AsyncMock(return_value="/data/placeholder.svg"),
+    )
+    async with TestSessionLocal() as db:
+        # Arrange
+        query = select(User).where(User.username == "test_user")
+        user = (await db.execute(query)).scalars().first()
+        db.add(AdventureTemplate(id="plain", title="Chapel of Ash", owner_id=user.id))
+        await db.commit()
+        manifest = {
+            "adventure": {"title": "Chapel of Ash"},
+            "scenes": [
+                {"id": "NAVE", "name": "Nave", "description": "Cold stone."},
+                {"id": "CRYPT", "name": "Crypt", "description": "Bones."},
+            ],
+            "exits": [],
+        }
+
+        # Act
+        await apply_manifest(db, "plain", manifest)
+
+    # Assert
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, "plain")
+    assert [(s["id"], s["label"]) for s in adv.world_sections] == [
+        (DEFAULT_SECTION_ID, "Chapel of Ash")
+    ]
+    assert await _scene_sections("plain") == {"NAVE": "MAIN", "CRYPT": "MAIN"}
+    assert world_map_enabled(adv.world_sections) is False
+
+
+@pytest.mark.asyncio
+async def test_a_new_editor_scene_lands_in_the_default_region(auth_client, setup_test_db):
+    # Arrange: an adventure that has no region yet (e.g. created before regions existed).
+    template_id = await _seed_template(None)
+
+    # Act
+    resp = await auth_client.post(
+        f"/api/adventures/{template_id}/editor/scene",
+        json={"scene_id": "CELLAR", "label": "Cellar", "description": "Damp."},
+    )
+
+    # Assert
+    assert resp.status_code in (200, 201), resp.text
+    assert (await _scene_sections(template_id))["CELLAR"] == DEFAULT_SECTION_ID
+    async with TestSessionLocal() as db:
+        adv = await db.get(AdventureTemplate, template_id)
+    assert [s["id"] for s in adv.world_sections] == [DEFAULT_SECTION_ID]

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * Chooses the scenes of one region. Checked scenes move into the region (from wherever they
- * were), unchecked scenes of the region leave it. Runs immediately, not through the save bar.
+ * Moves scenes into one region: checked scenes leave their current region. Every scene belongs
+ * to a region, so a scene leaves this region only by moving it into another one. Runs
+ * immediately, not through the save bar.
  */
 import { computed, ref, watch } from 'vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -27,7 +28,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'apply', added: string[], removed: string[]): void
+  (e: 'apply', added: string[]): void
 }>()
 
 const chosen = ref<Set<string>>(new Set())
@@ -35,13 +36,15 @@ const search = ref('')
 
 watch(open, (isOpen) => {
   if (!isOpen || !props.section) return
-  chosen.value = new Set(props.scenes.filter((s) => s.sectionId === props.section?.id).map((s) => s.id))
+  chosen.value = new Set()
   search.value = ''
 })
 
 const visible = computed(() => {
   const term = search.value.trim().toLowerCase()
-  return props.scenes.filter((s) => !term || s.label.toLowerCase().includes(term) || s.id.toLowerCase().includes(term))
+  return props.scenes.filter(
+    (s) => s.sectionId !== props.section?.id && (!term || s.label.toLowerCase().includes(term) || s.id.toLowerCase().includes(term)),
+  )
 })
 
 function isChosen(id: string): boolean {
@@ -56,31 +59,27 @@ function toggle(id: string, value: boolean): void {
 }
 
 function where(scene: SceneOption): string {
-  if (!scene.sectionId || scene.sectionId === props.section?.id) return scene.id
+  if (!scene.sectionId) return scene.id
   return `${scene.id} · now in ${props.sectionLabels[scene.sectionId] || scene.sectionId}`
 }
 
 function apply(): void {
-  const id = props.section?.id
-  if (!id) return
-  const before = new Set(props.scenes.filter((s) => s.sectionId === id).map((s) => s.id))
-  const added = [...chosen.value].filter((sceneId) => !before.has(sceneId))
-  const removed = [...before].filter((sceneId) => !chosen.value.has(sceneId))
-  emit('apply', added, removed)
+  if (!props.section || !chosen.value.size) return
+  emit('apply', [...chosen.value])
 }
 </script>
 
 <template>
   <UiModal
     v-model:open="open"
-    :title="`Scenes of ${section?.label || 'region'}`"
-    description="Checked scenes belong to this region. A scene belongs to one region at a time."
+    :title="`Move scenes into ${section?.label || 'region'}`"
+    description="Checked scenes move here from their current region. To take a scene out of this region, move it into another one."
     size="lg"
     :persistent="saving"
   >
     <div class="space-y-3">
       <UiInput v-model="search" type="search" placeholder="Filter scenes..." aria-label="Filter scenes" />
-      <UiEmptyState v-if="!visible.length" title="No scenes found" />
+      <UiEmptyState v-if="!visible.length" title="No other scenes" description="Every scene already lies in this region, or none matches the filter." />
       <div v-else class="max-h-96 overflow-y-auto space-y-1 pr-1">
         <UiCheckbox
           v-for="scene in visible"
@@ -94,7 +93,7 @@ function apply(): void {
     </div>
     <template #footer>
       <UiButton :disabled="saving" @click="open = false">Cancel</UiButton>
-      <UiButton variant="primary" :loading="saving" @click="apply">Apply</UiButton>
+      <UiButton variant="primary" :loading="saving" :disabled="!chosen.size" @click="apply">Move {{ chosen.size || '' }} scene(s)</UiButton>
     </template>
   </UiModal>
 </template>

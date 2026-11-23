@@ -16,7 +16,7 @@ from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
-from backend.engine.world.sections import manifest_sections, normalize_sections
+from backend.engine.world.sections import ensure_sections, manifest_sections
 from backend.models.adventure_template import AdventureTemplate
 
 logger = logging.getLogger(__name__)
@@ -163,12 +163,11 @@ def _apply_audio_tracks(ctx: ApplyContext, adventure: AdventureTemplate) -> None
 
 
 def _apply_sections(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
-    """World sections (regions); a manifest without them keeps the stored list."""
+    """World sections (regions); a manifest without them keeps the stored list. There is always
+    at least one built region: the default region named after the adventure is added."""
     raw = manifest_sections(ctx.manifest)
-    if raw is None:
-        return
-    sections = normalize_sections(raw)
-    adventure.world_sections = sections or None  # type: ignore[assignment]
+    sections = ensure_sections(adventure.world_sections if raw is None else raw, adventure.title)
+    adventure.world_sections = sections  # type: ignore[assignment]
     ctx.manifest["sections"] = sections
 
 

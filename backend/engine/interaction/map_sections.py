@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from backend.engine.interaction.map_engine import MapEngine
-from backend.engine.world.sections import player_sections
+from backend.engine.world.sections import player_sections, world_map_enabled
 
 VISITED = "visited"
 REVEALED = "revealed"
@@ -63,11 +63,12 @@ def attach_sections(
     scene_sections: dict[str, Optional[str]],
     raw_sections: Any,
 ) -> dict[str, Any]:
-    """Adds ``section_id`` to the nodes plus ``sections``, ``section_links`` and the current one."""
+    """Adds ``section_id`` to the nodes plus ``sections``, ``section_links`` and the current one.
+    With a single built region there is no world map: ``sections`` stays empty."""
     nodes = map_dict.get("nodes") or {}
     edges = map_dict.get("edges") or []
     _tag_nodes(nodes, scene_sections)
-    sections = player_sections(raw_sections)
+    sections = player_sections(raw_sections) if world_map_enabled(raw_sections) else []
     discovered = _discovered(nodes, {s["id"] for s in sections})
     map_dict["sections"] = [
         {**section, "discovery": discovered[section["id"]]}

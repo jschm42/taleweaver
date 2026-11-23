@@ -97,8 +97,9 @@ onMounted(state.init)
     </UiNotice>
     <UiNotice v-if="errorMsg" tone="danger">{{ errorMsg }}</UiNotice>
     <UiNotice tone="info" title="Regions come later">
-      This builds one connected world without regions. To grow it into a larger campaign, open the adventure in the
-      World-Editor afterwards: on the <strong>Regions</strong> page you can plan regions and generate them one by one.
+      This builds one connected world in a single region. To grow it into a larger campaign, open the adventure in the
+      World-Editor afterwards: on the <strong>Regions</strong> page you can rename that region, add new ones and
+      generate them one by one.
     </UiNotice>
 
     <CoverSourceSection v-if="isCoverMode" id="section-cover" class="scroll-mt-16" />
