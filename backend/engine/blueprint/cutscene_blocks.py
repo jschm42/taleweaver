@@ -1,12 +1,14 @@
 """``[Cutscene: ID] Title`` blocks of a blueprint.
 
-Every prose line of the block is one slide (what the narrator says). ``image N:`` sets the image
-prompt of slide N, ``style:`` the cut-scene's own image style and ``audio:`` a track of the audio
-library. A chapter shows it with ``cutscene: ID``. Example::
+Every prose line of the block is one slide (what the narrator says); a line starting with ``+``
+adds a further passage to the slide above it (shown after it over the same picture).
+``image N:`` sets the image prompt of slide N, ``style:`` the cut-scene's own image style and
+``audio:`` a track of the audio library. A chapter shows it with ``cutscene: ID``. Example::
 
     [Cutscene: INTRO] The Crimson Debt
     style: comic book
     The village burns inside a ring of black fire.
+    + Nobody remembers who lit it.
     A shadow wolf watches from the hill.
     image 1: a medieval village ringed by black fire at night
 
@@ -34,10 +36,24 @@ def _image_prompts(block: BlueprintBlock) -> dict[int, str]:
     return prompts
 
 
+def _slide_passages(block: BlueprintBlock) -> list[list[str]]:
+    """The passages of each slide: a ``+`` line continues the slide above it."""
+    slides: list[list[str]] = []
+    for raw in block.prose:
+        line = raw.strip()
+        if line.startswith("+") and slides:
+            passage = line[1:].strip()
+            if passage:
+                slides[-1].append(passage)
+        elif line:
+            slides.append([line.lstrip("+").strip()])
+    return slides[:MAX_SLIDES]
+
+
 def cutscene_from_block(block: BlueprintBlock) -> dict[str, Any]:
     """The manifest entry the block describes."""
     prompts = _image_prompts(block)
-    lines = [line for line in block.prose if line.strip()][:MAX_SLIDES]
+    slides = _slide_passages(block)
     fields = block.fixed() | block.hints()
     return {
         "id": block.ref,
@@ -45,8 +61,8 @@ def cutscene_from_block(block: BlueprintBlock) -> dict[str, Any]:
         "image_style": str(fields.get("image_style") or ""),
         "audio_track_id": fields.get("audio_track_id") or None,
         "slides": [
-            {"text": line, "image_prompt": prompts.get(index, "")}
-            for index, line in enumerate(lines)
+            {"passages": passages, "image_prompt": prompts.get(index, "")}
+            for index, passages in enumerate(slides)
         ],
     }
 
@@ -90,7 +106,7 @@ def apply_cutscene_blocks(manifest: dict[str, Any], blueprint: Blueprint) -> Non
 def check_cutscene_blocks(blueprint: Blueprint) -> None:
     """Warns about cut-scenes without slides and image prompts for missing slides."""
     for block in blueprint.of_kind("cutscene"):
-        slides = len([line for line in block.prose if line.strip()])
+        slides = len(_slide_passages(block))
         if slides == 0:
             blueprint.add_issue(
                 block.line,

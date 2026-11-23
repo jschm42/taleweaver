@@ -5,6 +5,7 @@
 import type { CutsceneDefinition, CutsceneDefinitionSlide } from '@/types'
 
 export const MAX_SLIDES = 12
+export const MAX_PASSAGES = 6
 const ID_MAX = 40
 
 function newSlideId(): string {
@@ -23,7 +24,7 @@ export function cutscenesOf(adventure: { cutscenes?: unknown } | null | undefine
       image_style: c.image_style || '',
       slides: (c.slides || []).map((s) => ({
         id: s.id || newSlideId(),
-        text: s.text || '',
+        passages: slidePassages(s),
         image_url: s.image_url || null,
         image_prompt: s.image_prompt || '',
       })),
@@ -44,8 +45,21 @@ export function suggestCutsceneId(title: string, taken: Set<string>): string {
   return candidate
 }
 
+/** A slide's passages; older data has one `text` instead. Always at least one entry. */
+function slidePassages(slide: { passages?: unknown, text?: unknown }): string[] {
+  const listed = Array.isArray(slide.passages) ? slide.passages.map((p) => String(p ?? '')) : []
+  const legacy = typeof slide.text === 'string' && slide.text ? [slide.text] : []
+  const passages = [...legacy, ...listed]
+  return passages.length ? passages : ['']
+}
+
+/** All passages of a slide as one text (for the image prompt). */
+export function slideText(slide: { passages: string[] }): string {
+  return slide.passages.map((p) => p.trim()).filter(Boolean).join(' ')
+}
+
 export function newSlide(text = ''): CutsceneDefinitionSlide {
-  return { id: newSlideId(), text, image_url: null, image_prompt: '' }
+  return { id: newSlideId(), passages: [text], image_url: null, image_prompt: '' }
 }
 
 export function newCutscene(title: string, taken: Set<string>): CutsceneDefinition {

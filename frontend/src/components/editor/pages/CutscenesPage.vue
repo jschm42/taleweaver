@@ -5,7 +5,7 @@
  * The list is edited as one draft and saved through the save bar; drawing an image runs at
  * once and puts the image into the draft. Spec: docs/specs/cutscenes.md.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Clapperboard, Plus } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
 import { useConfirm, usePrompt } from '@/composables/useDialogs'
@@ -17,15 +17,20 @@ import { resolveAccent, resolveSkin } from '@/skins/skinRegistry'
 import type { Cutscene, CutsceneDefinition } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import PageHeader from '@/components/workbench/PageHeader.vue'
+import UiBadge from '@/components/ui/UiBadge.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import UiField from '@/components/ui/UiField.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 import CutsceneForm from '@/components/editor/cutscenes/CutsceneForm.vue'
 import CutsceneOverlay from '@/components/game/immersive/CutsceneOverlay.vue'
 
 interface CutscenesDraft {
   cutscenes: CutsceneDefinition[]
+  /** Shown right after a new session starts ('' = none). */
+  introId: string
 }
 
 const editor = useEditor()
@@ -37,6 +42,7 @@ const adventure = computed(() => editor.debugData?.adventure as Record<string, a
 
 const { draft, isDirty, changedCount, isSaving, reset, commit } = useDraft<CutscenesDraft>(() => ({
   cutscenes: cutscenesOf(adventure.value),
+  introId: String(adventure.value?.intro_cutscene_id || ''),
 }))
 useUnsavedGuard(isDirty)
 
@@ -55,8 +61,21 @@ const audioTracks = computed(() =>
 const chapters = computed(() => (editor.adventure?.sequences || []) as { title?: string, id?: string, start_cutscene_id?: string }[])
 
 function usedBy(id: string): string[] {
-  return chapters.value.filter((c) => c.start_cutscene_id === id).map((c) => c.title || c.id || '')
+  const chapterTitles = chapters.value.filter((c) => c.start_cutscene_id === id).map((c) => `chapter ${c.title || c.id || ''}`)
+  return draft.value.introId === id ? ['the adventure (session start)', ...chapterTitles] : chapterTitles
 }
+
+const introOptions = computed(() =>
+  cutscenes.value.map((c) => ({ value: c.id, label: c.title ? `${c.title} (${c.id})` : c.id })),
+)
+
+// Renaming the intro cut-scene's id keeps it the intro (same position, new id).
+watch(
+  () => [selectedIndex.value, selected.value?.id] as const,
+  ([index, id], [oldIndex, oldId]) => {
+    if (index === oldIndex && id && oldId && draft.value.introId === oldId) draft.value.introId = id
+  },
+)
 
 const previewSkin = computed(() => resolveSkin('auto', adventure.value?.ui_theme, adventure.value?.selected_tone))
 const previewSkinStyle = computed((): Record<string, string> => {
@@ -90,6 +109,7 @@ async function deleteCutscene(cutscene: CutsceneDefinition): Promise<void> {
   })
   if (!ok) return
   draft.value.cutscenes = cutscenes.value.filter((c) => c !== cutscene)
+  if (draft.value.introId === cutscene.id) draft.value.introId = ''
   selectedIndex.value = -1
 }
 
@@ -99,7 +119,11 @@ function openPreview(cutscene: CutsceneDefinition): void {
     token: `preview-${Date.now()}`,
     id: cutscene.id,
     title: cutscene.title,
-    slides: cutscene.slides.map((s) => ({ id: s.id, text: s.text, image_url: getImageUrl(s.image_url) || s.image_url })),
+    slides: cutscene.slides.map((s) => ({
+      id: s.id,
+      passages: s.passages.filter((p) => p.trim()),
+      image_url: getImageUrl(s.image_url) || s.image_url,
+    })),
     audio: track?.url ? { id: track.id, url: track.url } : null,
   }
 }
@@ -111,7 +135,7 @@ async function save(): Promise<void> {
   }
   try {
     await commit(async (value) => {
-      await cutsceneService.saveCutscenes(editor.adventureId, value.cutscenes)
+      await cutsceneService.saveCutscenes(editor.adventureId, value.cutscenes, value.introId)
       await editor.fetchDebugInfo()
     })
     toast.success('Cut-scenes saved.')
@@ -123,7 +147,7 @@ async function save(): Promise<void> {
 
 <template>
   <div class="space-y-6">
-    <PageHeader title="Cut-scenes" description="Slide shows with narration that open a chapter or that a script plays.">
+    <PageHeader title="Cut-scenes" description="Slide shows with narration that open the adventure or a chapter, or that a script plays.">
       <template #actions>
         <UiButton variant="primary" :icon="Plus" @click="addCutscene">New cut-scene</UiButton>
       </template>
@@ -133,10 +157,19 @@ async function save(): Promise<void> {
       v-if="!cutscenes.length"
       :icon="Clapperboard"
       title="No cut-scene yet"
-      description="Create one, then pick it as a chapter's start cut-scene or play it from a script."
+      description="Create one, then pick it as the adventure intro, a chapter's start cut-scene or play it from a script."
     />
 
     <template v-else>
+      <UiCard>
+        <UiField
+          label="Adventure intro"
+          hint="Shown right after a new session starts, before the first chapter's cut-scene."
+        >
+          <UiSelect v-model="draft.introId" :options="introOptions" placeholder="None" />
+        </UiField>
+      </UiCard>
+
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <button
           v-for="(cutscene, index) in cutscenes"
@@ -160,6 +193,7 @@ async function save(): Promise<void> {
             <span class="wb-label block truncate !text-wb-strong">{{ cutscene.title || cutscene.id }}</span>
             <span class="wb-mono block truncate text-wb-muted">{{ cutscene.id }}</span>
             <span class="wb-hint block">{{ cutscene.slides.length }} slide{{ cutscene.slides.length === 1 ? '' : 's' }}</span>
+            <UiBadge v-if="cutscene.id === draft.introId" class="mt-1">Intro</UiBadge>
           </span>
         </button>
       </div>

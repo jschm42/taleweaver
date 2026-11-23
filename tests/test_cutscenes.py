@@ -59,9 +59,20 @@ def test_library_normalizes_ids_slides_and_style():
     intro = cutscenes[0]
     assert [c["id"] for c in cutscenes] == ["INTRO", "EMPTY"]
     assert intro["image_style"] == "comic"
-    assert [s["text"] for s in intro["slides"]] == ["The village burns.", "A wolf howls."]
+    assert [s["passages"] for s in intro["slides"]] == [["The village burns."], ["A wolf howls."]]
     assert intro["slides"][1]["image_url"] is None
     assert len({s["id"] for s in intro["slides"]}) == 2
+
+
+def test_a_slide_keeps_several_passages_after_a_legacy_text():
+    # Act
+    slide = normalize_cutscenes(
+        [{"id": "X", "slides": [{"text": "First.", "passages": ["Second.", " ", "Third."]}]}]
+    )[0]["slides"][0]
+
+    # Assert
+    assert slide["passages"] == ["First.", "Second.", "Third."]
+    assert "text" not in slide
 
 
 def test_foreign_image_urls_are_dropped():
@@ -106,7 +117,7 @@ def test_script_play_is_queued_once_and_resolved_for_the_client():
     assert len(states[CUTSCENE_STATE_KEY]["queue"]) == 1
     assert shown["id"] == "INTRO"
     assert shown["audio"] == {"id": "DREAD", "url": TRACKS[0]["url"]}
-    assert [s["text"] for s in shown["slides"]] == ["The village burns.", "A wolf howls."]
+    assert [s["passages"] for s in shown["slides"]] == [["The village burns."], ["A wolf howls."]]
 
 
 def test_chapter_intro_plays_first_and_seen_removes_it():
@@ -155,7 +166,7 @@ def test_reapplied_manifest_keeps_drawn_images():
     merged = merged_cutscenes(stored, incoming)
 
     # Assert
-    assert merged[0]["slides"][0] == {**merged[0]["slides"][0], "text": "new"}
+    assert merged[0]["slides"][0]["passages"] == ["new"]
     assert merged[0]["slides"][0]["image_url"] == "/data/x/a.png"
     assert merged_cutscenes(stored, None)[0]["id"] == "INTRO"
 
@@ -168,7 +179,7 @@ def _headers(username: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_first_chapter_intro_reaches_the_client_until_seen(client, setup_test_db):
+async def test_adventure_intro_then_chapter_intro_reach_the_client(client, setup_test_db):
     # Arrange
     async with TestSessionLocal() as db:
         user = User(username="cutter", hashed_password="x", role="admin")
@@ -181,7 +192,8 @@ async def test_first_chapter_intro_reaches_the_client_until_seen(client, setup_t
             is_ready=True,
             creation_status="Ready",
             original_manifest={"version": "2.0.0", "start_scene_id": "HALL"},
-            cutscenes=LIBRARY,
+            cutscenes=[*LIBRARY, {"id": "OPENING", "slides": [{"text": "Long ago..."}]}],
+            intro_cutscene_id="OPENING",
             audio_tracks=TRACKS,
             sequences=[{"id": "SEQ_1", "order": 1, "title": "One", "start_cutscene_id": "INTRO"}],
         )
@@ -196,18 +208,25 @@ async def test_first_chapter_intro_reaches_the_client_until_seen(client, setup_t
     )
     game_id = start.json()["game_id"]
 
+    async def confirm(token: str) -> dict:
+        res = await client.post(
+            f"/api/adventures/{game_id}/cutscene/seen",
+            json={"token": token},
+            headers=_headers("cutter"),
+        )
+        assert res.status_code == 200
+        return res.json()
+
     # Act
     shown = await client.get(f"/api/adventures/{game_id}/chat", headers=_headers("cutter"))
-    cutscene = shown.json()["cutscene"]
-    seen = await client.post(
-        f"/api/adventures/{game_id}/cutscene/seen",
-        json={"token": cutscene["token"]},
-        headers=_headers("cutter"),
-    )
+    opening = shown.json()["cutscene"]
+    chapter = (await confirm(opening["token"]))["cutscene"]
+    after = await confirm(chapter["token"])
 
-    # Assert
-    assert cutscene["id"] == "INTRO" and len(cutscene["slides"]) == 2
-    assert seen.status_code == 200 and seen.json()["cutscene"] is None
+    # Assert: the adventure's intro first, then the first chapter's cut-scene.
+    assert opening["id"] == "OPENING"
+    assert chapter["id"] == "INTRO" and len(chapter["slides"]) == 2
+    assert after["cutscene"] is None
     async with TestSessionLocal() as db:
         state = await db.get(SessionState, game_id)
         assert state is None or not (state.entity_states or {})[CUTSCENE_STATE_KEY]["queue"]
@@ -228,6 +247,7 @@ def test_validator_reports_unknown_cutscene_references():
                 {"id": "SEQ_1", "order": 1, "title": "One", "start_cutscene_id": "OUTRO"}
             ],
             "init_script": "tw.cutscene.play('GHOST')\ntw.cutscene.play('INTRO')",
+            "intro_cutscene_id": "NOWHERE",
         },
         "protagonist": {},
         "scenes": [],
@@ -242,6 +262,7 @@ def test_validator_reports_unknown_cutscene_references():
 
     # Assert
     assert {
+        "intro_cutscene_missing",
         "chapter_cutscene_missing",
         "cutscene_audio_missing",
         "script_cutscene_missing",

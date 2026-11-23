@@ -1019,6 +1019,13 @@ class WorldManifesto(WorldBaseSchema):
         default=None,
         description="Optional configuration for procedural dynamic scene image tiers, music mode, and NPC interlude quotes.",
     )
+    intro_cutscene_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of a cut-scene in `cutscenes` shown right after the session starts "
+            "(the adventure's opening). Use empty string for none."
+        ),
+    )
     cutscenes: list[CutsceneSchema] = Field(
         default=[],
         description=(

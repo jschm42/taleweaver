@@ -1,11 +1,18 @@
 <script setup lang="ts">
-/** One slide of a cut-scene: its image (opens the image dialog) and its text. */
-import { ArrowDown, ArrowUp, ImagePlus, Trash2 } from 'lucide-vue-next'
+/**
+ * One slide of a cut-scene: its image (opens the image dialog) and its text passages. Several
+ * passages are shown one after another over the same picture (e.g. a short dialogue).
+ */
+import { ArrowDown, ArrowUp, ImagePlus, Plus, Trash2, X } from 'lucide-vue-next'
+import { MAX_PASSAGES } from '@/services/cutsceneService'
 import type { CutsceneDefinitionSlide } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
+import UiButton from '@/components/ui/UiButton.vue'
 import UiField from '@/components/ui/UiField.vue'
 import UiIconButton from '@/components/ui/UiIconButton.vue'
 import UiTextarea from '@/components/ui/UiTextarea.vue'
+
+const MAX_PASSAGE_CHARS = 800
 
 const slide = defineModel<CutsceneDefinitionSlide>({ required: true })
 
@@ -16,13 +23,25 @@ defineEmits<{
   (e: 'move', delta: number): void
   (e: 'remove'): void
 }>()
+
+function addPassage(): void {
+  if (slide.value.passages.length < MAX_PASSAGES) slide.value.passages.push('')
+}
+
+function removePassage(position: number): void {
+  if (slide.value.passages.length > 1) slide.value.passages.splice(position, 1)
+}
+
+function passageLabel(slideIndex: number, position: number): string {
+  return slide.value.passages.length > 1 ? `Slide ${slideIndex + 1} · passage ${position + 1}` : `Slide ${slideIndex + 1}`
+}
 </script>
 
 <template>
   <div class="flex flex-col gap-3 sm:flex-row">
     <button
       type="button"
-      class="relative aspect-[16/9] w-full shrink-0 overflow-hidden rounded-md border border-wb-line bg-wb-sunken sm:w-48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent"
+      class="relative aspect-[16/9] w-full shrink-0 self-start overflow-hidden rounded-md border border-wb-line bg-wb-sunken sm:w-48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent"
       :aria-label="slide.image_url ? `Change the image of slide ${index + 1}` : `Add an image to slide ${index + 1}`"
       @click="$emit('image')"
     >
@@ -32,10 +51,27 @@ defineEmits<{
         <span class="wb-hint">Add image</span>
       </span>
     </button>
-    <div class="min-w-0 flex-1">
-      <UiField :label="`Slide ${index + 1}`" :count="slide.text.length" :max-length="800">
-        <UiTextarea v-model="slide.text" :rows="3" placeholder="What the narrator says on this slide." />
-      </UiField>
+    <div class="min-w-0 flex-1 space-y-3">
+      <div v-for="(_, position) in slide.passages" :key="position" class="flex items-start gap-2">
+        <UiField class="min-w-0 flex-1" :label="passageLabel(index, position)" :count="slide.passages[position].length" :max-length="MAX_PASSAGE_CHARS">
+          <UiTextarea
+            v-model="slide.passages[position]"
+            :rows="2"
+            :placeholder="position === 0 ? 'What the narrator says on this slide.' : 'Shown after the passage above, over the same picture.'"
+          />
+        </UiField>
+        <UiIconButton
+          v-if="slide.passages.length > 1"
+          class="mt-6"
+          :icon="X"
+          :label="`Remove passage ${position + 1}`"
+          size="sm"
+          @click="removePassage(position)"
+        />
+      </div>
+      <UiButton :icon="Plus" size="sm" variant="ghost" :disabled="slide.passages.length >= MAX_PASSAGES" @click="addPassage">
+        Add passage
+      </UiButton>
     </div>
     <div class="flex shrink-0 gap-1 sm:flex-col">
       <UiIconButton :icon="ArrowUp" label="Move up" size="sm" :disabled="index === 0" @click="$emit('move', -1)" />

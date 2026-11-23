@@ -220,6 +220,7 @@ def _create_cloned_template_entity(
         ),
         audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
+        intro_cutscene_id=original.intro_cutscene_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
         npc_conversations=normalize_conversation_settings(original.npc_conversations),

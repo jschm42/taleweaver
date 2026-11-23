@@ -1,6 +1,7 @@
 """Editor endpoints for the adventure's cut-scenes (``AdventureTemplate.cutscenes``).
 
-- ``PUT  .../editor/cutscenes {cutscenes}``: stores the whole list (normalized).
+- ``PUT  .../editor/cutscenes {cutscenes, intro_cutscene_id}``: stores the whole list
+  (normalized) and the adventure's intro cut-scene (shown when a session starts).
 - ``POST .../editor/cutscenes/image-prompt {title, text, image_style}``: the default prompt of a
   slide plus the style (the cut-scene's override, else the adventure's) and tone.
 - ``POST .../editor/cutscenes/image {prompt, image_style, use_style, use_tone, quality}``: draws
@@ -28,7 +29,11 @@ from backend.core.auth import get_current_user
 from backend.core.database import get_db
 from backend.core.style_catalog import resolve_tone_instruction
 from backend.engine.cutscenes.images import default_slide_prompt, style_instruction
-from backend.engine.cutscenes.library import MAX_STYLE_CHARS, normalize_cutscenes
+from backend.engine.cutscenes.library import (
+    MAX_STYLE_CHARS,
+    intro_cutscene_or_none,
+    normalize_cutscenes,
+)
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 
@@ -38,6 +43,8 @@ _BASE = "/{template_id}/editor/cutscenes"
 
 class CutscenesUpdate(BaseModel):
     cutscenes: list[dict[str, Any]] = Field(default_factory=list)
+    # Shown right after a new session starts; must name one of ``cutscenes``.
+    intro_cutscene_id: str | None = Field(default=None, max_length=40)
 
 
 class SlidePromptRequest(BaseModel):
@@ -84,8 +91,10 @@ async def update_cutscenes(
 ) -> dict:
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
     cutscenes = store_cutscenes(adv, payload.cutscenes)
+    intro = intro_cutscene_or_none(payload.intro_cutscene_id, cutscenes)
+    adv.intro_cutscene_id = intro  # type: ignore[assignment]
     await db.commit()
-    return {"cutscenes": cutscenes}
+    return {"cutscenes": cutscenes, "intro_cutscene_id": intro}
 
 
 @router.post(f"{_BASE}/image-prompt")

@@ -395,7 +395,8 @@ export interface PendingDialog {
 /** One slide of a cut-scene as the player sees it. */
 export interface CutsceneSlide {
   id: string
-  text: string
+  /** Shown one after another over the slide's picture. */
+  passages: string[]
   image_url?: string | null
 }
 
@@ -421,7 +422,8 @@ export interface CutsceneDefinition {
 
 export interface CutsceneDefinitionSlide {
   id: string
-  text: string
+  /** Text passages shown one after another over the same picture. */
+  passages: string[]
   image_url?: string | null
   image_prompt?: string
 }

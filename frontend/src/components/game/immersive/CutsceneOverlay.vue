@@ -2,10 +2,10 @@
 /**
  * CutsceneOverlay — a cut-scene (chapter intro or `tw.cutscene.play`) over the whole play view.
  *
- * Slides (image + text) follow each other like the travel curtain's cinematic veil: the image
- * drifts slowly (Ken Burns), the text sits in a letterboxed caption. Colors and fonts follow
+ * Slides (image + text passages) follow each other like the travel curtain's cinematic veil:
+ * the image drifts slowly (Ken Burns), the passages follow each other in a letterboxed caption. Colors and fonts follow
  * the active dialog skin (--tw-overlay-* tokens, src/skins/overlays.css). Holding the mouse
- * button or Space skips the current slide, Escape the whole cut-scene. Timing and speech:
+ * button or Space skips the current passage, Escape the whole cut-scene. Timing and speech:
  * composables/useCutsceneSlides.ts. Spec: docs/specs/cutscenes.md.
  */
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
@@ -24,9 +24,10 @@ const props = defineProps<{
 const emit = defineEmits<{ finished: [] }>()
 
 const slides = useCutsceneSlides(() => props.autoSpeech, () => emit('finished'))
-const { index, holdProgress } = slides
+const { index, passage, holdProgress } = slides
 
 const current = computed(() => props.cutscene?.slides[index.value] ?? null)
+const currentText = computed(() => current.value?.passages[passage.value] || '')
 const total = computed(() => props.cutscene?.slides.length ?? 0)
 // SVG ring around the skip hint: full circumference 2πr with r = 10.
 const RING = 2 * Math.PI * 10
@@ -119,11 +120,11 @@ onBeforeUnmount(() => {
       <div class="absolute inset-x-0 bottom-0 flex flex-col items-center px-6 pb-[7vh] pointer-events-none">
         <Transition name="cutscene-caption" mode="out-in">
           <p
-            v-if="current?.text"
-            :key="current.id"
+            v-if="currentText"
+            :key="`${current?.id}-${passage}`"
             class="cutscene-text max-w-3xl text-center text-base sm:text-xl leading-relaxed whitespace-pre-line"
           >
-            {{ current.text }}
+            {{ currentText }}
           </p>
         </Transition>
 

@@ -16,7 +16,7 @@ reveal, a death, the ending).
 ```json
 {"id": "INTRO", "title": "The Crimson Debt", "image_style": "comic book",
  "audio_track_id": "DREAD_THEME",
- "slides": [{"id": "a1b2c3d4", "text": "The village burns.",
+ "slides": [{"id": "a1b2c3d4", "passages": ["The village burns.", "Nobody remembers why."],
              "image_url": "/data/adventures/library/<template>/visuals/cutscene/...png",
              "image_prompt": "a medieval village ringed by black fire at night"}]}
 ```
@@ -28,10 +28,13 @@ reveal, a death, the ending).
 | `image_style` | Overrides the adventure's image style for the slide images: a style catalog id or name, or a free description. Empty = the adventure's style. |
 | `audio_track_id` | A track of the audio library; plays during the cut-scene instead of the scene audio. |
 | `slides` | 1-12 slides. A slide without an image shows on the skin's veil. |
+| `slides[].passages` | 1-6 text passages shown one after another over the slide's picture (e.g. a short exchange). A single `text` (LLM output, older data) becomes the first passage. |
 
 At most 100 cut-scenes. Image URLs other than `/data/...` and `assets/...` are dropped.
 
-A chapter (`sequence`) names its cut-scene in `start_cutscene_id`.
+A chapter (`sequence`) names its cut-scene in `start_cutscene_id`. The adventure names its
+intro in `AdventureTemplate.intro_cutscene_id` (migration `d9f1b3c5e7a2`): shown right after a
+new session starts. Only an id of the library is stored (`intro_cutscene_or_none`).
 
 ## 2. Showing a cut-scene
 
@@ -41,7 +44,10 @@ cut-scene that is already waiting is not queued again.
 
 **Sources.**
 
-- A chapter starts: `session_starter` (first chapter), `sequence_progress._advance_and_trigger`
+- A session starts: `session_starter._build_session_state` queues the adventure's
+  `intro_cutscene_id` first, then the first chapter's `start_cutscene_id`, then the cut-scenes
+  the init scripts queued.
+- A chapter starts: `sequence_progress._advance_and_trigger`
   (linear advance) and the script/activation start path queue `start_cutscene_id` **first**,
   before the chapter's start hook runs, so a chapter intro plays before cut-scenes its start
   script queued.
@@ -62,12 +68,13 @@ again.
 
 - Full-view layer above the travel curtain, styled with the skin's `--tw-overlay-*` tokens; it
   carries its own `.tw-skin` / `data-skin`, because it is rendered outside the skinned root.
-- The slide image drifts slowly (Ken Burns) and cross-fades to the next; the text sits in a
-  letterboxed caption; the title shows over the first slide; dots show the position.
-- With auto-speech on, each slide's text is read aloud and the slide stays until it was read
-  (at least 2.5 s). Without it a slide stays for a reading time based on its length (2.5-15 s).
-- Holding Space or the mouse button for 0.6 s skips the current slide (a ring shows the hold);
-  Escape ends the whole cut-scene.
+- The slide image drifts slowly (Ken Burns) and cross-fades to the next; the passages follow
+  each other in a letterboxed caption; the title shows over the first slide; dots show the
+  slide position.
+- With auto-speech on, each passage is read aloud and stays until it was read (at least
+  2.5 s). Without it a passage stays for a reading time based on its length (2.5-15 s).
+- Holding Space or the mouse button for 0.6 s skips the current passage (after a slide's last
+  passage: to the next slide; a ring shows the hold); Escape ends the whole cut-scene.
 - While it is open, the turn's narration is not read (`speechDeferred` of `useGameAutoSpeak`);
   it is read once the cut-scene closed. A cut-scene with an audio track replaces the scene audio
   (`effectiveAudio`), which cross-fades back afterwards.
@@ -77,7 +84,9 @@ again.
 **Cut-scenes** page (Presentation group, `components/editor/pages/CutscenesPage.vue`): list,
 then the selected cut-scene's form (`components/editor/cutscenes/`): title, ID, image style
 (catalog names or free text), audio track, slides (text, image, order). One draft, saved with the
-save bar (`PUT /editor/cutscenes`). **Preview** plays it in the adventure's skin without speech.
+save bar (`PUT /editor/cutscenes {cutscenes, intro_cutscene_id}`). **Adventure intro** above the
+list picks the cut-scene shown when a session starts; its tile carries an *Intro* badge, and
+renaming its id keeps it the intro. **Preview** plays it in the adventure's skin without speech.
 
 Slide images (`CutsceneSlideImageModal.vue`): the prompt comes from the slide text
 (`POST /editor/cutscenes/image-prompt`, `engine/cutscenes/images.py`) and can be edited;
@@ -89,18 +98,19 @@ stores the file under the adventure's `visuals/cutscene/`. The URL goes into the
 
 A chapter picks its cut-scene in the chapter dialog (Triggers tab, *Start cut-scene*).
 
-Validation (`core/world_validation/cutscenes.py`): `chapter_cutscene_missing`,
+Validation (`core/world_validation/cutscenes.py`): `intro_cutscene_missing`,
+`chapter_cutscene_missing`,
 `cutscene_without_slides`, `cutscene_audio_missing`, `script_cutscene_missing` (a literal
 `tw.cutscene.play("ID")` with an unknown id).
 
 ## 4. World-Builder
 
 - **Generation:** `WorldManifesto.cutscenes` (`engine/world/world_cutscene_schema.py`) and
-  `SequenceSchema.start_cutscene_id`. The prompt allows at most three cut-scenes for the opening
+  `SequenceSchema.start_cutscene_id`, `WorldManifesto.intro_cutscene_id`. The prompt allows at most three cut-scenes for the opening
   and big turning points, 2-4 slides each, with English `image_prompt`s.
 - **Blueprint:** `[Cutscene: ID] Title` (`engine/blueprint/cutscene_blocks.py`): every body
-  line is a slide, `image N:` its picture, `style:` and `audio:` as above; chapters use
-  `cutscene: ID`. The author's slides replace the LLM's for that id after generation; an LLM
+  line is a slide, a `+` line a further passage of the slide above, `image N:` its picture, `style:` and `audio:` as above; chapters use
+  `cutscene: ID`, `[World]` uses `intro_cutscene: ID` (alias `cutscene`). The author's slides replace the LLM's for that id after generation; an LLM
   image prompt stays where the author gave none.
 - **Apply:** `manifest_apply/adventure_meta` merges the cut-scenes by id (a re-applied manifest
   keeps drawn images); `manifest_apply/cutscene_media.py` draws missing slide images when scene

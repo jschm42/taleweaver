@@ -1,10 +1,11 @@
 /**
  * useCutsceneSlides — the timing of a cut-scene's slide show.
  *
- * Each slide stays until its text was read aloud (auto-speech on) or for a reading time based
- * on its length (auto-speech off), at least `MIN_SLIDE_MS`. Holding the mouse button or Space
- * for `HOLD_TO_SKIP_MS` skips the current slide; Escape ends the whole cut-scene. After the
- * last slide `onDone` runs once.
+ * A slide shows its passages one after another over the same picture. Each passage stays until
+ * it was read aloud (auto-speech on) or for a reading time based on its length (auto-speech
+ * off), at least `MIN_SLIDE_MS`. Holding the mouse button or Space for `HOLD_TO_SKIP_MS` skips
+ * the current passage (after a slide's last passage: to the next slide); Escape ends the whole
+ * cut-scene. After the last slide `onDone` runs once.
  */
 import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { audioService } from '@/services/audioService'
@@ -21,6 +22,8 @@ export const HOLD_TO_SKIP_MS = 600
 
 export interface CutsceneSlides {
   index: Ref<number>
+  /** Position of the shown passage within the current slide. */
+  passage: Ref<number>
   holdProgress: Ref<number>
   start: (cutscene: Cutscene) => void
   stop: () => void
@@ -40,6 +43,7 @@ export function readingTimeMs(text: string): number {
 
 export function useCutsceneSlides(autoSpeech: () => boolean, onDone: () => void): CutsceneSlides {
   const index = ref(0)
+  const passage = ref(0)
   const holdProgress = ref(0)
   let cutscene: Cutscene | null = null
   // Bumped on every slide change: a running slide timer sees it and stops.
@@ -47,15 +51,25 @@ export function useCutsceneSlides(autoSpeech: () => boolean, onDone: () => void)
   let holdStartedAt = 0
   let holdFrame = 0
 
-  async function showSlide(slideIndex: number, gen: number): Promise<void> {
+  function passageCount(slideIndex: number): number {
+    return Math.max(1, cutscene?.slides[slideIndex]?.passages.length ?? 0)
+  }
+
+  /** The step after (slide, passage): the next passage, else the next slide's first. */
+  function nextStep(slideIndex: number, passageIndex: number): [number, number] {
+    return passageIndex + 1 < passageCount(slideIndex) ? [slideIndex, passageIndex + 1] : [slideIndex + 1, 0]
+  }
+
+  async function showStep(slideIndex: number, passageIndex: number, gen: number): Promise<void> {
     const slide = cutscene?.slides[slideIndex]
     if (!slide) {
       finish()
       return
     }
     index.value = slideIndex
+    passage.value = passageIndex
     const startedAt = Date.now()
-    const text = slide.text.trim()
+    const text = (slide.passages[passageIndex] || '').trim()
     if (text && autoSpeech()) {
       await audioService.speak(text, { interruptCurrent: true })
       if (gen !== generation) return
@@ -64,7 +78,7 @@ export function useCutsceneSlides(autoSpeech: () => boolean, onDone: () => void)
       await sleep(readingTimeMs(text))
     }
     if (gen !== generation) return
-    void showSlide(slideIndex + 1, ++generation)
+    void showStep(...nextStep(slideIndex, passageIndex), ++generation)
   }
 
   function finish(): void {
@@ -79,9 +93,10 @@ export function useCutsceneSlides(autoSpeech: () => boolean, onDone: () => void)
   function start(next: Cutscene): void {
     cutscene = next
     index.value = 0
+    passage.value = 0
     const gen = ++generation
     void sleep(START_DELAY_MS).then(() => {
-      if (gen === generation) void showSlide(0, gen)
+      if (gen === generation) void showStep(0, 0, gen)
     })
   }
 
@@ -94,7 +109,7 @@ export function useCutsceneSlides(autoSpeech: () => boolean, onDone: () => void)
   function skipSlide(): void {
     if (!cutscene) return
     audioService.stop()
-    void showSlide(index.value + 1, ++generation)
+    void showStep(...nextStep(index.value, passage.value), ++generation)
   }
 
   function tickHold(): void {
@@ -121,5 +136,5 @@ export function useCutsceneSlides(autoSpeech: () => boolean, onDone: () => void)
 
   onBeforeUnmount(stop)
 
-  return { index, holdProgress, start, stop, skipSlide, skipAll: finish, beginHold, endHold }
+  return { index, passage, holdProgress, start, stop, skipSlide, skipAll: finish, beginHold, endHold }
 }

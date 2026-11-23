@@ -94,7 +94,7 @@ def client_cutscene(
             "id": cutscene["id"],
             "title": cutscene["title"],
             "slides": [
-                {"id": s["id"], "text": s["text"], "image_url": s["image_url"]}
+                {"id": s["id"], "passages": s["passages"], "image_url": s["image_url"]}
                 for s in cutscene["slides"]
             ],
             "audio": {"id": track["id"], "url": track["url"]}

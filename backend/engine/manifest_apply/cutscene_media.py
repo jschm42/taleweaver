@@ -12,7 +12,7 @@ import logging
 from typing import Any
 
 from backend.engine.cutscenes.images import default_slide_prompt, style_instruction
-from backend.engine.cutscenes.library import normalize_cutscenes
+from backend.engine.cutscenes.library import normalize_cutscenes, slide_text
 from backend.engine.manifest_apply.context import ApplyContext
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
 
@@ -24,7 +24,9 @@ async def _draw(ctx: ApplyContext, cutscene: dict[str, Any], slide: dict[str, An
 
     adventure = ctx.adventure
     title = str(getattr(adventure, "title", "") or "")
-    prompt = slide["image_prompt"] or default_slide_prompt(title, cutscene["title"], slide["text"])
+    prompt = slide["image_prompt"] or default_slide_prompt(
+        title, cutscene["title"], slide_text(slide)
+    )
     catalog = getattr(ctx.user, "image_styles_catalog", None)
     style = style_instruction(
         cutscene["image_style"], getattr(adventure, "selected_image_styles", None), catalog

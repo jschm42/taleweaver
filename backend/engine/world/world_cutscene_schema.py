@@ -19,6 +19,13 @@ class CutsceneSlideSchema(WorldBaseSchema):
         ...,
         description="What the narrator says on this slide (1-3 sentences, max 400 characters).",
     )
+    passages: list[str] = Field(
+        default=[],
+        description=(
+            "Optional further passages shown one after another over the same picture "
+            "(e.g. a dialogue exchange). Use [] for none."
+        ),
+    )
     image_prompt: str = Field(
         default="",
         description=(

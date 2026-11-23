@@ -7,10 +7,12 @@ Entry::
 
     {"id": "INTRO", "title": "The Debt", "audio_track_id": "CRYPT_THEME" | None,
      "image_style": "" | "comic" | "loose watercolor, soft edges",
-     "slides": [{"id": "a1b2c3", "text": "...", "image_url": "/data/..." | None,
+     "slides": [{"id": "a1b2c3", "passages": ["...", "..."], "image_url": "/data/..." | None,
                  "image_prompt": "..."}]}
 
-A slide without ``image_url`` is shown on the theme's veil (the World-Builder writes slides with
+A slide shows its ``passages`` one after another over the same picture (input may still use a
+single ``text``, which becomes the first passage). A slide without ``image_url`` is shown on the
+theme's veil (the World-Builder writes slides with
 a prompt; images are drawn during the manifest apply or in the editor). ``image_style`` overrides
 the adventure's image style for the slide images: a style catalog id or name, or a free
 description; empty = the adventure's style.
@@ -30,6 +32,7 @@ MAX_CUTSCENES = 100
 MAX_SLIDES = 12
 MAX_TITLE_CHARS = 100
 MAX_TEXT_CHARS = 800
+MAX_PASSAGES = 6
 MAX_PROMPT_CHARS = 1000
 MAX_URL_CHARS = 500
 MAX_STYLE_CHARS = 300
@@ -63,6 +66,18 @@ def _image_url(value: Any) -> Optional[str]:
     return url if url.startswith(("/data/", "assets/")) else None
 
 
+def _passages(raw: dict[str, Any]) -> list[str]:
+    """``text`` (legacy, LLM, blueprint) first, then ``passages``; empty ones dropped."""
+    listed = raw.get("passages") if isinstance(raw.get("passages"), list) else []
+    texts = [_text(value, MAX_TEXT_CHARS) for value in [raw.get("text"), *listed]]
+    return [text for text in texts if text][:MAX_PASSAGES]
+
+
+def slide_text(slide: dict[str, Any]) -> str:
+    """All passages of a slide as one text (image prompts, summaries)."""
+    return " ".join(slide.get("passages") or [])
+
+
 def normalize_slide(raw: Any) -> Optional[dict[str, Any]]:
     """A clean slide, or None when it has neither text nor image nor prompt."""
     if isinstance(raw, str):
@@ -72,11 +87,11 @@ def normalize_slide(raw: Any) -> Optional[dict[str, Any]]:
     slide_id = str(raw.get("id") or "").strip()
     slide = {
         "id": slide_id if SLIDE_ID_RE.fullmatch(slide_id) else new_slide_id(),
-        "text": _text(raw.get("text"), MAX_TEXT_CHARS),
+        "passages": _passages(raw),
         "image_url": _image_url(raw.get("image_url")),
         "image_prompt": _line(raw.get("image_prompt"), MAX_PROMPT_CHARS),
     }
-    if not (slide["text"] or slide["image_url"] or slide["image_prompt"]):
+    if not (slide["passages"] or slide["image_url"] or slide["image_prompt"]):
         return None
     return slide
 
@@ -133,6 +148,12 @@ def find_cutscene(cutscenes: Any, cutscene_id: Any) -> Optional[dict[str, Any]]:
         ),
         None,
     )
+
+
+def intro_cutscene_or_none(value: Any, cutscenes: Any) -> Optional[str]:
+    """``value`` when it names a cut-scene of ``cutscenes`` (the adventure's intro), else None."""
+    wanted = cutscene_id_or_none(value)
+    return wanted if wanted and wanted in cutscene_ids(cutscenes) else None
 
 
 def cutscene_ids(cutscenes: Any) -> set[str]:

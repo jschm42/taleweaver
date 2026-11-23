@@ -8,7 +8,7 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { Sparkles, Trash2, Upload, X } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
-import { cutsceneService, type SlideImageQuality } from '@/services/cutsceneService'
+import { cutsceneService, slideText, type SlideImageQuality } from '@/services/cutsceneService'
 import type { CutsceneDefinitionSlide } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -58,7 +58,7 @@ async function load(): Promise<void> {
   imageUrl.value = slide.image_url || null
   loading.value = true
   try {
-    const info = await cutsceneService.slidePrompt(props.adventureId, props.cutsceneTitle, slide.text, props.imageStyle)
+    const info = await cutsceneService.slidePrompt(props.adventureId, props.cutsceneTitle, slideText(slide), props.imageStyle)
     prompt.value = slide.image_prompt || info.prompt
     style.value = info.style
     tone.value = info.tone

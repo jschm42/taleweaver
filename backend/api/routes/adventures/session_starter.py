@@ -33,7 +33,11 @@ from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY, resolve_tts_prefere
 from backend.engine.audio.audio_state import apply_audio_ops
 from backend.engine.conversations.ops import apply_conversation_ops
 from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
-from backend.engine.cutscenes.queue import apply_cutscene_ops, queue_chapter_cutscene
+from backend.engine.cutscenes.queue import (
+    apply_cutscene_ops,
+    queue_chapter_cutscene,
+    queue_cutscene,
+)
 from backend.engine.party.party_ops import apply_party_ops
 from backend.engine.party.party_start import seed_starting_party, sync_starting_party_rows
 from backend.engine.party.party_state import PARTY_KEY
@@ -337,8 +341,10 @@ def _build_session_state(
     active_seq_order = int(first_seq.get("order") or 1) if first_seq else 1
     # The player's profile defaults decide which voices this session reads aloud.
     entity_states[TTS_AUTO_SPEAK_KEY] = resolve_tts_preferences(user.game_settings)
-    # The first chapter's intro cut-scene plays before those the init scripts queued.
+    # The adventure's intro, then the first chapter's cut-scene, then those the init scripts
+    # queued (each `front` insert goes before the previous ones).
     queue_chapter_cutscene(entity_states, first_seq, front=True)
+    queue_cutscene(entity_states, getattr(adventure, "intro_cutscene_id", None), front=True)
 
     return SessionState(
         session_id=session_id,

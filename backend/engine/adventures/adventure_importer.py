@@ -30,6 +30,7 @@ from backend.engine.adventures.adventure_import_support import (
 from backend.engine.audio.audio_assets import map_imported_audio
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.library import intro_cutscene_or_none
 from backend.engine.cutscenes.transfer import imported_cutscenes
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
@@ -107,6 +108,9 @@ def _apply_imported_media(
     )
     template.world_map_layout = imported_map_layout(adv_data.get("world_map_layout"), asset_mapping)
     template.cutscenes = imported_cutscenes(adv_data.get("cutscenes"), asset_mapping)
+    template.intro_cutscene_id = intro_cutscene_or_none(
+        adv_data.get("intro_cutscene_id"), template.cutscenes
+    )
 
 
 class AdventureConflictError(Exception):

@@ -109,9 +109,9 @@ function updateImage(value: { image_url: string | null, image_prompt: string }):
         <UiSelect v-model="audioTrack" :options="audioOptions" placeholder="No track (scene audio keeps playing)" />
       </UiField>
     </div>
-    <p v-if="props.usedBy.length" class="wb-hint">Starts the chapter{{ props.usedBy.length > 1 ? 's' : '' }}: {{ props.usedBy.join(', ') }}</p>
+    <p v-if="props.usedBy.length" class="wb-hint">Opens {{ props.usedBy.join(', ') }}.</p>
 
-    <UiSection title="Slides" :description="`${cutscene.slides.length} of ${MAX_SLIDES}. Hold Space or the mouse button in the game to skip a slide.`">
+    <UiSection title="Slides" :description="`${cutscene.slides.length} of ${MAX_SLIDES}. Passages of a slide follow each other over its picture; players skip one by holding Space or the mouse button.`">
       <div class="space-y-4">
         <CutsceneSlideRow
           v-for="(slide, index) in cutscene.slides"

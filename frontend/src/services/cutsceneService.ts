@@ -6,7 +6,15 @@
 import { API_BASE, authHeaders } from '@/services/http'
 import type { CutsceneDefinition } from '@/types'
 
-export { MAX_SLIDES, cutscenesOf, newCutscene, newSlide, suggestCutsceneId } from '@/services/cutsceneLibrary'
+export {
+  MAX_PASSAGES,
+  MAX_SLIDES,
+  cutscenesOf,
+  newCutscene,
+  newSlide,
+  slideText,
+  suggestCutsceneId,
+} from '@/services/cutsceneLibrary'
 
 /** Image model of a slide image: the fast simple model or the high-fidelity one. */
 export type SlideImageQuality = 'simple' | 'advanced'
@@ -36,8 +44,17 @@ function json(method: string, body: unknown): RequestInit {
 }
 
 export const cutsceneService = {
-  saveCutscenes(adventureId: string, cutscenes: CutsceneDefinition[]): Promise<{ cutscenes: CutsceneDefinition[] }> {
-    return send(base(adventureId), json('PUT', { cutscenes }), 'Failed to save the cut-scenes.')
+  /** Saves the list and the adventure's intro cut-scene (shown when a session starts). */
+  saveCutscenes(
+    adventureId: string,
+    cutscenes: CutsceneDefinition[],
+    introCutsceneId: string,
+  ): Promise<{ cutscenes: CutsceneDefinition[], intro_cutscene_id: string | null }> {
+    return send(
+      base(adventureId),
+      json('PUT', { cutscenes, intro_cutscene_id: introCutsceneId || null }),
+      'Failed to save the cut-scenes.',
+    )
   },
 
   /** The default prompt of a slide image plus the style and tone that apply. */

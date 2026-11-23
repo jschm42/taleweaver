@@ -43,6 +43,7 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     manifest["narrator_voice"] = adventure.narrator_voice
     manifest["audio_tracks"] = adventure.audio_tracks or []
     manifest["cutscenes"] = adventure.cutscenes or []
+    manifest["intro_cutscene_id"] = adventure.intro_cutscene_id
     manifest["sections"] = normalize_sections(adventure.world_sections)
     manifest["audio_enabled"] = adventure.audio_enabled
     manifest["fast_travel_enabled"] = adventure.fast_travel_enabled is not False
