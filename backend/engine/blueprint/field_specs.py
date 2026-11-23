@@ -25,6 +25,7 @@ from backend.engine.blueprint.converters import (
     ability_damage,
     boolean,
     choice,
+    dynamic_entity_depth,
     dynamic_entity_types,
     dynamic_instructions_scope,
     dynamic_max_depth,
@@ -317,6 +318,8 @@ _hook(EXIT_KEYS, "on_use", "on_exit_used")
 
 NPC_KEYS: dict[str, FieldSpec] = {
     "in": _ref("start_scene_id"),
+    # Room depth inside a dynamic zone (``in: ZONE_ID``), see blueprint/zone_entities.py.
+    "depth": FieldSpec("dynamic_depth", dynamic_entity_depth),
     "position": FieldSpec("spatial_position"),
     "type": FieldSpec("npc_type", choice("HUMANOID", "ANIMAL", "MONSTER", "BEING")),
     "goal": FieldSpec("goal"),
@@ -399,6 +402,7 @@ ITEM_TYPES = (
 )
 ITEM_KEYS: dict[str, FieldSpec] = {
     "in": _ref("start_scene_id"),
+    "depth": FieldSpec("dynamic_depth", dynamic_entity_depth),
     "position": FieldSpec("spatial_position"),
     "type": FieldSpec("item_type", choice(*ITEM_TYPES)),
     "appearance": FieldSpec("appearance"),

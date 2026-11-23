@@ -347,6 +347,17 @@ def dynamic_max_depth(raw: str) -> int:
     return val
 
 
+def dynamic_entity_depth(raw: str) -> int | str:
+    """Depth of a dynamic zone room an author-placed entity appears in: 1..10 or ``max``."""
+    token = raw.strip().lower()
+    if token in {"max", "final", "climax", "last"}:
+        return "max"
+    val = integer(raw)
+    if not 1 <= val <= 10:
+        raise ValueError(f"expected a depth between 1 and 10 or 'max', got '{raw.strip()}'")
+    return val
+
+
 def dynamic_max_npcs(raw: str) -> int:
     """Parse max_npcs for dynamic scenes (0..5)."""
     val = integer(raw)

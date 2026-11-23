@@ -17,6 +17,7 @@ from backend.api.routes.adventures.dynamic_scene_media import (
 )
 from backend.engine.party.party_state import read_party
 from backend.engine.scripting.sandbox import SafeAstInterpreter
+from backend.engine.world.dynamic_required_entities import npcs_to_persist, objects_to_persist
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedNpc,
     DynamicGeneratedObject,
@@ -528,9 +529,9 @@ async def resolve_fallback_zone_key_prompt(
     max_depth = int(zone.get("max_depth") or 3)
     if depth >= max_depth and bool(zone.get("cul_de_sac_on_max_depth", True)):
         return None
-    if not any(npc.attitude == "hostile" for npc in payload.npcs[:max_npcs]):
+    if not any(npc.attitude == "hostile" for npc in npcs_to_persist(payload, max_npcs)):
         return None
-    for obj in payload.objects[:5]:
+    for obj in objects_to_persist(payload):
         haystack = f"{obj.id} {obj.name}".lower()
         if getattr(obj, "is_zone_key", False) or any(
             tok in haystack for tok in ("key", "schlüssel", "schluessel")

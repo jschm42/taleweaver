@@ -48,6 +48,7 @@ from backend.api.routes.adventures.dynamic_scene_media import (
     sync_dynamic_scene_audio,
 )
 from backend.api.routes.adventures.dynamic_teleport import apply_script_teleport
+from backend.engine.world.dynamic_required_entities import npcs_to_persist, objects_to_persist
 from backend.engine.world.dynamic_scene_generator import (
     generate_dynamic_interlude_quote,
     generate_dynamic_scene_payload,
@@ -129,7 +130,7 @@ async def _persist_generated_scene_entities(
     party_hp = await compute_party_hp_budget(db, state)
     danger = str(zone.get("danger_level") or "medium")
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
-    for idx, npc in enumerate(payload.npcs[:max_npcs]):
+    for idx, npc in enumerate(npcs_to_persist(payload, max_npcs)):
         for npc_entity, is_primary in build_dynamic_npc_clones(
             session_id=state.session_id,
             target_id=target_id,
@@ -155,7 +156,7 @@ async def _persist_generated_scene_entities(
             )
 
     spawned_objects: list[dict[str, Any]] = []
-    persisted_objects = list(payload.objects[:5])
+    persisted_objects = objects_to_persist(payload)
     object_entities: list[WorldEntity] = []
     object_idx_by_id: dict[str, int] = {}
     raw_id_to_entity: dict[str, WorldEntity] = {}

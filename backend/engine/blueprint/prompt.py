@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock
+from backend.engine.blueprint.zone_entities import REQUIRED_FIELD
 
 COLLECTIONS = {
     "scene": "scenes",
@@ -42,6 +43,9 @@ _RULES = (
     "build the world so they work (create every ID, variable and flag they use).\n"
     "- Exits with `dynamic_zone` expand procedurally at runtime; their `to_scene_id` (`DYN_*`) "
     "is a virtual placeholder. NEVER create an entry in `scenes` for a `DYN_*` target.\n"
+    "- NPCs and items listed in a dynamic exit's `runtime_entities` are created inside that "
+    "zone when the player explores it. NEVER create them in `npcs` or `objects`; you may "
+    "mention them as something waiting in that zone.\n"
     "- Pre-mapped scenes with `dynamic_zone` ARE real entries in `scenes` whose exits and fixed "
     "entities already exist on the map, while narrative description and dynamic encounters are "
     "generated on first player entry; keep their `dynamic_zone` verbatim.\n"
@@ -62,8 +66,11 @@ def block_payload(block: BlueprintBlock) -> dict[str, Any]:
         payload["order" if block.kind == "sequence" else "id"] = (
             int(block.ref) if block.kind == "sequence" else block.ref
         )
+    fixed = {k: v for k, v in block.fixed().items() if k != REQUIRED_FIELD}
+    if block.zone_entity_ids:
+        payload["runtime_entities"] = list(block.zone_entity_ids)
     for key, value in (
-        ("fixed", block.fixed()),
+        ("fixed", fixed),
         ("hints", block.hints()),
         ("open", block.open_fields),
         ("notes", block.description),

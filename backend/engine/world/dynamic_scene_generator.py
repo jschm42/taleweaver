@@ -28,6 +28,15 @@ from backend.engine.world.dynamic_interlude_quote import (
     _pick_interlude_npc,
     _strip_outer_quotes,
 )
+from backend.engine.world.dynamic_required_entities import (
+    cap_npcs,
+    is_protected,
+    merge_required_entities,
+    raise_plan_for_required,
+    required_blocks,
+    required_prompt_section,
+    split_protected,
+)
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedChildExit,
     DynamicGeneratedScenePayload,
@@ -279,7 +288,7 @@ def _roll_scene_plan(
     if allow_switch:
         allowed_item_types.append("SWITCH")
 
-    return adjust_plan_for_instructions(
+    plan = adjust_plan_for_instructions(
         {
             "target_npcs": len(npc_slots),
             "npc_slots": npc_slots,
@@ -296,6 +305,7 @@ def _roll_scene_plan(
         zone,
         cluster_context,
     )
+    return raise_plan_for_required(plan, required_blocks(zone, cluster_context))
 
 
 def _filter_planned_npcs(
@@ -327,11 +337,16 @@ def _apply_scene_plan_to_payload(
     scene_plan: dict[str, Any],
     zone: Optional[dict[str, Any]] = None,
     cluster_context: Optional[list[dict[str, Any]]] = None,
-) -> None:
-    """Enforce rolled NPC/object limits, per-type caps, hostility, and item stats."""
+) -> set[str]:
+    """Enforce rolled NPC/object limits, per-type caps, hostility, and item stats. The
+    author-placed zone entities are added and survive every cut; returns their keys."""
+    protected: set[str] = set()
     if zone:
         apply_instructions_backfill(payload, zone, scene_plan, cluster_context)
-    payload.npcs = _filter_planned_npcs(list(payload.npcs or []), scene_plan)
+        protected = merge_required_entities(payload, required_blocks(zone, cluster_context))
+    own_npcs, other_npcs = split_protected(list(payload.npcs or []), protected)
+    npc_plan = {**scene_plan, "target_npcs": int(scene_plan["target_npcs"]) - len(own_npcs)}
+    payload.npcs = [*own_npcs, *_filter_planned_npcs(other_npcs, npc_plan)]
 
     max_cap = 5
     carried_ids = {
@@ -339,10 +354,11 @@ def _apply_scene_plan_to_payload(
         for npc in (payload.npcs or [])
         for item_id in (npc.inventory or [])
     }
-    sliced_objects = select_planned_objects(
-        list(payload.objects or []),
-        int(scene_plan["target_objects"]),
-        max_cap=max_cap,
+    own_objects, other_objects = split_protected(list(payload.objects or []), protected)
+    sliced_objects = own_objects + select_planned_objects(
+        other_objects,
+        int(scene_plan["target_objects"]) - len(own_objects),
+        max_cap=max_cap - len(own_objects),
         carried_ids=carried_ids,
     )
     allow_switch = bool(scene_plan["allow_switch"])
@@ -351,6 +367,9 @@ def _apply_scene_plan_to_payload(
     seen_container = False
 
     for obj in sliced_objects:
+        if is_protected(obj, protected):
+            ensure_object_item_stats(obj)
+            continue
         if obj.item_type == "SWITCH":
             obj.item_type = "STANDARD" if (not allow_switch or seen_switch) else "SWITCH"
             seen_switch = seen_switch or (obj.item_type == "SWITCH")
@@ -360,6 +379,7 @@ def _apply_scene_plan_to_payload(
         ensure_object_item_stats(obj)
 
     payload.objects = sliced_objects
+    return protected
 
 
 def _build_scene_prompts(
@@ -466,9 +486,16 @@ def _build_scene_prompts(
     cluster_section = build_cluster_consistency_prompt_section(zone, cluster_context)
     instructions_section = build_instructions_prompt_section(zone, cluster_context)
     scene_hint_section = build_existing_scene_context_prompt_section(existing_scene_hint)
+    required_section = required_prompt_section(required_blocks(zone, cluster_context))
     extra_sections = "\n\n".join(
         part
-        for part in (blueprint_section, cluster_section, scene_hint_section, instructions_section)
+        for part in (
+            blueprint_section,
+            cluster_section,
+            scene_hint_section,
+            instructions_section,
+            required_section,
+        )
         if part
     )
     user_prompt = (
@@ -565,6 +592,8 @@ def _finalize_fallback_scene(
         _sync_forward_exits_with_blueprint(fallback, zone, existing_scene_hint)
     if backfill:
         apply_instructions_backfill(fallback, zone, {}, cluster_context)
+    # Author-placed zone entities appear even when the generation failed.
+    merge_required_entities(fallback, required_blocks(zone, cluster_context))
     return fallback
 
 
@@ -652,8 +681,8 @@ async def generate_dynamic_scene_payload(
             operation="dynamic_scene.generate",
             phase="expansion",
         )
-        _apply_scene_plan_to_payload(payload, scene_plan, zone, cluster_context)
-        payload.npcs = payload.npcs[:max_npcs]
+        protected = _apply_scene_plan_to_payload(payload, scene_plan, zone, cluster_context)
+        payload.npcs = cap_npcs(payload.npcs, max_npcs, protected)
         if effective_danger == "peaceful":
             _apply_peaceful_filter(payload.npcs)
         is_cul_de_sac = int(zone["depth"]) >= int(zone["max_depth"]) and zone.get(
@@ -666,4 +695,4 @@ async def generate_dynamic_scene_payload(
         return payload
     except Exception as exc:
         logger.warning("Dynamic scene generation failed (%s); using fallback scene.", exc)
-        return _finalize_fallback_scene(exit_label, zone, existing_scene_hint)
+        return _finalize_fallback_scene(exit_label, zone, existing_scene_hint, cluster_context)

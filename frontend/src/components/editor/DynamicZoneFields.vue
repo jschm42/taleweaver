@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
+import DynamicZoneEntitiesField from '@/components/editor/DynamicZoneEntitiesField.vue'
 
 export interface DynamicZoneNpcCapsOverride {
   humanoid?: number | null
@@ -43,6 +44,7 @@ export interface DynamicZoneForm {
   generation_model?: 'mechanics' | 'narration' | 'world_builder' | null
   cul_de_sac_on_max_depth: boolean
   on_after_generated_script?: string | null
+  required_entities?: string | null
 }
 
 const NPC_CAP_FIELDS: Array<{ key: keyof DynamicZoneNpcCapsOverride; label: string }> = [
@@ -108,6 +110,7 @@ const zone = computed<DynamicZoneForm>(() => ({
       ? Boolean(props.modelValue.cul_de_sac_on_max_depth)
       : true,
   on_after_generated_script: props.modelValue?.on_after_generated_script ?? '',
+  required_entities: props.modelValue?.required_entities ?? null,
 }))
 
 const hasAnyOverride = computed(() => {
@@ -471,6 +474,11 @@ function clearOverrides() {
             Accepts freeform instructions or World-Builder Blueprint blocks ([Scene:], [NPC:], [Container:], [Weapon:], [Item:], ...). In Blueprint blocks, optional <code>depth: 1</code> or <code>depth: max</code> targets specific depths, and spawned entities are automatically deduplicated across the cluster.
           </p>
         </div>
+        <DynamicZoneEntitiesField
+          v-if="!isSceneMode"
+          :model-value="zone.required_entities"
+          @update:model-value="updateField('required_entities', $event ?? null)"
+        />
       </template>
 
       <div v-else-if="activeDynamicTab === 'spawns'" class="space-y-4">

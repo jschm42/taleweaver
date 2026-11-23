@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.engine.blueprint.field_specs import KEY_TABLES, FieldRole
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock
+from backend.engine.blueprint.zone_entities import dynamic_exit_zones, zone_of
 from backend.engine.scripting.sandbox import SafeAstInterpreter
 
 MAX_READABLE_CHARS = 500
@@ -37,7 +38,10 @@ def validate_blueprint(blueprint: Blueprint) -> list[str]:
         _check_required_parts(blueprint, block)
         for mention in _MENTION_RE.findall(block.description):
             referenced.setdefault(mention, block.line)
-    missing = sorted(ref for ref in referenced if ref not in declared)
+    _check_zone_entities(blueprint)
+    # ``in: ZONE_ID`` of a zone-placed entity names a dynamic zone, not a missing scene.
+    zones = set(dynamic_exit_zones(blueprint))
+    missing = sorted(ref for ref in referenced if ref not in declared and ref not in zones)
     for ref in missing:
         blueprint.add_issue(
             referenced[ref],
@@ -139,6 +143,20 @@ def _check_required_parts(blueprint: Blueprint, block: BlueprintBlock) -> None:
         blueprint.add_issue(block.line, f"{_label(block)} needs a 'trigger:'.")
     if block.kind == "rule" and not (block.name or "condition" in block.fields):
         blueprint.add_issue(block.line, f"{_label(block)} needs a condition ('when:').")
+
+
+def _check_zone_entities(blueprint: Blueprint) -> None:
+    """``depth:`` only means something for an entity placed in a dynamic zone."""
+    zones = dynamic_exit_zones(blueprint)
+    for block in blueprint.blocks:
+        depth = block.fields.get("dynamic_depth")
+        if depth is not None and zone_of(block, zones) is None:
+            blueprint.add_issue(
+                depth.line or block.line,
+                f"{_label(block)} depth: only applies to an NPC or item placed in a dynamic "
+                "zone ('in: ZONE_ID' of a dynamic exit); it is ignored here.",
+                "warning",
+            )
 
 
 def _label(block: BlueprintBlock) -> str:
