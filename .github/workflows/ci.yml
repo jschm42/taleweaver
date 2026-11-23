@@ -52,7 +52,12 @@ jobs:
 
     - name: Run Tests with pytest
       # The full suite. Required status check for merging into main (docs/testing.md).
-      run: poetry run pytest tests/ -q
+      # CI has no .env: the app refuses to start without ENCRYPTION_KEY and SECRET_KEY,
+      # so use throwaway keys.
+      run: |
+        export ENCRYPTION_KEY="$(poetry run python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+        export SECRET_KEY="$(poetry run python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+        poetry run pytest tests/ -q
 
   frontend-test:
     runs-on: ubuntu-latest

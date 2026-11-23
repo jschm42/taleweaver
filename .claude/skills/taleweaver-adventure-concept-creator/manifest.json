@@ -6,38 +6,38 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "568f1b47db14108d3bd5db89efdd0f7bb6d2ae5f33e7f039056f5f3d36caac67",
-      "size": 38718
+      "sha256": "499374818ed80907139cd1d79097544d4254b1639788bdda205668a1ff4bcca1",
+      "size": 38292
     },
     {
       "path": "docs/scripting-enginge.md",
-      "sha256": "1e11d6a1277d2c4ea816632562b0341f19d93d51eb118a7c5ff5afad401bf4b8",
-      "size": 140104
+      "sha256": "53b34753bba509b63a486e3d78d27241a976f28e3482af98439ccdc126ae1e90",
+      "size": 141665
     },
     {
       "path": "docs/scripting_engine.md",
-      "sha256": "1e11d6a1277d2c4ea816632562b0341f19d93d51eb118a7c5ff5afad401bf4b8",
-      "size": 140104
+      "sha256": "53b34753bba509b63a486e3d78d27241a976f28e3482af98439ccdc126ae1e90",
+      "size": 141665
     },
     {
       "path": "docs/specs/adventure_format.md",
-      "sha256": "294feacfce22b3b67074be80b350d5c7a0c0ff2bfb98b715b67cebc056f1cc3b",
-      "size": 41660
+      "sha256": "ae14f75c94663e858bc5a192f0f90376bb7f04cffc2b0cdd7659090df185b9d5",
+      "size": 43120
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",
-      "sha256": "dac6c3928438baf8e469f28fb297ea20cf214597ddeef79d0bbc9d954e921747",
-      "size": 38408
+      "sha256": "87965644f4822978056f1bc764ca67c1c84e4bf4968c886daae456187da6d2a2",
+      "size": 37623
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "b6c1c33e253f21d4e70cd6b9dd363c1f6c3b3c0183f1c3c30f3b94bcea0eb82d",
-      "size": 40812
+      "sha256": "0dfc8c92f8079573c205b919d7a32e58e098b52c5d00190d3297b2c3b27b753b",
+      "size": 40409
     },
     {
       "path": "package.json",
-      "sha256": "455e817fb45e0e2f95e27ea7df71e3b3a9417dca8dcf703357b3fbf5694da36a",
-      "size": 2214
+      "sha256": "ddb73e1cd073409221965307158a4f2fbd9e5d4ea3c63dfc43fe1218a39d4a75",
+      "size": 2157
     }
   ],
   "documentation": [
@@ -69,7 +69,7 @@
     }
   ],
   "compatibility": {
-    "taleweaver": ">=0.8.0-beta",
+    "taleweaver": ">=0.8.1-beta",
     "agents": [
       "claude-code",
       "claude-skills",

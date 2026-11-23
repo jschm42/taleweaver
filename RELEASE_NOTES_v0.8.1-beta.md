@@ -1,8 +1,11 @@
-# TaleWeaver v0.8.0-beta: Companions, Dynamic Worlds & Living NPCs
+# TaleWeaver v0.8.1-beta: Companions, Dynamic Worlds & Living NPCs
 
-**TaleWeaver v0.8.0-beta** gives the protagonist company and makes the world around them larger and more alive. Companions travel, fight and carry items at the hero's side. Dynamic zones generate whole mini-adventures on the fly. NPCs remember the protagonist, talk to each other and pass on gossip. Falling at 0 HP can now mean waking up at a revival point instead of the end. The Play-Agent becomes a feature for players, and the editor and admin console move to a new, consistent Workbench design.
+**TaleWeaver v0.8.1-beta** gives the protagonist company and makes the world around them larger and more alive. Companions travel, fight and carry items at the hero's side. Dynamic zones generate whole mini-adventures on the fly. NPCs remember the protagonist, talk to each other and pass on gossip. Falling at 0 HP can now mean waking up at a revival point instead of the end. The Play-Agent becomes a feature for players, and the editor and admin console move to a new, consistent Workbench design.
 
 This release introduces **adventure format 1.4.0**. Format 1.3.1 adventures keep working unchanged.
+
+> [!NOTE]
+> v0.8.1-beta replaces v0.8.0-beta. The v0.8.0-beta tag was set one commit too early: it has the same features, but `pyproject.toml` and `frontend/package.json` still say 0.7.1-beta and these release notes are missing. Use v0.8.1-beta.
 
 ---
 
@@ -102,7 +105,7 @@ The admin console and the adventure editor are rebuilt on one design system with
 * **Clock format**: the unused 24-hour and date switches in the admin game settings are removed. Players choose 12- or 24-hour display in their profile.
 * **Play-Agent settings** moved from Intelligence ("Pass 4") to their own admin page. Existing settings are kept.
 * **Database**: 5 new migrations (exit `companions_allowed` and `dynamic_zone`, scene `dynamic_zone` and `is_respawn_point`, adventure `npc_conversations`) plus 2 merge revisions. All new columns are nullable or have defaults; existing data is unchanged.
-* **Development**: the tests are split into suites, and a pre-push hook runs the affected tests ([docs/testing.md](docs/testing.md)). With a manual setup, enable the hooks with `git config core.hooksPath .githooks`. CI now fails on failing tests.
+* **Development**: the tests are split into suites, and an opt-in pre-push hook runs the affected tests (`TW_PRE_PUSH_TESTS=1`, [docs/testing.md](docs/testing.md)). With a manual setup, enable the hooks with `git config core.hooksPath .githooks`. CI now fails on failing tests, and merges into `main` require green CI.
 
 ---
 
@@ -122,11 +125,11 @@ The admin console and the adventure editor are rebuilt on one design system with
 * **Testing & Quality Assurance**:
   * 2,407 automated backend tests passing, organized in 14 suites.
   * 109 automated frontend tests passing.
-  * Pre-push hook for affected tests; CI runs the full suite as a gate.
+  * Opt-in pre-push hook for affected tests; CI runs the full suite and gates merges.
 
 ---
 
-## 🚀 Getting Started with v0.8.0-beta
+## 🚀 Getting Started with v0.8.1-beta
 
 ### Upgrading Backend & Database
 ```bash

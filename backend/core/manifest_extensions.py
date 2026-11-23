@@ -20,11 +20,17 @@ MAX_NAMESPACES = 32
 MAX_EXTENSIONS_BYTES = 256 * 1024
 
 
-def _encoded_size(value: Any) -> int:
+def encoded_size(value: Any) -> int:
+    """UTF-8 size of ``value`` as JSON; unserializable values count as over any budget."""
     try:
         return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
     except (TypeError, ValueError):
         return MAX_EXTENSIONS_BYTES + 1
+
+
+def is_valid_namespace(namespace: Any) -> bool:
+    """True for a namespace id such as ``my_fork`` or ``acme.vn``."""
+    return isinstance(namespace, str) and bool(_NAMESPACE.match(namespace))
 
 
 def normalize_extensions(value: Any) -> dict[str, dict[str, Any]]:
@@ -41,11 +47,9 @@ def normalize_extensions(value: Any) -> dict[str, dict[str, Any]]:
     for namespace, data in value.items():
         if len(result) >= MAX_NAMESPACES:
             break
-        if not isinstance(namespace, str) or not _NAMESPACE.match(namespace):
+        if not is_valid_namespace(namespace) or not isinstance(data, dict):
             continue
-        if not isinstance(data, dict):
-            continue
-        size = _encoded_size(data)
+        size = encoded_size(data)
         if size > budget:
             continue
         budget -= size
