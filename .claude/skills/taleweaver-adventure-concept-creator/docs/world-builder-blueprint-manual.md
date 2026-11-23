@@ -603,6 +603,23 @@ audio: CRYPT_DRONE
 
 The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
+### Cut-scenes
+
+A cut-scene opens a chapter like a short film: a few slides, each a picture with one or two sentences the narrator reads. Write one line per slide; `image N:` describes slide N's picture (otherwise it is drawn from the slide's text), and `style:` gives the cut-scene its own look, for example a comic or watercolor cut-scene in a painterly fantasy adventure. Link it from the chapter with `cutscene:`.
+
+```text
+[Cutscene: INTRO] The Crimson Debt
+style: loose watercolor
+The village of Ashford burns inside a ring of black fire.
+On the hill, a shadow wolf waits for its debtor.
+image 2: a black wolf made of smoke on a moonlit hill
+
+[Sequence: 1] The Debt
+cutscene: INTRO
+```
+
+Keep slides short and free of solutions: they are shown, not played. Players skip a slide by holding Space or the mouse button. A script shows a cut-scene at any other moment with `tw.cutscene.play("INTRO")`. Without `[Cutscene]` tags the World-Builder may still write up to three cut-scenes for important chapter starts; edit or delete them on the editor's **Cut-scenes** page.
+
 ### Regions for a large world
 
 Every adventure has at least one region: without `[Section]` tags it gets a default region named after the adventure, and players see no world map. A world with many scenes reads better in several regions: each region gets its own scene map in the editor, and from two regions on a world map shows how they connect. Declare them with `[Section: ID] Label`, place them with `position: x, y` (percent of the world map) and put scenes in with `section: ID` (a scene without it goes into the first built region). A region you only plan for later is `status: planned`; it has no scenes yet, players never see it, and `links` notes the planned routes.

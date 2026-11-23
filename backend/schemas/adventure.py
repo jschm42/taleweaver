@@ -65,6 +65,8 @@ class SequenceSchema(BaseModel):
     exp_reward: Optional[int] = 50
     on_start_sequence_script: Optional[str] = ""
     on_start_sequence_text: Optional[str] = ""
+    # Cut-scene of the adventure's library shown when the chapter starts (engine/cutscenes).
+    start_cutscene_id: Optional[str] = ""
     on_end_sequence_script: Optional[str] = ""
     on_end_sequence_text: Optional[str] = ""
     # Helper functions/constants (like init_script) available to every script run.

@@ -13,6 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
+from backend.api.routes.adventures.cutscene_routes import cutscene_snapshot
 from backend.api.routes.adventures.section_triggers import run_section_change_scripts
 from backend.api.routes.adventures.listen_mode_command import (
     handle_listen_mode_command,
@@ -52,6 +53,7 @@ from backend.core.narration_styles import (
 from backend.core.narrator_voices import narrator_voice_rules
 from backend.core.prose_craft import PROSE_CRAFT_RULES
 from backend.core.voice_tags import vocal_tag_reminder
+from backend.engine.cutscenes.queue import apply_cutscene_ops
 from backend.engine.rules.fast_travel import TRAVEL_KEY, apply_travel_ops
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.debug_script_command import (
@@ -1887,6 +1889,8 @@ class GameTurnManager:
                 "sequence_id": self.state.active_sequence_id,
                 # Audio a script started (or speech it stopped) applies before the narration.
                 "audio": await build_audio_snapshot(self.db, self.state, None, self.user),
+                # A chapter intro or tw.cutscene.play of this turn opens before the narration.
+                "cutscene": cutscene_snapshot(self.state, self.adventure),
                 **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 "status": "success",
@@ -3267,6 +3271,7 @@ class GameTurnManager:
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
         apply_audio_ops(entity_states, changeset.audio_ops)
         store_skip_narration(entity_states, changeset.skip_narration)
+        apply_cutscene_ops(entity_states, changeset.cutscene_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
 

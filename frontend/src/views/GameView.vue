@@ -52,6 +52,8 @@ import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
 import { useGameAudio } from '@/composables/useGameAudio'
+import { useCutscenePlayer } from '@/composables/useCutscenePlayer'
+import CutsceneOverlay from '@/components/game/immersive/CutsceneOverlay.vue'
 import { useSessionAutoSpeakSettings } from '@/composables/useSessionAutoSpeakSettings'
 import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
 import { useGameInteractionState } from '@/composables/useGameInteractionState'
@@ -256,6 +258,7 @@ const {
   inputLocked,
   pendingTerminalEpilogue,
   pendingDialog,
+  cutscene,
   audio,
   promptSuggestions,
   worldMemories,
@@ -291,7 +294,10 @@ const {
   loadOlderMessages,
 } = useGameSocket()
 
-const gameAudio = useGameAudio(audio)
+// Cut-scenes (chapter intro, tw.cutscene.play): shown once; their track replaces the scene audio.
+const cutscenePlayer = useCutscenePlayer(cutscene, () => props.id, audio)
+const gameAudio = useGameAudio(cutscenePlayer.effectiveAudio)
+const { activeSkin: cutsceneSkin, skinStyle: cutsceneSkinStyle } = useSheetSkin(() => sheet.value)
 const { muted: audioMuted, playerVolume: audioVolume, hasAudio, isGenerating: isAudioGenerating, lastError: audioError, isPlaying: isAudioPlaying } = gameAudio
 const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
@@ -1745,7 +1751,7 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   // A choice dialog no longer silences speech: it usually opens at the end of the turn whose
   // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
-  speechDeferred: isSceneTransitioning,
+  speechDeferred: computed(() => isSceneTransitioning.value || cutscenePlayer.isActive.value),
   // tw.audio.stop_speech(): no auto-speech until the player's next action.
   speechHeld: gameAudio.speechHeld,
   playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
@@ -2276,6 +2282,14 @@ usePlayAgentAutoLoop()
       @inspect-item="handleInspectInventoryItem"
       @flip-switch="handleFlipInventorySwitch"
     />
+    <CutsceneOverlay
+      :cutscene="cutscenePlayer.active.value"
+      :auto-speech="audioService.autoSpeechEnabled.value && audioService.isUnlocked.value"
+      :skin="cutsceneSkin"
+      :skin-style="cutsceneSkinStyle"
+      @finished="cutscenePlayer.finish"
+    />
+
     <MapModal
       :open="showMap"
       :map-data="mapData"

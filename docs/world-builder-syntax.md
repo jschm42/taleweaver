@@ -254,7 +254,7 @@ In the World-Editor, the companion settings and the On Recruit triggers are in t
 
 ### `[Sequence: N] Title`
 At most **15** sequences. They are numbered 1..N in the order they appear.
-`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `respawn` (no = deadly chapter: 0 HP ends the adventure even in respawn mode), `fast_travel` (no = no fast travel while this chapter is active), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
+`description` (or `lore` / `intro`: atmospheric premise shown in the chapter banner; must not contain spoilers or solutions), `goal_item`, `goal_scene`, `defeat` (hard completion rules), `guard` (completion expression), `end` (narrative end condition), `xp`, `walkthrough` (step-by-step puzzle solutions and actions), `activation` (scene ID; aliases `activation_scene`, `start_in`: entering this scene starts the sequence if it is not completed yet), `companions` (no = solo chapter: the companion does not follow into new scenes; `solo: yes` is the same), `respawn` (no = deadly chapter: 0 HP ends the adventure even in respawn mode), `fast_travel` (no = no fast travel while this chapter is active), `cutscene` (alias `start_cutscene`: ID of a `[Cutscene]` shown when the chapter starts), `on_start`, `on_end` (+ `_text` variants), `helpers` (script: the chapter's functions and constants, see [Sequence Helpers](scripting_engine.md#sequence-helpers)).
 The free text becomes the chapter's description or walkthrough. When `walkthrough:` is provided, free text is treated as the lore description. Keep `description` spoiler-free.
 
 **Sequence progression** is set with `progression:` in `[World]`:
@@ -293,6 +293,21 @@ Requires **Event Scripts** to be enabled in the generator settings.
 
 ### `[Audio: ID] Name`
 A track of the adventure's audio library (alias `[Track: ID]`). `prompt` is the English prompt for the music model: genre, instruments, tempo, mood; instrumental, no artist names or lyrics; ideally ending with a seamless-loop request. Scenes pick a track with `audio: ID`. The World-Builder only stores the prompt; the track is rendered in the editor's **Audio** tab.
+
+### `[Cutscene: ID] Title`
+A cut-scene: a narrated slide show shown over the whole play view (aliases `[Cut_Scene: ID]`, `[Cinematic: ID]`). **Every body line is one slide**: what the narrator says (read aloud when the player has auto-speech on). Keys: `image N` (the image prompt of slide N, English, no text in the picture; slides without one get a prompt from their text), `style` (alias `image_style`: an image style for these slides only, a style name such as `comic book` or a free description; empty = the adventure's style), `audio` (ID of an `[Audio]` track that plays during the cut-scene). At most 12 slides. A chapter shows it when it starts with `cutscene: ID`; scripts play it with `tw.cutscene.play("ID")`. The images are drawn when the adventure is generated with scene images, or later on the editor's **Cut-scenes** page.
+
+```text
+[Cutscene: INTRO] The Crimson Debt
+style: comic book
+audio: DREAD_THEME
+The village of Ashford burns inside a ring of black fire.
+On the hill, a shadow wolf waits for its debtor.
+image 1: a medieval village ringed by black fire at night, seen from a hill
+
+[Sequence: 1] The Debt
+cutscene: INTRO
+```
 
 ### `[Section: ID] Label`
 A region of the world map that groups scenes of a large world (alias `[Region: ID]`). The body text is its description; the Game Master sees it while the player is in the region. Keys: `position` (`x, y` in percent of the world map, 0-100), `status` (`built` default, or `stub`/`planned`: a region without scenes yet, hidden from players), `brief` (directions for building a planned region later), `links` (planned routes of a planned region with an optional travel time, e.g. `HARBOR_TOWN 8h, MINES 2d`). Scenes join a region with `section: ID`; a scene without one goes into the first built region, and an adventure without `[Section]` gets one default region named after it. Regions gate nothing; locks stay on exits. See [World sections](specs/world_sections.md).

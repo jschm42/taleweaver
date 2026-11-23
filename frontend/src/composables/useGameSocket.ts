@@ -18,7 +18,7 @@ import {
   prependOlderPage,
   visibleServerMessages,
 } from '@/composables/historyWindow'
-import type { ChatMessage, CharacterSheet, CombatState, AudioSnapshot, PendingDialog, SequenceDetail } from '@/types'
+import type { ChatMessage, CharacterSheet, CombatState, AudioSnapshot, PendingDialog, SequenceDetail, Cutscene } from '@/types'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'game_over' | 'loading' | 'completed'
 
@@ -91,6 +91,8 @@ export interface UseGameSocket {
   inputLocked: Ref<boolean>
   pendingTerminalEpilogue: Ref<boolean>
   pendingDialog: Ref<PendingDialog | null>
+  /** Next cut-scene the server queued (chapter intro or tw.cutscene.play). */
+  cutscene: Ref<Cutscene | null>
   audio: Ref<AudioSnapshot | null>
   promptSuggestions: Ref<string[]>
   worldMemories: Ref<any[]>
@@ -169,6 +171,7 @@ export function useGameSocket(): UseGameSocket {
   const inputLocked = ref(false)
   const pendingTerminalEpilogue = ref(false)
   const pendingDialog = ref<PendingDialog | null>(null)
+  const cutscene = ref<Cutscene | null>(null)
   const audio = ref<AudioSnapshot | null>(null)
   const promptSuggestions = ref<string[]>([])
   const worldMemories = ref<any[]>([])
@@ -383,6 +386,9 @@ export function useGameSocket(): UseGameSocket {
     if (data.pending_dialog !== undefined) {
       pendingDialog.value = data.pending_dialog || null
     }
+    if (data.cutscene !== undefined) {
+      cutscene.value = data.cutscene || null
+    }
     if (data.audio !== undefined) {
       audio.value = data.audio || null
     }
@@ -518,6 +524,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked.value = false
     pendingTerminalEpilogue.value = false
     pendingDialog.value = null
+    cutscene.value = null
     audio.value = null
     promptSuggestions.value = []
     worldMemories.value = []
@@ -1195,6 +1202,7 @@ export function useGameSocket(): UseGameSocket {
     inputLocked,
     pendingTerminalEpilogue,
     pendingDialog,
+    cutscene,
     audio,
     promptSuggestions,
     worldMemories,

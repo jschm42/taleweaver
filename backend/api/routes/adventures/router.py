@@ -5,6 +5,7 @@ from backend.api.routes.adventures.assets import router as assets_router
 from backend.api.routes.adventures.blueprint_routes import router as blueprint_router
 from backend.api.routes.adventures.chat_history import router as chat_history_router
 from backend.api.routes.adventures.cloning import router as cloning_router
+from backend.api.routes.adventures.cutscene_routes import router as cutscene_router
 from backend.api.routes.adventures.dialog_routes import router as dialog_router
 from backend.api.routes.adventures.dice_routes import router as dice_router
 from backend.api.routes.adventures.editor import router as editor_router
@@ -70,6 +71,7 @@ router.include_router(session_debug_exports_router)
 router.include_router(chat_history_router)
 router.include_router(dice_router)
 router.include_router(dialog_router)
+router.include_router(cutscene_router)
 router.include_router(travel_router)
 router.include_router(expansion_router)
 router.include_router(agent_router)

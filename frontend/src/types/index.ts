@@ -392,6 +392,40 @@ export interface PendingDialog {
   options: DialogOption[]
 }
 
+/** One slide of a cut-scene as the player sees it. */
+export interface CutsceneSlide {
+  id: string
+  text: string
+  image_url?: string | null
+}
+
+/** The next cut-scene to show (`cutscene` of `GET /chat` and of the pre-narration event). */
+export interface Cutscene {
+  /** Confirms this showing with `POST /{game_id}/cutscene/seen`. */
+  token: string
+  id: string
+  title?: string
+  slides: CutsceneSlide[]
+  audio?: { id: string, url: string } | null
+}
+
+/** A cut-scene of the adventure's library as the editor stores it (`AdventureTemplate.cutscenes`). */
+export interface CutsceneDefinition {
+  id: string
+  title: string
+  audio_track_id?: string | null
+  /** Overrides the adventure's image style for the slide images; empty = the adventure's style. */
+  image_style?: string
+  slides: CutsceneDefinitionSlide[]
+}
+
+export interface CutsceneDefinitionSlide {
+  id: string
+  text: string
+  image_url?: string | null
+  image_prompt?: string
+}
+
 /** What a chapter banner in the story feed shows (`sequence_details` of `GET /chat`). */
 export interface SequenceDetail {
   title: string

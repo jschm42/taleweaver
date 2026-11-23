@@ -19,6 +19,7 @@ COLLECTIONS = {
     "award": "awards",
     "audio": "audio_tracks",
     "section": "sections",
+    "cutscene": "cutscenes",
 }
 _CHILD_COLLECTIONS = {
     "rule": "soft_rules",
@@ -31,6 +32,7 @@ _RULES = (
     "- Every entity below MUST exist in your JSON output with EXACTLY the given `id` "
     "(scenes -> `scenes`, NPCs -> `npcs`, items -> `objects`, sidequests -> `quests`, "
     "awards -> `awards` with `key` = id, scripts -> `scripts`, audio -> `audio_tracks`, "
+    "cut-scenes -> `cutscenes` (their notes are the slide texts in order), "
     "sections -> `sections`). Exits are identified by "
     "`from_scene_id` + `to_scene_id`. Sequences are identified by `order`.\n"
     "- `fixed` values are FINAL: copy them verbatim. They are re-applied after generation.\n"

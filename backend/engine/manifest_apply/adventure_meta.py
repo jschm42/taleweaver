@@ -11,6 +11,7 @@ from sqlalchemy import select
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.transfer import merged_cutscenes
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
@@ -175,6 +176,9 @@ def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
     for key in _NARRATIVE_FIELDS:
         setattr(adventure, key, adventure_field(ctx.manifest, key) or getattr(adventure, key))
     _apply_audio_tracks(ctx, adventure)
+    adventure.cutscenes = merged_cutscenes(  # type: ignore[assignment]
+        adventure.cutscenes, adventure_field(ctx.manifest, "cutscenes")
+    )
     _apply_sections(ctx, adventure)
     adventure.cover_appearance = clean_appearance(adventure.cover_appearance)  # type: ignore[assignment]
 

@@ -30,6 +30,7 @@ from backend.engine.world.world_conversation_schema import (
     NpcConversationsSchema,
     NpcRelationSchema,
 )
+from backend.engine.world.world_cutscene_schema import CutsceneSchema
 from backend.engine.world.world_object_schema import WorldObjectSchema
 from backend.engine.world.world_section_schema import WorldSectionSchema
 
@@ -694,6 +695,10 @@ class SequenceSchema(WorldBaseSchema):
         default="",
         description="Optional script executed when this sequence begins. Use empty string for none.",
     )
+    start_cutscene_id: Optional[str] = Field(
+        default="",
+        description="Optional id of a cut-scene in `cutscenes` shown when this sequence starts.",
+    )
     on_start_sequence_text: Optional[str] = Field(
         default="",
         description="Optional text output when this sequence begins. Use empty string for none.",
@@ -1013,6 +1018,13 @@ class WorldManifesto(WorldBaseSchema):
     dynamic_generation: Optional[dict[str, Any]] = Field(
         default=None,
         description="Optional configuration for procedural dynamic scene image tiers, music mode, and NPC interlude quotes.",
+    )
+    cutscenes: list[CutsceneSchema] = Field(
+        default=[],
+        description=(
+            "Optional cut-scenes (narrated slide shows) for chapter starts; at most 3. "
+            "Use [] for none."
+        ),
     )
     sections: list[WorldSectionSchema] = Field(
         default=[],

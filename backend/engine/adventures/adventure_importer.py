@@ -30,6 +30,7 @@ from backend.engine.adventures.adventure_import_support import (
 from backend.engine.audio.audio_assets import map_imported_audio
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.transfer import imported_cutscenes
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
@@ -93,7 +94,7 @@ def _gm_time_control(*sources: Optional[dict[str, Any]]) -> bool:
 def _apply_imported_media(
     template: Any, manifest_data: dict, adv_data: dict, asset_mapping: dict
 ) -> None:
-    """Audio library, title track and world map image of an imported ``.adz``."""
+    """Audio library, title track, world map image and cut-scenes of an imported ``.adz``."""
     map_imported_audio(manifest_data, asset_mapping)
     template.audio_tracks = normalize_tracks(
         adv_data.get("audio_tracks") or adv_data.get("music_tracks"), template.id
@@ -105,6 +106,7 @@ def _apply_imported_media(
         adv_data.get("title_track_id"), template.audio_tracks
     )
     template.world_map_layout = imported_map_layout(adv_data.get("world_map_layout"), asset_mapping)
+    template.cutscenes = imported_cutscenes(adv_data.get("cutscenes"), asset_mapping)
 
 
 class AdventureConflictError(Exception):

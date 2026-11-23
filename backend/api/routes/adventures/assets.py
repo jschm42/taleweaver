@@ -49,6 +49,8 @@ _VISUAL_UPLOAD_LIMITS = {
     "cover": {"maxWidth": 2048, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
     # World map tiles (AdventureTemplate.world_map_layout, editing/section_map_routes.py).
     "world_map": {"maxWidth": 4096, "maxHeight": 4096, "maxBytes": 12 * 1024 * 1024},
+    # Cut-scene slides (AdventureTemplate.cutscenes, editing/cutscene_routes.py).
+    "cutscene": {"maxWidth": 3072, "maxHeight": 2048, "maxBytes": 10 * 1024 * 1024},
     "protagonist": {"maxWidth": 1536, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
     "scene": {"maxWidth": 2048, "maxHeight": 1536, "maxBytes": 8 * 1024 * 1024},
     "npc": {"maxWidth": 1536, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
@@ -160,7 +162,7 @@ def _sanitize_filename_token(value: Optional[str]) -> Optional[str]:
 
 def _canonical_target_type(target_type: Optional[str]) -> str:
     cleaned = sanitize_path_component(target_type or "").lower()
-    for allowed in ("cover", "scene", "npc", "object", "protagonist", "world_map"):
+    for allowed in ("cover", "scene", "npc", "object", "protagonist", "world_map", "cutscene"):
         if cleaned == allowed:
             return allowed
     raise ValueError("Invalid visual target type.")

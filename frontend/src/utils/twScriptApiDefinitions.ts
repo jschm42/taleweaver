@@ -219,6 +219,14 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'tree', kind: 'method', signature: '(tree: dict, on_end: str = None, on_action: str = None, speaker: str = None) -> bool', snippet: 'tree(${1:TREE_DICT}, on_end="${2:on_end}")', doc: 'Initiates a branching NPC dialogue tree.' },
     ],
   },
+  cutscene: {
+    name: 'cutscene',
+    doc: 'Cut-scenes: narrated slide shows of the cut-scene library',
+    items: [
+      { name: 'play', kind: 'method', signature: '(cutscene_id: str) -> bool', snippet: 'play("${1:CUTSCENE_ID}")', doc: 'Shows a cut-scene of the library over the play view after this script; does not wait for it. Combine with tw.story.skip_narration() to replace the narration.' },
+      { name: 'show', kind: 'method', signature: '(cutscene_id: str) -> bool', snippet: 'show("${1:CUTSCENE_ID}")', doc: 'Alias for tw.cutscene.play().' },
+    ],
+  },
   time: {
     name: 'time',
     doc: 'In-game clock, round pacing, and scheduled timers',
@@ -456,6 +464,8 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'flags', kind: 'namespace', doc: 'Story flags boolean key-value store.' },
   { name: 'story', kind: 'namespace', doc: 'Narration, directives, and system alerts.' },
   { name: 'dialog', kind: 'namespace', doc: 'Choice dialogs and branching RPG dialogue trees.' },
+  { name: 'cutscene', kind: 'namespace', doc: 'Cut-scenes: narrated slide shows of the cut-scene library.' },
+  { name: 'cutscenes', kind: 'namespace', doc: 'Alias for tw.cutscene.' },
   { name: 'time', kind: 'namespace', doc: 'In-game clock, round pacing, and scheduled timers.' },
   { name: 'audio', kind: 'namespace', doc: 'Background audio composed on the fly (experimental).' },
   { name: 'party', kind: 'namespace', doc: 'Companions (sidekicks): recruit, dismiss, wait and follow.' },

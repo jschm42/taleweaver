@@ -77,6 +77,8 @@ class AdventureTemplate(Base, TimestampMixin):
     audio_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )
+    # Cut-scenes: slide shows for chapter starts and tw.cutscene.play (engine/cutscenes/library.py).
+    cutscenes: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     # World sections (regions) that group the scenes; None = no sections (engine/world/sections.py).
     world_sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     # The drawn world map as a grid of image tiles (engine/world/world_map_layout.py).

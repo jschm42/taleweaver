@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from backend.engine.blueprint.cutscene_blocks import apply_cutscene_blocks, cutscene_from_block
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock
 from backend.engine.blueprint.prompt import COLLECTIONS
 from backend.engine.world.dynamic_scene_schemas import (
@@ -106,6 +107,7 @@ _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[s
     "award": (_default_award, ()),
     "audio": (_default_audio, ()),
     "section": (_default_section, ()),
+    "cutscene": (cutscene_from_block, ()),
 }
 _CHILD_COLLECTIONS = {
     "rule": "soft_rules",
@@ -142,6 +144,7 @@ def apply_blueprint(
             if entry is not None:
                 _apply_children(entry, block, violations)
     _strip_virtual_dynamic_scenes(manifest, blueprint)
+    apply_cutscene_blocks(manifest, blueprint)
     return violations
 
 

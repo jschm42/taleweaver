@@ -519,6 +519,15 @@ _hook(SEQUENCE_KEYS, "on_start", "on_start_sequence")
 _hook(SEQUENCE_KEYS, "on_end", "on_end_sequence")
 # Sequence helper block: functions/constants every script can call (like init_script).
 SEQUENCE_KEYS["helpers"] = _script("helpers_script")
+# Cut-scene shown when the chapter starts ([Cutscene] block, blueprint/cutscene_blocks.py).
+SEQUENCE_KEYS["cutscene"] = SEQUENCE_KEYS["start_cutscene"] = _ref("start_cutscene_id")
+# [Cutscene]: prose lines are the slides; `image N:` is slide N's image prompt.
+CUTSCENE_KEYS: dict[str, FieldSpec] = {
+    "style": FieldSpec("image_style"),
+    "image_style": FieldSpec("image_style"),
+    "audio": FieldSpec("audio_track_id", ident),
+    **{f"image_{n}": FieldSpec(f"image_{n}") for n in range(1, 13)},
+}
 
 RULE_KEYS: dict[str, FieldSpec] = {
     "when": FieldSpec("condition"),
@@ -638,6 +647,7 @@ KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "sidequest": SIDEQUEST_KEYS,
     "award": AWARD_KEYS,
     "audio": AUDIO_KEYS,
+    "cutscene": CUTSCENE_KEYS,
     "section": SECTION_KEYS,
     "ability": ABILITY_KEYS,
     "talent": TALENT_KEYS,

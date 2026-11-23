@@ -4,7 +4,7 @@
  */
 import { computed, defineAsyncComponent, type Component, type ComputedRef } from 'vue'
 import {
-  Award, BookOpen, Brain, Clock, Cog, Feather, Globe2, Image, Map, MapPin, MessagesSquare, Music, Package, Palette, Scroll,
+  Award, BookOpen, Brain, Clapperboard, Clock, Cog, Feather, Globe2, Image, Map, MapPin, MessagesSquare, Music, Package, Palette, Scroll,
   ScrollText, ShieldCheck, Sparkles, User, Users, Workflow,
 } from 'lucide-vue-next'
 import type { WorkbenchNavGroup } from '@/components/workbench/WorkbenchNav.vue'
@@ -33,6 +33,7 @@ export const EDITOR_PAGES: Record<string, Component> = {
   visuals: page(() => import('@/components/editor/pages/VisualsPage.vue')),
   tone: page(() => import('@/components/editor/pages/TonePage.vue')),
   audio: page(() => import('@/components/editor/pages/AudioPage.vue')),
+  cutscenes: page(() => import('@/components/editor/pages/CutscenesPage.vue')),
   advanced: page(() => import('@/components/editor/pages/AdvancedPage.vue')),
   validation: page(() => import('@/components/editor/pages/ValidationPage.vue')),
 }
@@ -83,6 +84,7 @@ export function useEditorNavigation(editor: EditorContext): EditorNavigation {
         { id: 'visuals', label: 'Visual style', icon: Palette },
         { id: 'tone', label: 'Tone', icon: Feather },
         { id: 'audio', label: 'Audio', icon: Music },
+        { id: 'cutscenes', label: 'Cut-scenes', icon: Clapperboard, badge: count(editor.debugData?.adventure?.cutscenes) },
       ],
     },
     { title: 'Settings', items: [{ id: 'advanced', label: 'Advanced', icon: Cog }] },

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from backend.api.routes.adventures.editing import (
     ai_fix_apply,
     ai_fix_suggest,
+    cutscene_routes,
     generation,
     payload,
     script_assist,
@@ -54,6 +55,7 @@ for _module in (
     section_text_routes,
     section_discard_routes,
     section_map_routes,
+    cutscene_routes,
     entity_update,
     generation,
 ):

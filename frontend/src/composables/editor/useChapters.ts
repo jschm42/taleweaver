@@ -88,6 +88,7 @@ export function useChapters(editor: EditorContext): Chapters {
       exp_reward: seq.exp_reward ?? 50,
       on_start_sequence_script: seq.on_start_sequence_script || '',
       on_start_sequence_text: seq.on_start_sequence_text || '',
+      start_cutscene_id: seq.start_cutscene_id || '',
       on_end_sequence_script: seq.on_end_sequence_script || '',
       on_end_sequence_text: seq.on_end_sequence_text || '',
       helpers_script: seq.helpers_script || '',

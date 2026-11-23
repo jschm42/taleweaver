@@ -86,7 +86,7 @@ export interface GameAudioControls {
   stopAll: () => void
 }
 
-export function useGameAudio(audio: Ref<AudioSnapshot | null>): GameAudioControls {
+export function useGameAudio(audio: Readonly<Ref<AudioSnapshot | null>>): GameAudioControls {
   const muted = audioMuted
   const playerVolume = audioVolume
   let current: Channel | null = null

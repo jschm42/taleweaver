@@ -424,7 +424,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'regions' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'regions' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'cutscenes' | 'dynamic' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -535,6 +535,7 @@ const editorTabs = [
   { key: 'visuals', label: 'Visual style' },
   { key: 'tone', label: 'Tone' },
   { key: 'audio', label: 'Audio' },
+  { key: 'cutscenes', label: 'Cut-scenes' },
   { key: 'dynamic', label: 'Dynamic generator' },
   { key: 'advanced', label: 'Advanced' },
   { key: 'validation', label: 'Validation' },

@@ -29,6 +29,7 @@ import type {
   EarnedAward,
   TravelOptions,
   RegionSummary,
+  Cutscene,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -633,6 +634,14 @@ export const api = {
     return request(`/adventures/${gameId}/dialog/choice`, {
       method: 'POST',
       body: JSON.stringify({ dialog_id: dialogId, index, language: language || undefined }),
+    })
+  },
+
+  /** Confirms a shown cut-scene; returns the next queued one (or null). */
+  markCutsceneSeen(gameId: string, token: string): Promise<{ cutscene: Cutscene | null }> {
+    return request(`/adventures/${gameId}/cutscene/seen`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     })
   },
 

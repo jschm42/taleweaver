@@ -11,6 +11,7 @@ from backend.core.config import settings
 from backend.engine.audio.audio_state import apply_audio_ops, read_audio_state
 from backend.engine.conversations.ops import apply_conversation_ops
 from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
+from backend.engine.cutscenes.queue import apply_cutscene_ops
 from backend.engine.interaction.script_item_apply import (
     apply_player_inventory,
     insert_cloned_entities,
@@ -336,6 +337,7 @@ class TriggerService:
         apply_conversation_ops(cur_states, changeset.conversation_ops)
         apply_travel_ops(cur_states, changeset.travel_ops)
         store_skip_narration(cur_states, changeset.skip_narration)
+        apply_cutscene_ops(cur_states, changeset.cutscene_ops)
         state.entity_states = cur_states
         flag_modified(state, "entity_states")
 

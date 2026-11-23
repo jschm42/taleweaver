@@ -16,6 +16,7 @@ from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
 from backend.core.npc_extensions import split_npc_extensions
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.transfer import localized_cutscenes
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
 from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
@@ -510,6 +511,7 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "selected_tone": adv.selected_tone,
         "narrator_voice": adv.narrator_voice,
         "audio_tracks": deepcopy(adv.audio_tracks or []),
+        "cutscenes": deepcopy(getattr(adv, "cutscenes", None) or []),
         "audio_enabled": bool(getattr(adv, "audio_enabled", True)),
         "fast_travel_enabled": getattr(adv, "fast_travel_enabled", True) is not False,
         "world_map_layout": deepcopy(getattr(adv, "world_map_layout", None)),
@@ -630,6 +632,10 @@ def _localize_manifest_images(
     )
     for tile in (adventure.get("world_map_layout") or {}).get("tiles") or []:
         tile["url"] = _localize_asset_path(tile.get("url"), adventure_dir, asset_mapping)
+    adventure["cutscenes"] = localized_cutscenes(
+        adventure.get("cutscenes"),
+        lambda url: _localize_asset_path(url, adventure_dir, asset_mapping),
+    )
     if manifest["protagonist"]:
         manifest["protagonist"]["profile_image"] = _localize_asset_path(
             manifest["protagonist"].get("profile_image"), adventure_dir, asset_mapping

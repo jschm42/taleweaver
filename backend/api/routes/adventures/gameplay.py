@@ -28,6 +28,7 @@ from backend.api.routes.adventures.chat_snapshot import (
     load_snapshot_history,
     resolve_prompt_suggestions,
 )
+from backend.api.routes.adventures.cutscene_routes import cutscene_snapshot
 from backend.api.routes.adventures.dialog_routes import ensure_no_pending_dialog
 from backend.api.routes.adventures.gameplay_logic import (
     GameTurnManager,
@@ -227,6 +228,7 @@ async def get_chat_history(
         if session_status in {"completed", "game_over"}
         else client_dialog(pending_dialog(state.entity_states)),
         audio=await build_audio_snapshot(db, state, adventure, current_user),
+        cutscene=cutscene_snapshot(state, adventure),
     )
 
 

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.transfer import cloned_cutscenes
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -214,6 +215,9 @@ def _create_cloned_template_entity(
         world_sections=deepcopy(original.world_sections) if original.world_sections else None,
         fast_travel_enabled=original.fast_travel_enabled is not False,
         world_map_layout=clone_map_layout(original.world_map_layout, original.id, new_id),
+        cutscenes=cloned_cutscenes(
+            original.cutscenes, lambda url: rewrite_asset_url(url, original.id, new_id)
+        ),
         audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),

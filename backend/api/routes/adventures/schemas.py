@@ -613,6 +613,8 @@ class ChatResponse(BaseModel):
     pending_dialog: Optional[dict[str, Any]] = None
     # Script audio (tw.audio): what to play now and whether its track is rendered yet.
     audio: Optional[dict[str, Any]] = None
+    # Next cut-scene to show (chapter intro or tw.cutscene.play), see engine/cutscenes/queue.py.
+    cutscene: Optional[dict[str, Any]] = None
 
 
 class AdventureTemplateImportPayload(BaseModel):

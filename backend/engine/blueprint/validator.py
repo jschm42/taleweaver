@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from functools import cache
 from typing import Any
 
+from backend.engine.blueprint.cutscene_blocks import check_cutscene_blocks
 from backend.engine.blueprint.field_specs import KEY_TABLES, FieldRole
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock
 from backend.engine.blueprint.zone_entities import dynamic_exit_zones, zone_of
@@ -39,6 +40,7 @@ def validate_blueprint(blueprint: Blueprint) -> list[str]:
         for mention in _MENTION_RE.findall(block.description):
             referenced.setdefault(mention, block.line)
     _check_zone_entities(blueprint)
+    check_cutscene_blocks(blueprint)
     # ``in: ZONE_ID`` of a zone-placed entity names a dynamic zone, not a missing scene.
     zones = set(dynamic_exit_zones(blueprint))
     missing = sorted(ref for ref in referenced if ref not in declared and ref not in zones)

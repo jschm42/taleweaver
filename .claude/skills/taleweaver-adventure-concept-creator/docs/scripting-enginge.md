@@ -31,6 +31,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dice](#twdice)
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
+   - [tw.cutscene (Cut-scenes)](#twcutscene-cut-scenes)
    - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
    - [tw.image & tw.media (In-Game Image Generation)](#twimage--twmedia-in-game-image-generation)
    - [tw.turn (Player Message & Turn Info)](#twturn-player-message--turn-info)
@@ -928,6 +929,21 @@ RPG-style conversations as a tree of nodes. The NPC says a node's `npc_text`; ea
 A response script that opens another dialog (`tw.dialog.choose` or `tw.dialog.tree`) or ends the adventure (`tw.game.win`, `tw.game.game_over`) stops the conversation; `on_end` is not called then. The tree's text is shown as written: there is no LLM narration of tree steps.
 
 See [Example 16](#example-16-blacksmith-conversation-dialogue-tree) for a complete conversation.
+
+### `tw.cutscene` (Cut-scenes)
+Shows a cut-scene of the adventure's library: a narrated slide show (image + text per slide, optional audio track) over the whole play view, in the colors of the active skin. Cut-scenes are made on the editor's **Cut-scenes** page (Presentation) or in a blueprint (`[Cutscene: ID]`). A chapter shows its own with its *Start cut-scene* (`start_cutscene_id`); scripts play one at any other moment.
+
+- `tw.cutscene.play(cutscene_id) -> bool` (alias `tw.cutscene.show`, namespace alias `tw.cutscenes`): queues the cut-scene. Returns `False` for an invalid id. The call does not wait: the client shows the cut-scene once the script's turn reaches it, before the turn's narration. Slides are read aloud when the player has auto-speech on; the narration waits until the cut-scene ends. Holding Space or the mouse button skips a slide, Escape the whole cut-scene.
+- Several calls queue several cut-scenes (at most 5 waiting); a cut-scene that is already waiting is not queued twice. A chapter's start cut-scene plays before cut-scenes its start script queued.
+- Combine it with `tw.story.skip_narration()` when the cut-scene should replace the turn's narration. The queue lives in `entity_states["__cutscene__"]`, so it is part of every save.
+
+```python
+# on_defeat_script of the dragon: the ending as a cut-scene instead of a narration.
+tw.cutscene.play("DRAGON_FALLS")
+tw.story.skip_narration()
+```
+
+The editor validation warns (`script_cutscene_missing`) when a script plays an id the library does not have.
 
 ### `tw.llm` & `tw.json` (Ask the LLM & Structured JSON)
 

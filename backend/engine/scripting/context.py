@@ -15,6 +15,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from backend.engine.cutscenes.proxy import CutsceneProxy
 from backend.engine.scripting.audio_proxy import AudioProxy
 from backend.engine.scripting.dialog import DialogProxy
 from backend.engine.scripting.gm_directions import clean_direction, queue_direction
@@ -150,6 +151,8 @@ class ScriptChangeset:
     conversation_ops: list[dict[str, Any]] = field(default_factory=list)
     # Ordered tw.game fast travel operations, replayed by fast_travel.apply_travel_ops.
     travel_ops: list[dict[str, Any]] = field(default_factory=list)
+    # tw.cutscene.play ids in call order, queued by cutscenes.queue.apply_cutscene_ops.
+    cutscene_ops: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.narrative_messages, _TrackingList):
@@ -213,6 +216,7 @@ class ScriptChangeset:
             or self.conversation_ops
             or self.travel_ops
             or self.skip_narration
+            or self.cutscene_ops
         )
 
 
@@ -1908,6 +1912,9 @@ class GameContext:
         self.sequence = self.sequences
         self.dice = DiceProxy()
         self.dialog = DialogProxy(self.changeset, self)
+        # tw.cutscene: queues a cut-scene of the adventure's library (cutscenes/proxy.py).
+        self.cutscene = CutsceneProxy(self.changeset, debug=self.debug)
+        self.cutscenes = self.cutscene
         # tw.audio: the session's audio state (audio_state.read_audio_state), else empty.
         self.audio = AudioProxy(self.changeset, audio, self, library=audio_library)
         # Former name, kept so scripts written before the rename keep working.
