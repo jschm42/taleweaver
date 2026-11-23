@@ -92,12 +92,32 @@ async def _scene_sections(
     return {row.id: row.section_id for row in (await db.execute(query)).all()}
 
 
-async def _map_adventure(db: AsyncSession, template_id: str, session_id: Optional[str]) -> Any:
+async def _map_adventure(
+    db: AsyncSession, template_id: str, session_id: Optional[str], state: Any = None
+) -> Any:
     """Where the map's sections come from: the session's frozen copy, else the template."""
     if session_id:
-        state = await AdventureLogic.resolve_session_state(db, session_id)
-        return await load_session_adventure(db, state)
+        resolved = state or await AdventureLogic.resolve_session_state(db, session_id)
+        return await load_session_adventure(db, resolved)
     return await db.get(AdventureTemplate, template_id)
+
+
+async def attach_map_sections(
+    db: AsyncSession,
+    map_dict: dict[str, Any],
+    template_id: str,
+    session_id: Optional[str] = None,
+    state: Any = None,
+) -> dict[str, Any]:
+    """Attach discovered regions, inter-region links, and world_map_layout to a map payload."""
+    adventure = await _map_adventure(db, template_id, session_id, state=state)
+    attach_sections(
+        map_dict,
+        await _scene_sections(db, template_id, session_id),
+        getattr(adventure, "world_sections", None),
+    )
+    map_dict["world_map_layout"] = getattr(adventure, "world_map_layout", None)
+    return map_dict
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -134,14 +154,7 @@ async def get_map(
                 map_dict, exits, raw_current_id, exit_states=exit_states
             )
 
-    adventure = await _map_adventure(db, template_id, session_id)
-    map_dict = attach_sections(
-        map_dict,
-        await _scene_sections(db, template_id, session_id),
-        getattr(adventure, "world_sections", None),
-    )
-    map_dict["world_map_layout"] = getattr(adventure, "world_map_layout", None)
-    return map_dict
+    return await attach_map_sections(db, map_dict, template_id, session_id=session_id)
 
 
 @router.post("/adventures/{template_id}/map/visit", status_code=200)

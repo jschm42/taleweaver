@@ -46,6 +46,14 @@ const regionTitle = computed(() =>
     ? 'Other places'
     : (props.mapData?.sections || []).find((r) => r.id === regionView.value)?.label || '',
 )
+const defaultLocalRegionId = computed(() => {
+  if (props.mapData?.current_section_id) return props.mapData.current_section_id
+  const first = props.mapData?.sections?.[0]?.id
+  return first || NO_REGION
+})
+function openLocalMap(): void {
+  regionView.value = defaultLocalRegionId.value
+}
 watch(() => props.open, (isOpen) => {
   if (isOpen) regionView.value = null
 })
@@ -612,17 +620,38 @@ onMounted(() => {
                 </span>
               </div>
 
-              <button
-                v-if="hasRegions && regionView"
-                type="button"
-                class="tw-dialog-chip !opacity-100 text-xs"
-                @click="regionView = null"
+              <div
+                v-if="hasRegions"
+                role="tablist"
+                aria-label="Map view"
+                class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !p-1 gap-1 text-sm border border-white/20 bg-black/40"
               >
-                <i class="ra ra-map mr-1" aria-hidden="true"></i> World map
-              </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="showWorld"
+                  class="px-3.5 py-1.5 rounded-full transition-colors flex items-center gap-1.5 cursor-pointer font-medium whitespace-nowrap"
+                  :class="showWorld ? 'bg-amber-500/25 text-amber-100 border border-amber-400/50 shadow-sm' : 'text-slate-300 hover:text-white hover:bg-white/10 border border-transparent'"
+                  @click="regionView = null"
+                >
+                  <i class="ra ra-map text-base" aria-hidden="true"></i>
+                  <span>World map</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="!showWorld"
+                  class="px-3.5 py-1.5 rounded-full transition-colors flex items-center gap-1.5 cursor-pointer font-medium whitespace-nowrap"
+                  :class="!showWorld ? 'bg-amber-500/25 text-amber-100 border border-amber-400/50 shadow-sm' : 'text-slate-300 hover:text-white hover:bg-white/10 border border-transparent'"
+                  @click="openLocalMap"
+                >
+                  <i class="ra ra-compass text-base" aria-hidden="true"></i>
+                  <span>Local map</span>
+                </button>
+              </div>
 
               <!-- Map Controls -->
-              <div class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !px-1.5 !py-1 gap-0.5 sm:gap-1">
+              <div v-if="!showWorld" class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !px-1.5 !py-1 gap-0.5 sm:gap-1">
                 <button
                   @click="zoom = Math.max(0.2, zoom - 0.1)"
                   class="tw-map-tool p-1.5 rounded-full transition-colors"
@@ -680,7 +709,7 @@ onMounted(() => {
             </div>
 
             <!-- World map: the regions; a click opens the region's scenes -->
-            <div v-else-if="showWorld" class="w-full h-full flex flex-col gap-3">
+            <div v-else-if="showWorld" class="w-full h-full flex flex-col gap-3 relative z-10">
               <PlayerRegionMap
                 class="flex-grow"
                 :regions="mapData.sections || []"

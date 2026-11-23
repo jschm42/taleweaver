@@ -155,8 +155,15 @@ class TurnStateApplier:
         map_dict = MapEngine.augment_map_data(
             map_dict, exits, self.state.current_scene_id, self.state.exit_states
         )
+        from backend.api.routes.map_api import attach_map_sections
 
-        return map_dict
+        return await attach_map_sections(
+            self.db,
+            map_dict,
+            self.state.template_id,
+            session_id=self.state.session_id,
+            state=self.state,
+        )
 
     async def _build_awards_payload(self, adventure: AdventureTemplate | None) -> list[dict]:
         """Helper to build the awards payload with earned status."""

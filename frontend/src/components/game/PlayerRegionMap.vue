@@ -41,8 +41,8 @@ const controls = [
 </script>
 
 <template>
-  <div class="relative w-full h-full min-h-[16rem] rounded-xl border border-white/10 bg-black/30 overflow-hidden">
-    <WorldMapViewport :layout="layout">
+  <div class="relative flex flex-col w-full h-full min-h-[20rem] rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+    <WorldMapViewport class="flex-1 min-h-0" :layout="layout">
       <template #default="{ zoom }">
         <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <template v-for="{ link, a, b } in lines" :key="`${link.from}-${link.to}`">
@@ -71,10 +71,22 @@ const controls = [
           :aria-label="`Open region ${region.label}`"
           @click="emit('open', region.id)"
         >
-          <span
-            class="w-4 h-4 rounded-full border-2 border-black/80"
-            :class="region.id === currentRegionId ? 'bg-amber-300 ring-2 ring-amber-200/70' : 'bg-white/80'"
-          />
+          <span class="relative flex items-center justify-center w-5 h-5">
+            <span
+              v-if="region.id === currentRegionId"
+              class="absolute inset-0 rounded-full bg-amber-300/65 animate-ping"
+              aria-hidden="true"
+            />
+            <span
+              v-if="region.id === currentRegionId"
+              class="absolute -inset-1 rounded-full bg-amber-400/35 blur-[2px] animate-pulse"
+              aria-hidden="true"
+            />
+            <span
+              class="relative w-4 h-4 rounded-full border-2 border-black/80"
+              :class="region.id === currentRegionId ? 'bg-amber-300 ring-2 ring-amber-200/80 shadow-[0_0_12px_rgba(252,211,77,0.9)]' : 'bg-white/80'"
+            />
+          </span>
           <!-- Solid dark chip: the name stays readable on any map image. -->
           <span
             class="rounded-md border px-2 py-0.5 whitespace-nowrap bg-black/75 shadow-lg"

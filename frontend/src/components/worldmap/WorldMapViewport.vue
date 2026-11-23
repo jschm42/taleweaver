@@ -28,9 +28,9 @@ const tiles = computed(() => props.layout?.tiles || [])
 /** Zoom at which the whole map fits into the viewport. */
 function fitZoom(): number {
   const el = viewport.value
-  if (!el || !el.clientWidth) return 1
+  if (!el || !el.clientWidth || !el.clientHeight) return 1
   const canvasHeight = el.clientWidth * (rows.value * 9) / (cols.value * 16)
-  return Math.min(1, el.clientHeight / canvasHeight)
+  return Math.max(MIN_ZOOM, Math.min(1, el.clientHeight / canvasHeight))
 }
 
 function fit(): void {
