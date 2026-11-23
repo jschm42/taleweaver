@@ -14,7 +14,7 @@ from backend.api.routes.adventures.dynamic_challenge_helper import (
 )
 from backend.api.routes.adventures.dynamic_scene_materialize import _build_object_entity
 from backend.core.database import AsyncSessionLocal, engine
-from backend.engine.world.dynamic_scene_generator import _roll_scene_plan
+from backend.engine.world.dynamic_scene_plan import roll_scene_plan
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedNpc,
     DynamicGeneratedObject,
@@ -87,7 +87,7 @@ def test_sanitize_dynamic_script_rewrites_ids_and_rejects_unsafe():
 
 
 def test_roll_scene_plan_climax_guarantees_hostile_and_container():
-    plan = _roll_scene_plan(
+    plan = roll_scene_plan(
         zone={
             "zone_id": "DUNGEON",
             "theme": "Stone dungeon",
@@ -623,7 +623,7 @@ async def test_cluster_blueprint_diamond_graph_and_lazy_materialization():
     from backend.engine.world.dynamic_cluster_blueprint import (
         build_cluster_blueprint_prompt_section,
     )
-    from backend.engine.world.dynamic_scene_generator import _build_scene_prompts
+    from backend.engine.world.dynamic_scene_prompt import build_scene_prompts
     from backend.models.world_entity import WorldExit, WorldScene
 
     async with engine.begin() as conn:
@@ -700,7 +700,7 @@ async def test_cluster_blueprint_diamond_graph_and_lazy_materialization():
         bp_text = build_cluster_blueprint_prompt_section(scene_rows[d3_1_sid].dynamic_zone)
         assert cluster_bp["story_arc"] in bp_text
         assert cluster_bp["climax_goal"] in bp_text
-        _sys_p, user_p = _build_scene_prompts(
+        _sys_p, user_p = build_scene_prompts(
             adventure_title=adv.title,
             adventure_setting=adv.plot,
             adventure_tone="Dark Fantasy",
@@ -790,7 +790,7 @@ async def test_build_existing_scene_context_prompt_section_string_and_dict_hints
     from backend.engine.world.dynamic_instructions_helper import (
         build_existing_scene_context_prompt_section,
     )
-    from backend.engine.world.dynamic_scene_generator import _build_scene_prompts
+    from backend.engine.world.dynamic_scene_prompt import build_scene_prompts
     from backend.models.world_entity import WorldScene
 
     async with engine.begin() as conn:
@@ -843,7 +843,7 @@ async def test_build_existing_scene_context_prompt_section_string_and_dict_hints
         assert d2_1_hint["exits"][0] in section
         assert "Signal Lantern (OBJECT)" in section
 
-        _sys_p, user_p = _build_scene_prompts(
+        _sys_p, user_p = build_scene_prompts(
             adventure_title=adv.title,
             adventure_setting=adv.plot,
             adventure_tone="Dark Fantasy",
@@ -854,7 +854,7 @@ async def test_build_existing_scene_context_prompt_section_string_and_dict_hints
             language="English",
             effective_danger="medium",
             max_npcs=2,
-            scene_plan=_roll_scene_plan(
+            scene_plan=roll_scene_plan(
                 zone=d2_1_scene.dynamic_zone,
                 max_npcs=2,
                 effective_danger="medium",

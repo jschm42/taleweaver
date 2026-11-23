@@ -12,11 +12,8 @@ from backend.engine.world.dynamic_required_entities import (
     required_blocks,
     required_entities_summary,
 )
-from backend.engine.world.dynamic_scene_generator import (
-    _apply_scene_plan_to_payload,
-    _finalize_fallback_scene,
-    _roll_scene_plan,
-)
+from backend.engine.world.dynamic_scene_fallback import finalize_fallback_scene
+from backend.engine.world.dynamic_scene_plan import apply_scene_plan_to_payload, roll_scene_plan
 from backend.engine.world.dynamic_scene_schemas import (
     DynamicGeneratedScenePayload,
     normalize_dynamic_zone,
@@ -153,11 +150,11 @@ def test_entities_appear_at_their_depth_and_only_once_per_cluster():
 def test_required_entities_survive_every_cap():
     # Arrange: the room may hold 1 NPC and the LLM already filled 5 objects and the NPC slot.
     zone = _zone(3)
-    plan = _roll_scene_plan(zone, max_npcs=1)
+    plan = roll_scene_plan(zone, max_npcs=1)
     payload = _payload()
 
     # Act
-    protected = _apply_scene_plan_to_payload(payload, plan, zone, None)
+    protected = apply_scene_plan_to_payload(payload, plan, zone, None)
 
     # Assert
     npc_ids = [n.id for n in npcs_to_persist(payload, 1)]
@@ -182,7 +179,7 @@ def test_a_generated_entity_with_the_same_id_is_replaced_not_duplicated():
 
 def test_fallback_scenes_keep_the_required_entities():
     # Act
-    fallback = _finalize_fallback_scene("a shaft", _zone(3), None, None)
+    fallback = finalize_fallback_scene("a shaft", _zone(3), None, None)
 
     # Assert
     assert "FOREMAN" in {n.id for n in fallback.npcs}
