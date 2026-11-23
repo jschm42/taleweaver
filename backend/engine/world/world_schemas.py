@@ -33,6 +33,11 @@ from backend.engine.world.world_conversation_schema import (
 from backend.engine.world.world_object_schema import WorldObjectSchema
 from backend.engine.world.world_section_schema import WorldSectionSchema
 
+VOICE_DESCRIPTION = (
+    "Optional TTS voice id from the voice list in the requirements; omit or null when no list "
+    "is given. Voices are cast automatically when missing."
+)
+
 
 class AudioTrackSchema(WorldBaseSchema):
     id: str = Field(..., description="Uppercase slug, e.g. CRYPT_THEME")
@@ -380,6 +385,7 @@ class SpecialActionSchema(WorldBaseSchema):
 class WorldNPCSchema(WorldBaseSchema):
     id: str = Field(..., description="Unique slug for the NPC, e.g., MAD_ALCHEMIST")
     name: str = Field(..., description="Human-readable name")
+    voice: Optional[str] = Field(None, description=VOICE_DESCRIPTION)
     description: str = Field(
         ..., description="Appearance and demeanor or physical characteristics, max 400 characters."
     )
@@ -858,6 +864,7 @@ class ProtagonistSchema(WorldBaseSchema):
     source_asset_id: Optional[str] = Field(
         None, description="Optional source protagonist ID to reuse an old portrait image."
     )
+    voice: Optional[str] = Field(None, description=VOICE_DESCRIPTION)
     special_actions: list[SpecialActionSchema] = Field(
         default=[],
         description="List of up to 5 special actions the protagonist has at the start. Max 5.",
