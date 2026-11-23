@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * "Plan regions": the World-Builder proposes planned regions and a campaign outline. The
+ * "Plan regions": the World-Builder proposes planned regions from the adventure's plot. The
  * proposal is shown for review; "Use plan" puts it into the Regions page draft (saved with the
  * save bar), nothing is stored before.
  */
@@ -52,7 +52,7 @@ function usePlan(): void {
 </script>
 
 <template>
-  <UiModal v-model:open="open" title="Plan regions" description="The World-Builder plans new regions and a campaign outline from the adventure's plot." size="lg" :persistent="planning">
+  <UiModal v-model:open="open" title="Plan regions" description="The World-Builder plans new regions from the adventure's plot." size="lg" :persistent="planning">
     <div class="space-y-4">
       <div class="grid gap-4 md:grid-cols-[8rem_1fr]">
         <UiField label="New regions">
@@ -67,7 +67,6 @@ function usePlan(): void {
         <p v-for="region in newRegions" :key="region.id" class="wb-body">
           <span class="text-wb-strong">{{ region.label }}</span> · {{ region.description }}
         </p>
-        <p v-if="plan.outline?.premise" class="wb-hint">Outline: {{ plan.outline.premise }}</p>
       </div>
     </div>
     <template #footer>

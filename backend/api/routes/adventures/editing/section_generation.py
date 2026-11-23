@@ -5,8 +5,8 @@
   ``stub`` with its ``generation_error``. The editor polls its assets to see the result.
 - ``POST /{template_id}/editor/sections/{section_id}/generate/preview``: the prompt's blocks with
   token estimates for the given context options, without an LLM call.
-- ``POST /{template_id}/editor/sections/plan``: returns a proposal (campaign outline plus
-  planned regions). Nothing is stored; the author reviews and saves it on the Regions page.
+- ``POST /{template_id}/editor/sections/plan``: returns a proposal of planned regions from
+  the adventure's plot. Nothing is stored; the author reviews and saves it on the Regions page.
 
 Spec: docs/specs/world_sections.md (9.3-9.4), docs/specs/region_builder.md (8).
 """
@@ -233,7 +233,7 @@ async def plan_editor_sections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """A proposal of planned regions and a campaign outline (nothing is stored)."""
+    """A proposal of planned regions from the adventure's plot (nothing is stored)."""
     await _get_owned_adventure_or_404(db, template_id, current_user.id)
     try:
         return await plan_sections(db, template_id, current_user, payload.count, payload.direction)

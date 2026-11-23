@@ -14,6 +14,7 @@ import MapTab from '@/components/editor/MapTab.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import RegionMapCard from '@/components/editor/regions/RegionMapCard.vue'
 import { UNASSIGNED, regionLinks, regionSceneIds, sceneCount } from '@/components/editor/regions/regionGraph'
+import { sceneRegionMap } from '@/components/editor/regions/regionExits'
 
 // The open region per adventure survives a trip to a scene's editor and back.
 const lastRegion = new Map<string, string | null>()
@@ -43,6 +44,12 @@ const mapScenes = computed(() => {
   const ids = filtered.value
   if (!ids) return editor.editorScenes
   return scenes.value.filter((s) => ids.inside.has(s.id) || ids.border.has(s.id))
+})
+const sceneRegions = computed(() => (hasRegions.value ? sceneRegionMap(scenes.value, sections.value) : undefined))
+// The open region as MapTab expects it: null = scenes without a region, undefined = none open.
+const currentRegionId = computed(() => {
+  if (!hasRegions.value || !regionId.value) return undefined
+  return regionId.value === UNASSIGNED ? null : regionId.value
 })
 const dimmedSceneIds = computed(() => [...(filtered.value?.border || [])])
 const showWorld = computed(() => hasRegions.value && !regionId.value)
@@ -95,7 +102,7 @@ function openRegion(id: string): void {
       <div v-if="hasRegions" class="flex flex-wrap items-center gap-3">
         <UiButton variant="secondary" size="sm" :icon="ArrowLeft" @click="regionId = null">World map</UiButton>
         <span class="wb-heading">{{ regionLabel }}</span>
-        <span class="wb-hint">Dimmed scenes lie in a neighbouring region.</span>
+        <span class="wb-hint">Dimmed scenes lie in a neighbouring region; blue dashed exits lead there (hover for details).</span>
       </div>
       <MapTab
         :debug-data="editor.debugData"
@@ -104,6 +111,8 @@ function openRegion(id: string): void {
         :active-scene-id="editor.activeMapSceneId"
         :active-exit-id="editor.activeMapExitId"
         :dimmed-scene-ids="dimmedSceneIds"
+        :scene-regions="sceneRegions"
+        :current-region-id="currentRegionId"
         @open-scene="editor.openSceneEditorRoute"
         @open-exit="editor.openExitEditorRoute"
       />

@@ -4,8 +4,8 @@ Uses the section's ``generated`` record (written by ``section_merge``): its scen
 touching them, its characters and items plus any other entity placed in its scenes, and its
 quests, awards, chapters and scripts. The remaining chapters are renumbered 1..n. The section
 becomes ``stub`` again with its old planned links, so it can be rebuilt. Only the template
-changes: sessions that already took in the region keep their copy. Thread updates of the
-campaign outline are not undone. Spec: docs/specs/region_builder.md (phase D).
+changes: sessions that already took in the region keep their copy.
+Spec: docs/specs/region_builder.md (phase D).
 """
 
 from __future__ import annotations

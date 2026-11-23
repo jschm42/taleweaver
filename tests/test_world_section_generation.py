@@ -11,11 +11,6 @@ from backend.api.routes.adventures.session_expansion import expand_session, pend
 from backend.engine.world import section_generator
 from backend.engine.world.section_generator import SectionGenerationError, generate_section
 from backend.engine.world.section_ledger import Ledger, build_ledger
-from backend.engine.world.section_outline import (
-    apply_thread_updates,
-    normalize_outline,
-    outline_prompt_block,
-)
 from backend.engine.world.section_validation import prepare_section, validate_section
 from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
@@ -54,7 +49,6 @@ def _region(**overrides):
         "awards": [],
         "sequences": [{"id": "SEQ_PEAKS", "order": 1, "title": "The Peaks"}],
         "scripts": [{"id": "BOOT", "trigger": "on_init", "code": "pass"}],
-        "thread_updates": [{"id": "SURVEYOR", "status": "resolved", "resolved_in": "PEAKS"}],
     }  # fmt: skip
     region.update(overrides)
     return region
@@ -70,34 +64,6 @@ def _ledger(**overrides):
     }
     values.update(overrides)
     return Ledger(**values)
-
-
-# --- outline ---------------------------------------------------------------------------------
-
-
-def test_outline_normalizes_and_merges_thread_updates():
-    # Arrange
-    outline = {"premise": "A storm.", "threads": [{"id": "surveyor", "opened_in": "harbor"}]}
-
-    # Act
-    merged = apply_thread_updates(
-        outline, [{"id": "SURVEYOR", "status": "resolved", "resolved_in": "PEAKS"}]
-    )
-
-    # Assert
-    assert merged["threads"] == [
-        {
-            "id": "SURVEYOR",
-            "opened_in": "HARBOR",
-            "resolved_in": "PEAKS",
-            "status": "resolved",
-            "note": "",
-        }
-    ]
-    assert normalize_outline({"premise": ""}) is None
-    assert "(THIS REGION)" in outline_prompt_block(
-        {"sections": [{"id": "PEAKS", "purpose": "Reveal the saboteur."}]}, "PEAKS"
-    )
 
 
 # --- validation ------------------------------------------------------------------------------
@@ -167,10 +133,6 @@ async def _seed_template(db) -> AdventureTemplate:
         title="Campaign",
         owner_id=user.id if user else None,
         world_sections=normalize_sections([HARBOR, PEAKS]),
-        world_outline={
-            "premise": "A storm.",
-            "threads": [{"id": "SURVEYOR", "opened_in": "HARBOR"}],
-        },
         sequences=[{"id": "SEQ_1", "order": 1, "title": "Harbor"}],
         quests=[],
         awards=[],
@@ -249,7 +211,6 @@ async def test_generation_retries_once_and_merges_the_region(setup_test_db, monk
     assert [q["id"] for q in adv.quests] == ["Q_HERMIT"]
     assert [s["order"] for s in adv.sequences] == [1, 2]
     assert {s["id"] for s in adv.original_manifest["scenes"]} == {"SQUARE", "PASS", "HUT"}
-    assert adv.world_outline["threads"][0]["status"] == "resolved"
 
 
 @pytest.mark.asyncio
@@ -295,11 +256,7 @@ async def test_failed_background_generation_marks_the_region_planned_again(
 @pytest.mark.asyncio
 async def test_plan_endpoint_returns_a_proposal(auth_client, setup_test_db, monkeypatch):
     plan = SimpleNamespace(
-        premise="A storm.",
-        arc=["Act one."],
         sections=[SimpleNamespace(model_dump=lambda: {**PEAKS, "id": "MINES", "label": "Mines"})],
-        outline_sections=[SimpleNamespace(model_dump=lambda: {"id": "MINES", "purpose": "Ore."})],
-        threads=[],
     )
 
     class _PlanLLM:
@@ -325,7 +282,7 @@ async def test_plan_endpoint_returns_a_proposal(auth_client, setup_test_db, monk
     body = resp.json()
     assert [s["id"] for s in body["sections"]] == ["HARBOR", "PEAKS", "MINES"]
     assert body["sections"][2]["status"] == "stub"
-    assert body["outline"]["sections"][0]["purpose"] == "Ore."
+    assert "outline" not in body
 
 
 # --- session expansion -----------------------------------------------------------------------

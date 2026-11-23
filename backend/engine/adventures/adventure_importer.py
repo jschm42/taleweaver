@@ -536,8 +536,6 @@ class AdventureTemplateImporter:
                     },
                     "sections": manifest_sections(manifest_data),
                     "fast_travel_enabled": adv_data.get("fast_travel_enabled"),
-                    "world_outline": adv_data.get("world_outline")
-                    or manifest_data.get("world_outline"),
                     "scenes": manifest_data.get("scenes", []),
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),

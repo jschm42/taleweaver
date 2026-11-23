@@ -693,7 +693,6 @@ class AdventureTemplateUpdate(BaseModel):
     narrator_voice: Optional[dict[str, Any]] = None
     audio_enabled: Optional[bool] = None
     fast_travel_enabled: Optional[bool] = None
-    world_outline: Optional[dict[str, Any]] = None
     ui_theme: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None

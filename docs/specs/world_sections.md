@@ -16,13 +16,13 @@ instead of a toggle in the creation wizard (9.3).
 
 | Phase 3 piece | Where |
 | --- | --- |
-| Outline (`AdventureTemplate.world_outline`, migration `d6f8b0c2e4a5`) | `engine/world/section_outline.py` |
 | Ledger | `engine/world/section_ledger.py` |
 | Schemas, prompts, generator, validation | `engine/world/section_schemas.py`, `section_prompt.py`, `section_generator.py`, `section_validation.py` |
 | Merge into the template | `engine/manifest_apply/section_merge.py` |
 | Editor endpoints (generate in background, plan) | `api/routes/adventures/editing/section_generation.py` |
+| Region description / brief text (small model, Regions page **Generate**) | `api/routes/adventures/editing/section_text_routes.py`, `engine/world/section_text.py`, `components/editor/regions/RegionTextGenerate.vue` |
 | Session expansion | `api/routes/adventures/session_expansion.py`, `expansion_routes.py`, `frontend/src/composables/useRegionExpansion.ts` |
-| Editor UI | `components/editor/regions/RegionGenerateControls.vue`, `RegionPlanModal.vue`, `RegionOutlineCard.vue` |
+| Editor UI | `components/editor/regions/RegionGenerateControls.vue`, `RegionPlanModal.vue`, `pages/RegionBuilderPage.vue` |
 | Tests | `tests/test_world_section_generation.py` |
 
 | Phase 1 piece | Where |
@@ -36,13 +36,14 @@ instead of a toggle in the creation wizard (9.3).
 | Map API (`sections`, `section_links`, node `section_id`) | `engine/interaction/map_sections.py`, `api/routes/map_api.py` |
 | Editor endpoints, change-set ops `set_sections` / `assign_section` | `api/routes/adventures/editing/section_crud.py` |
 | Editor UI: Regions page, Map region filter, scene region select, list filters | `components/editor/regions/`, `pages/RegionsPage.vue`, `pages/MapPage.vue`, `SceneSectionSelect.vue`, `components/editor/filters/` |
+| Scene map: exits into another region (blue dashed line; exit tooltip names the region), scene tooltip names the scene's region | `components/editor/regions/regionExits.ts`, `MapTab.vue` |
 | Tests | `tests/test_world_sections.py` |
 
 | Phase | Content | Depends on |
 | --- | --- | --- |
 | 1 | Sections as structure: data model, manifest `1.5.0`, editor maps | – |
 | 2 | Travel time on exits, fast travel points, player world map | 1 (world map only) |
-| 3 | Campaign outline, world ledger, per-section generation in the editor | 1 |
+| 3 | World ledger, region planning, per-section generation in the editor | 1 |
 | 4 | Optional extras: section hooks, world map image, travel events | 2, 3 |
 
 Phases 2 and 3 are independent of each other and can be built in either order.
@@ -143,7 +144,6 @@ those paths. The snapshot keeps only built sections without the author fields
 | `WorldExit` | `travel_minutes` Integer, nullable | 2 | `NULL`/0 = no travel time |
 | `WorldExit` | `travel_label` String(100), nullable | 2 | flavour, e.g. "two days by ship" |
 | `AdventureTemplate` | `fast_travel_enabled` Boolean, default true | 2 | |
-| `AdventureTemplate` | `world_outline` JSON, nullable | 3 | see 9.1 |
 
 Sequences get an optional field `fast_travel_allowed` (default true) in their JSON, next to
 `companions_allowed` and `respawn_allowed`.
@@ -164,8 +164,7 @@ Update `docs/specs/adventure_format.md`.
 ```json
 {
   "adventure": {
-    "fast_travel_enabled": true,
-    "world_outline": { "...": "see 9.1" }
+    "fast_travel_enabled": true
   },
   "sections": [
     {
@@ -365,32 +364,15 @@ Needs `docs/scripting_engine.md`, `world_scripting_prompt.py` and
 
 ## 9. Generation (phase 3)
 
-### 9.1 Campaign outline
+### 9.1 The plot as the campaign's guide
 
-Stored in `AdventureTemplate.world_outline`. Text only, cheap to generate, and the reason
-section 1 can plant things that section 4 needs.
-
-```json
-{
-  "premise": "…",
-  "arc": ["act 1 …", "act 2 …", "act 3 …"],
-  "sections": [
-    {
-      "id": "GLOOM_PEAKS",
-      "purpose": "Reveal who sabotaged the lighthouse.",
-      "gating": "Needs the harbormaster's pass from HARBOR_TOWN.",
-      "plants": ["rumour about the drowned bell"],
-      "resolves": ["the missing surveyor"]
-    }
-  ],
-  "threads": [
-    { "id": "MISSING_SURVEYOR", "opened_in": "HARBOR_TOWN", "resolved_in": "GLOOM_PEAKS", "status": "open" }
-  ]
-}
-```
-
-The author can edit the outline in the editor. Thread `status` is updated after each
-section generation.
+There is no stored campaign outline. The adventure's plot (and teaser) is the only story
+guide: **Plan regions** derives the planned regions and their briefs from it, and every
+region generation reads it as the *Global plot* context block, together with the
+summaries of the built regions and the briefs of the planned ones. What a region
+contains is decided when it is generated. (An earlier `world_outline` column with premise,
+arc and story threads was removed by migration `a3c5e7f9b1d4`; older `.adv` files that
+still carry `adventure.world_outline` import fine, the field is ignored.)
 
 ### 9.2 World ledger
 
@@ -413,8 +395,9 @@ section 5), so leaving a list out of the prompt never weakens the checks.
 Implemented as an editor action instead of a toggle in the creation wizard, so it also works
 for adventures that already exist: **Regions → Plan regions** (`POST
 /{template_id}/editor/sections/plan {count, direction}`, `section_generator.plan_sections`,
-schema `CampaignPlan`). One call proposes the outline and `count` planned regions with
-description, map position, brief and planned links to the existing regions. Nothing is
+schema `CampaignPlan`). One call proposes `count` planned regions derived from the
+adventure's plot, with description, map position, brief (the part of the story that plays
+there) and planned links to the existing regions. Nothing is
 stored: the proposal goes into the page's draft, and the author reviews and saves it. A new
 adventure that should become a campaign is generated as usual (it becomes the first region
 when its scenes are assigned to one), then planned here.
@@ -437,7 +420,7 @@ characters get voices; *Validate & fix afterwards* fixes the findings the region
 **Discard region...** takes a region the builder built out again ([region_builder.md](region_builder.md), 7.3).
 
 Prompt (`section_prompt.region_blocks`): adventure frame, the chosen context blocks
-(outline, other regions, plot, world rules, chapters with walkthroughs, quests, scenes,
+(other regions, plot, world rules, chapters with walkthroughs, quests, scenes,
 characters, items), the gateway scenes (always; `section_gateways.py`), the region with its
 id prefix and brief, and the REGION REQUIREMENTS (`section_requirements.py`: counts, feature
 switches, strictness). The request body may carry `context` and `options`
@@ -446,8 +429,7 @@ switches, strictness). The request body may carry `context` and `options`
 token estimates without an LLM call.
 
 Output schema `SectionManifest` (`engine/world/section_schemas.py`, `extra="forbid"`):
-scenes, exits, NPCs, objects, quests, awards, sequences, scripts, `summary`, and the
-outline thread updates. The prompt asks for one or two fast travel points per section, one
+scenes, exits, NPCs, objects, quests, awards, sequences, scripts and `summary`. The prompt asks for one or two fast travel points per section, one
 of them at the arrival scene. The init script is off limits: section setup goes into
 `on_enter_scene` scripts or scene `helpers_script`, because `on_init` has already run in
 existing sessions (9.7). Exits may connect new scenes to each other and to gateway scenes
@@ -469,8 +451,7 @@ adventure are renamed to the next free `<ID>_2` with all references in the regio
 (`section_id_renames.py`), every scene gets the region's `section_id`, new chapters are numbered after the existing ones, `on_init`
 scripts are dropped. On any error the job retries once with the errors in the prompt, then
 gives up: nothing is applied and the section returns to `stub`. On success the region is
-merged, the section becomes `built` with its `summary`, `planned_links` is cleared and the
-outline threads are updated. Then the whole-template validators run once more; the findings
+merged, the section becomes `built` with its `summary` and `planned_links` is cleared. Then the whole-template validators run once more; the findings
 the region introduced and the fix-ups are stored in the section's `generation_notes` and
 shown on the Regions page until the author dismisses them.
 
@@ -558,8 +539,8 @@ Limits, to be stated in the docs:
 
 * Manual edits to existing content (a changed NPC, a rewritten quest) still do not reach
   running sessions. Only whole new sections do.
-* A campaign with stubs must not be winnable before its last section exists. The outline
-  fixes the final goal from the start; when a session has finished every available
+* A campaign with stubs must not be winnable before its last section exists. The
+  adventure's plot fixes the final goal from the start; when a session has finished every available
   sequence while the template still has stubs, the player gets a "to be continued" notice
   instead of an ending (`campaign_continuation.py`: while the template has planned
   regions or regions the session has not taken in yet, finishing the last known chapter
@@ -653,7 +634,7 @@ Accepted when:
 
 ### Phase 3: generation
 
-Scope: outline, ledger, campaign toggle, `SectionManifest`, section generation job,
+Scope: ledger, campaign toggle, `SectionManifest`, section generation job,
 validation, apply through the change-set applier (new operations), session expansion,
 blueprint tags.
 

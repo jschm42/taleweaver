@@ -32,7 +32,8 @@ Today a planned region is generated from one text field (the brief). The author 
    with one click.
 
 Non-goals: changing existing content (the builder stays additive, section 7.4), generating
-several regions in one job, editing the campaign outline from the builder.
+several regions in one job, a stored campaign outline (the adventure's plot guides every
+region; world_sections.md 9.1).
 
 ## 3. Entry points
 
@@ -117,7 +118,6 @@ All on by default. Each is one prompt block, built from the database at job star
 | Option | Block content | Default detail |
 | --- | --- | --- |
 | **Other regions** | id, name, status, summary (built) or description and brief (planned), links with travel time | full |
-| **Campaign outline** | premise, arc, this region's purpose / gating / plants / resolves, open threads | full |
 | **Chapters (sequences)** | order, title, description, goal and completion condition; **walkthrough** per chapter | full, walkthrough clipped to 600 chars per chapter |
 | **Quests** | id, title, main/side, objective, region hint, required item / scene / NPC | full |
 | **Global plot** | adventure plot, teaser and lore context | full |
@@ -125,10 +125,6 @@ All on by default. Each is one prompt block, built from the database at job star
 | **Characters (NPCs)** | id, name, scene and region, role / one-line description, relations | compact |
 | **Scenes** | id, label, region (full: plus the first 400 chars of the description) | compact |
 | **Items** | id, name, type, holder, what it unlocks (full: plus description, quest item flag) | compact |
-
-*Campaign outline* is not in the original wish list. It is added because the outline is how
-regions plan threads for each other (world_sections.md 9.1); without it the generated
-`thread_updates` have no base. It is hidden when the adventure has no outline.
 
 ### 5.2 Always included
 
@@ -285,7 +281,7 @@ Build region
 ### 7.2 Prompt layout
 
 The system prompt stays static (`SECTION_SYSTEM_PROMPT` plus the scripting API), so it is
-cached. The user prompt holds the blocks in a fixed order: frame, outline, other regions,
+cached. The user prompt holds the blocks in a fixed order: frame, other regions,
 plot, rules, chapters, quests, scenes, NPCs, items, gateway scenes, target region, region
 idea / blueprint section, requirements, retry errors. Volatile parts come last, so the retry
 re-uses the cached prefix.
@@ -323,8 +319,7 @@ Regions page (`RegionDiscardControl.vue`, confirmation) calls `POST .../sections
 those scenes, every exit touching them, those characters and items plus any other entity
 placed in the scenes, removes the quests, awards, chapters and scripts (remaining chapters
 are renumbered 1..n), and makes the section a planned region with its old links again. Only
-the template changes: sessions that already took in the region keep their copy; outline
-thread updates are not undone. Regions built or assigned by hand cannot be discarded (409).
+the template changes: sessions that already took in the region keep their copy. Regions built or assigned by hand cannot be discarded (409).
 
 ### 7.4 Additive only
 
@@ -345,7 +340,6 @@ only `brief` stays valid; missing fields take the defaults):
   "mode": "advanced",
   "context": {
     "regions": "full",
-    "outline": "full",
     "sequences": "full",
     "walkthroughs": true,
     "quests": "full",

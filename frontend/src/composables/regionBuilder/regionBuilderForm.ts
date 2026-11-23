@@ -6,7 +6,7 @@
 
 export type RegionMode = 'simple' | 'advanced'
 export type Detail = 'off' | 'compact' | 'full'
-export type ContextKey = 'regions' | 'outline' | 'sequences' | 'quests' | 'plot' | 'rules' | 'npcs' | 'scenes' | 'items'
+export type ContextKey = 'regions' | 'sequences' | 'quests' | 'plot' | 'rules' | 'npcs' | 'scenes' | 'items'
 export type SizePreset = 'small' | 'medium' | 'large'
 export type CountKey = 'scenes' | 'items' | 'quests' | 'sequences' | 'containers' | 'text_logs' | 'awards'
 
@@ -84,14 +84,13 @@ export interface ContextOptionInfo {
   key: ContextKey
   label: string
   description: string
-  /** Offers compact / full in advanced mode (plot, rules and the outline have one level). */
+  /** Offers compact / full in advanced mode (plot and rules have one level). */
   hasDetail: boolean
 }
 
 /** Display order of the World context card (spec 5.1). */
 export const CONTEXT_OPTIONS: ContextOptionInfo[] = [
   { key: 'regions', label: 'Other regions', description: 'Names, summaries and links of the other regions.', hasDetail: true },
-  { key: 'outline', label: 'Campaign outline', description: 'Premise, arc and the story threads that run across regions.', hasDetail: false },
   { key: 'sequences', label: 'Chapters', description: 'The existing chapters with their goals.', hasDetail: true },
   { key: 'quests', label: 'Quests', description: 'Side quests with their goals and requirements.', hasDetail: true },
   { key: 'plot', label: 'Global plot', description: 'The adventure teaser and plot.', hasDetail: false },
@@ -103,7 +102,6 @@ export const CONTEXT_OPTIONS: ContextOptionInfo[] = [
 
 export const DEFAULT_CONTEXT: RegionContext = {
   regions: 'full',
-  outline: 'full',
   sequences: 'full',
   quests: 'full',
   plot: 'full',

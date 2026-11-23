@@ -158,7 +158,7 @@ async def test_context_blocks_follow_the_chosen_options(setup_test_db):
     assert "- HARBOR: SQUARE (Square)" in text
     assert "KEY (Key, ITEM, in SQUARE) opens exit SQUARE -> SQUARE" in text
     assert "The lighthouse went dark." in text and "Ask the keeper." in text
-    assert "CAMPAIGN OUTLINE" in text and "Id prefix of its new ids: PEA_" in text
+    assert "CAMPAIGN OUTLINE" not in text and "Id prefix of its new ids: PEA_" in text
     short = trimmed.user_prompt([])
     assert "EXISTING SCENES" not in short and "lighthouse" not in short
     assert "Ask the keeper." not in short and "1. Harbor" in short

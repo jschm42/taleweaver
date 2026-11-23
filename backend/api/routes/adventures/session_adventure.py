@@ -64,7 +64,6 @@ def template_columns(adventure: AdventureTemplate) -> dict[str, Any]:
     """
     columns = {key: _json_safe(getattr(adventure, key, None)) for key in _column_keys()}
     columns["world_sections"] = player_sections(columns.get("world_sections")) or None
-    columns["world_outline"] = None
     return columns
 
 

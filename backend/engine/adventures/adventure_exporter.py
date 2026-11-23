@@ -17,7 +17,6 @@ from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
 from backend.core.npc_extensions import split_npc_extensions
 from backend.engine.conversations.settings import normalize_conversation_settings
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
-from backend.engine.world.section_outline import normalize_outline
 from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -513,7 +512,6 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "audio_tracks": deepcopy(adv.audio_tracks or []),
         "audio_enabled": bool(getattr(adv, "audio_enabled", True)),
         "fast_travel_enabled": getattr(adv, "fast_travel_enabled", True) is not False,
-        "world_outline": normalize_outline(getattr(adv, "world_outline", None)),
         "world_map_layout": deepcopy(getattr(adv, "world_map_layout", None)),
         "title_track_id": adv.title_track_id,
         "ui_theme": adv.ui_theme,

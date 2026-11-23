@@ -3,8 +3,7 @@
 Unlike ``apply_manifest`` nothing is cleared: the region's scenes, exits, characters and items
 go through the same ``persist_*`` steps as a full world (stats, scripts, inventories, voices),
 and its quests, awards, chapters and scripts are appended to the adventure. The section
-becomes ``built`` with its summary, and the campaign outline's threads are updated. The region
-was validated before (``engine/world/section_validation.py``), so its ids are all new.
+becomes ``built`` with its summary. The region was validated before (``engine/world/section_validation.py``), so its ids are all new.
 
 With the Region Builder's media options the scenes, characters and items get images while
 they are persisted (``section_media``). The section keeps a ``generated`` record of every id the
@@ -27,7 +26,6 @@ from backend.engine.manifest_apply.npcs import persist_npcs
 from backend.engine.manifest_apply.objects import ObjectPlacement, persist_objects
 from backend.engine.manifest_apply.scenes import persist_exits, persist_scenes
 from backend.engine.manifest_apply.section_media import RegionMedia, enable_images, image_notes
-from backend.engine.world.section_outline import apply_thread_updates
 from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
@@ -90,9 +88,6 @@ def _mark_built(adventure: AdventureTemplate, section_id: str, region: dict[str,
             section["planned_links"] = []
             section.pop("generation_error", None)
     adventure.world_sections = sections  # type: ignore[assignment]
-    adventure.world_outline = apply_thread_updates(  # type: ignore[assignment]
-        adventure.world_outline, region.get("thread_updates")
-    )
     manifest = (
         deepcopy(adventure.original_manifest)
         if isinstance(adventure.original_manifest, dict)
@@ -100,7 +95,7 @@ def _mark_built(adventure: AdventureTemplate, section_id: str, region: dict[str,
     )
     manifest["sections"] = deepcopy(sections)
     adventure.original_manifest = manifest  # type: ignore[assignment]
-    for column in ("world_sections", "world_outline", "original_manifest"):
+    for column in ("world_sections", "original_manifest"):
         flag_modified(adventure, column)
 
 

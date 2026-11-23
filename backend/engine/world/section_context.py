@@ -15,12 +15,10 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from backend.engine.world.section_ledger import WorldRows
-from backend.engine.world.section_outline import normalize_outline, outline_prompt_block
 from backend.engine.world.sections import is_stub
 
 # Prompt order of the switchable blocks (docs/specs/region_builder.md, 7.2).
 CONTEXT_OPTIONS = (
-    "outline",
     "regions",
     "plot",
     "rules",
@@ -32,7 +30,6 @@ CONTEXT_OPTIONS = (
 )
 DETAIL_LEVELS = ("off", "compact", "full")
 DEFAULT_CONTEXT: dict[str, str] = {
-    "outline": "full",
     "regions": "full",
     "plot": "full",
     "rules": "full",
@@ -130,13 +127,6 @@ def _regions(src: ContextSource, detail: str) -> tuple[str, int]:
     return render("OTHER REGIONS:", entries), len(entries)
 
 
-def _outline(src: ContextSource, _detail: str) -> tuple[str, int]:
-    outline = getattr(src.adventure, "world_outline", None)
-    if normalize_outline(outline) is None:
-        return "", 0
-    return outline_prompt_block(outline, src.section["id"]), 1
-
-
 def _plot(src: ContextSource, _detail: str) -> tuple[str, int]:
     adv = src.adventure
     entries = [
@@ -218,7 +208,6 @@ def _builders() -> dict[str, Callable[[ContextSource, str], tuple[str, int]]]:
     from backend.engine.world.section_context_world import items_block, npcs_block, scenes_block
 
     return {
-        "outline": _outline,
         "regions": _regions,
         "plot": _plot,
         "rules": _rules,

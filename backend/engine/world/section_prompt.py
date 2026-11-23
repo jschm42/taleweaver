@@ -38,8 +38,8 @@ SECTION_SYSTEM_PROMPT = (
     "- Characters start in new scenes (`start_scene_id`); items start in a new scene, or in a "
     "character's or container's inventory. Locks use items that already exist or are new in "
     "this region, and the key must be obtainable.\n"
-    "- If a CAMPAIGN OUTLINE is given, plant and resolve what it asks of this region and report "
-    "it in `thread_updates`.\n"
+    "- Follow the adventure's plot: the region serves its part of the story, and hooks it "
+    "leaves open must be resolvable in this or a later region.\n"
     "- Scripts: never use the trigger `on_init` and do not write an init script; the adventure "
     "already runs. Put setup into `on_enter_scene` scripts or a scene's `helpers_script`.\n"
     "- `summary`: 3-5 sentences on the region, its key characters, items and open hooks.\n\n"
@@ -52,9 +52,8 @@ PLAN_SYSTEM_PROMPT = (
     "uppercase id, a name, a one-paragraph description, a map position (map_x, map_y in "
     "percent, regions spread over the map), status 'stub', a brief for building it later, and "
     "planned_links to neighbouring regions with a travel time in minutes. Existing regions keep "
-    "their ids; link new regions to them. The outline names each region's purpose, what gates "
-    "it, what it plants for later regions and what it resolves, plus the threads that run "
-    "across regions. The final goal must lie in the last region."
+    "their ids; link new regions to them. Derive each region from the adventure's plot: its "
+    "brief says what part of the story plays there. The final goal must lie in the last region."
 )
 
 

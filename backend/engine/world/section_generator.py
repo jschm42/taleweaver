@@ -6,7 +6,7 @@ prompt, then ``SectionGenerationError``. A valid region is merged into the templ
 (``manifest_apply/section_merge.py``). ``preview_section_prompt`` builds the same prompt
 without an LLM call and reports its blocks with token estimates.
 
-``plan_sections``: returns a reviewable proposal (outline and planned regions); nothing is
+``plan_sections``: returns a reviewable proposal of planned regions; nothing is
 stored until the author applies it in the editor.
 Spec: docs/specs/world_sections.md (9.3-9.5), docs/specs/region_builder.md (5, 7, 8).
 """
@@ -31,7 +31,6 @@ from backend.engine.world.section_blueprint import (
 from backend.engine.world.section_context import ContextBlock, ContextSource, normalize_context
 from backend.engine.world.section_gateways import built_neighbours
 from backend.engine.world.section_ledger import Ledger, ledger_from_rows, load_world_rows
-from backend.engine.world.section_outline import normalize_outline
 from backend.engine.world.section_prompt import (
     PLAN_SYSTEM_PROMPT,
     SECTION_SYSTEM_PROMPT,
@@ -230,21 +229,13 @@ def _proposal(plan: CampaignPlan, existing: list[dict[str, Any]]) -> dict[str, A
         for index, s in enumerate(normalize_sections([s.model_dump() for s in plan.sections]))
         if s["id"] not in taken
     ]
-    outline = normalize_outline(
-        {
-            "premise": plan.premise,
-            "arc": plan.arc,
-            "sections": [s.model_dump() for s in plan.outline_sections],
-            "threads": [t.model_dump() for t in plan.threads],
-        }
-    )
-    return {"outline": outline, "sections": normalize_sections([*existing, *new])}
+    return {"sections": normalize_sections([*existing, *new])}
 
 
 async def plan_sections(
     db: AsyncSession, template_id: str, user: User, count: int, direction: str
 ) -> dict[str, Any]:
-    """A proposal {outline, sections}: the existing regions plus ``count`` planned ones."""
+    """A proposal {sections}: the existing regions plus ``count`` planned ones."""
     adventure = await db.get(AdventureTemplate, template_id)
     if adventure is None:
         raise ValueError(f"Adventure '{template_id}' not found.")

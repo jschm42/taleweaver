@@ -3,10 +3,12 @@
  * MapTab — Renders the adventure template scenes as an interactive world map.
  * Reuses Dagre for graph layouts and SVG/HTML rendering for visual excellence.
  */
-import { watch, ref, nextTick, onMounted, computed } from 'vue'
+import { watch, ref, onMounted, computed } from 'vue'
 import dagre from 'dagre'
 import mapSvg from '@/assets/svg/fantasy-rpg-map.svg'
 import { visualService } from '@/services/visualService'
+import { Globe2 } from 'lucide-vue-next'
+import { exitTargetRegion, type SceneRegion } from '@/components/editor/regions/regionExits'
 
 const props = defineProps<{
   debugData: any
@@ -16,6 +18,10 @@ const props = defineProps<{
   activeExitId?: string | null
   /** Scenes outside the selected region that are shown only as its way out (dimmed). */
   dimmedSceneIds?: string[]
+  /** Region of every scene (raw scene id); exits between regions are marked. */
+  sceneRegions?: Record<string, SceneRegion>
+  /** The open region (null = scenes without a region); its neighbours' scenes show their region. */
+  currentRegionId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +44,7 @@ const hoveredExit = ref<{
   isLocked: boolean
   isDynamic?: boolean
   dynamicZone?: Record<string, any> | null
+  regionTarget?: string | null
 } | null>(null)
 const hoveredExitPos = ref({ x: 0, y: 0 })
 
@@ -101,6 +108,7 @@ const layoutData = ref<{
     isBidirectional: boolean
     isDynamic: boolean
     dynamicZone: Record<string, any> | null
+    regionTarget: string | null
   }>
   width: number
   height: number
@@ -197,6 +205,7 @@ function updateLayout() {
     }
   })
 
+  const rawIdOf = (id: string): string => nodes.find((n) => n.id === id)?.rawId || id
   const edges = g.edges().map(e => {
     const edge = g.edge(e)
     const rawExit = (props.debugData?.exits || []).find((re: any) => 
@@ -218,6 +227,7 @@ function updateLayout() {
       isBidirectional: exitType === 'bidirectional',
       isDynamic: !!dynamicZone,
       dynamicZone,
+      regionTarget: exitTargetRegion(rawIdOf(e.v), rawIdOf(e.w), props.sceneRegions, props.currentRegionId),
     }
   })
 
@@ -244,6 +254,7 @@ const exitCircles = computed(() => {
     exitType: string
     isDynamic: boolean
     dynamicZone: Record<string, any> | null
+    regionTarget: string | null
   }> = []
 
   layoutData.value.edges.forEach((edge, edgeIdx) => {
@@ -268,6 +279,7 @@ const exitCircles = computed(() => {
       exitType: edge.exitType,
       isDynamic: edge.isDynamic,
       dynamicZone: edge.dynamicZone,
+      regionTarget: edge.regionTarget,
     })
 
     // If bidirectional, also add a circle at the start of the edge (pointing back to 'from' scene)
@@ -287,12 +299,24 @@ const exitCircles = computed(() => {
         exitType: edge.exitType,
         isDynamic: edge.isDynamic,
         dynamicZone: edge.dynamicZone,
+        regionTarget: edge.regionTarget,
       })
     }
   })
 
   return circles
 })
+
+/** The region of a scene for its tooltip (null when the adventure has no regions). */
+function sceneRegion(rawId: string): string | null {
+  return props.sceneRegions?.[rawId]?.label || null
+}
+
+/** Hovering an exit line shows the same tooltip as its exit circle. */
+function handleEdgeMouseEnter(exitId: string, event: MouseEvent) {
+  const circle = exitCircles.value.find((c) => c.exitId === exitId)
+  if (circle) handleExitMouseEnter(circle, event)
+}
 
 function movePointToward(
   anchor: { x: number; y: number },
@@ -372,6 +396,7 @@ function handleExitMouseEnter(exit: any, event: MouseEvent) {
     isLocked: exit.isLocked,
     isDynamic: !!exit.isDynamic,
     dynamicZone: exit.dynamicZone || null,
+    regionTarget: exit.regionTarget || null,
   }
   hoveredExitPos.value = { x: event.clientX, y: event.clientY }
 }
@@ -561,16 +586,19 @@ onMounted(() => {
                 v-for="(edge, idx) in layoutData.edges"
                 :key="idx"
                 :d="getEdgePath(edge.points)"
-                :stroke="edge.isDynamic ? '#c084fc' : '#ffd97d'"
-                :stroke-width="isActiveExit(edge.id) ? 4 : (edge.isLocked ? 2 : 2.5)"
-                :stroke-dasharray="edge.isLocked ? '6,6' : (edge.isDynamic ? '4,3' : 'none')"
+                :stroke="edge.regionTarget ? undefined : (edge.isDynamic ? '#c084fc' : '#ffd97d')"
+                :stroke-width="isActiveExit(edge.id) ? 4 : (edge.regionTarget ? 3 : (edge.isLocked ? 2 : 2.5))"
+                :stroke-dasharray="edge.regionTarget ? '12,6' : (edge.isLocked ? '6,6' : (edge.isDynamic ? '4,3' : 'none'))"
                 fill="none"
                 class="transition-opacity duration-300 cursor-pointer"
-                :class="{ 'opacity-60': edge.isLocked, 'opacity-100': isActiveExit(edge.id), 'opacity-80': !isActiveExit(edge.id) }"
+                :class="{ 'stroke-wb-info': edge.regionTarget, 'opacity-60': edge.isLocked, 'opacity-100': isActiveExit(edge.id), 'opacity-80': !isActiveExit(edge.id) }"
                 :marker-end="edge.isDynamic ? 'url(#arrow-dynamic-end)' : 'url(#arrow-end)'"
                 :marker-start="edge.isBidirectional ? (edge.isDynamic ? 'url(#arrow-dynamic-start)' : 'url(#arrow-start)') : 'none'"
                 style="pointer-events: stroke;"
                 @click.stop="handleExitClick(edge.id)"
+                @mouseenter="handleEdgeMouseEnter(edge.id, $event)"
+                @mousemove="handleExitMouseMove($event)"
+                @mouseleave="handleExitMouseLeave"
               />
             </g>
           </svg>
@@ -736,6 +764,9 @@ onMounted(() => {
           <span class="flex items-center gap-1.5">
             <span class="inline-block w-2.5 h-1 border-t-2 border-dashed border-[#ffd97d]/50"></span> Locked Exit
           </span>
+          <span v-if="layoutData?.edges.some((e) => e.regionTarget)" class="flex items-center gap-1.5">
+            <span class="inline-block w-4 h-1 border-t-2 border-dashed border-wb-info"></span> Exit to another region
+          </span>
         </div>
 
         <div class="text-[10px] text-slate-500 bg-slate-900/60 px-3 py-1.5 border border-white/5 rounded-lg backdrop-blur-sm uppercase tracking-wider">
@@ -769,6 +800,9 @@ onMounted(() => {
                     {{ hoveredNode.isDynamic ? 'Dynamic Zone' : 'Scene' }}
                   </span>
                 </div>
+                <p v-if="sceneRegion(hoveredNode.rawId)" class="wb-label mb-2 flex items-center gap-1 text-wb-info-text">
+                  <Globe2 class="h-3 w-3" aria-hidden="true" /> Region: {{ sceneRegion(hoveredNode.rawId) }}
+                </p>
                 <p class="text-xs text-slate-400 leading-relaxed italic line-clamp-4">
                   {{ (hoveredNode.description && hoveredNode.description.trim()) ? hoveredNode.description : 'No description provided.' }}
                 </p>
@@ -815,6 +849,9 @@ onMounted(() => {
                 </svg>
                 <span class="text-white">{{ hoveredExit.to }}</span>
               </div>
+              <p v-if="hoveredExit.regionTarget" class="wb-label mt-2 flex items-center gap-1 text-wb-info-text">
+                <Globe2 class="h-3 w-3" aria-hidden="true" /> Leads into region {{ hoveredExit.regionTarget }}
+              </p>
             </div>
           </div>
         </Transition>

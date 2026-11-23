@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Fields of one region in the Regions page draft. Planned regions also get the author's brief
- * and their planned links (routes to neighbours that have no exits yet).
+ * and their planned links (routes to neighbours that have no exits yet). Description and brief
+ * can be written by the World-Builder (RegionTextGenerate) into the draft.
  */
 import { computed } from 'vue'
 import { Plus, Trash2, Users } from 'lucide-vue-next'
@@ -14,10 +15,12 @@ import UiInput from '@/components/ui/UiInput.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import UiTextarea from '@/components/ui/UiTextarea.vue'
+import RegionTextGenerate from '@/components/editor/regions/RegionTextGenerate.vue'
 
 const section = defineModel<WorldSection>({ required: true })
 
 const props = defineProps<{
+  adventureId: string
   others: WorldSection[]
   sceneCount: number
 }>()
@@ -33,6 +36,7 @@ const STATUS_OPTIONS = [
 ]
 
 const isPlanned = computed(() => section.value.status !== 'built')
+const allSections = computed(() => [section.value, ...props.others])
 const linkTargets = computed(() => props.others.map((s) => ({ value: s.id, label: s.label })))
 
 const status = computed<string>({
@@ -80,11 +84,25 @@ function removeLink(index: number): void {
     <UiField label="Description" hint="One paragraph; the Game Master sees it while the player is in this region.">
       <UiTextarea v-model="section.description" :rows="3" />
     </UiField>
+    <RegionTextGenerate
+      :adventure-id="adventureId"
+      field="description"
+      :section="section"
+      :sections="allSections"
+      @generated="section.description = $event"
+    />
 
     <div v-if="isPlanned" class="space-y-4">
       <UiField label="Brief" hint="Your directions for building this region later.">
         <UiTextarea v-model="section.brief" :rows="2" />
       </UiField>
+      <RegionTextGenerate
+        :adventure-id="adventureId"
+        field="brief"
+        :section="section"
+        :sections="allSections"
+        @generated="section.brief = $event"
+      />
       <div class="space-y-2">
         <p class="wb-label">Planned routes</p>
         <div v-for="(link, index) in section.planned_links" :key="index" class="grid gap-2 md:grid-cols-[1fr_8rem_auto] items-end">
