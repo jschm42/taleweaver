@@ -11,6 +11,7 @@ from backend.api.routes.adventures.editing.change_set import (
     DeferredCommitSession,
     apply_change_set,
 )
+from backend.engine.world.sections import default_section
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.user import User
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -33,8 +34,12 @@ async def _seed() -> None:
             title="Moon Temple",
             owner_id=owner.id,
             original_manifest={"scenes": [], "exits": [], "scripts": []},
+            # Every adventure has a region (migration b5d7f9a1c3e6 placed old scenes in it).
+            world_sections=[default_section("Moon Temple")],
         )
-        hall = WorldScene(id="HALL", template_id=adv.id, label="Hall", description="A hall.")
+        hall = WorldScene(
+            id="HALL", template_id=adv.id, label="Hall", description="A hall.", section_id="MAIN"
+        )
         db.add_all([owner, adv, hall])
         await db.commit_for_real()
 
