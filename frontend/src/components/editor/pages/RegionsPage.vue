@@ -6,10 +6,11 @@
  * Region Builder page (RegionBuilderPage).
  * Spec: docs/specs/world_sections.md.
  */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Globe2, Plus, Sparkles } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
+import { useRegionBuildPoll } from '@/composables/editor/useRegionBuildPoll'
 import { useConfirm, usePrompt } from '@/composables/useDialogs'
 import { useDraft } from '@/composables/useDraft'
 import { useToast } from '@/composables/useToast'
@@ -40,9 +41,8 @@ interface RegionsDraft {
   sections: WorldSection[]
 }
 
-const POLL_MS = 5000
-
 const editor = useEditor()
+useRegionBuildPoll(() => sectionsOf(editor.debugData?.adventure), () => editor.fetchDebugInfo())
 const confirm = useConfirm()
 const prompt = usePrompt()
 const toast = useToast()
@@ -73,20 +73,7 @@ const selectedScenes = computed(() =>
     .filter((s) => selected.value && s.section_id === selected.value.id)
     .map((s) => ({ id: s.id, label: s.label || s.name || s.id, imageUrl: s.image_url })),
 )
-const generating = computed(() => sectionsOf(editor.debugData?.adventure).some((s) => s.status === 'generating'))
-
-// While a region is generated on the server, reload the editor data until it is done.
-let pollTimer: ReturnType<typeof setInterval> | null = null
-watch(generating, (busy) => {
-  if (busy && !pollTimer) pollTimer = setInterval(() => void editor.fetchDebugInfo(), POLL_MS)
-  if (!busy && pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}, { immediate: true })
-onBeforeUnmount(() => {
-  if (pollTimer) clearInterval(pollTimer)
-})
+// Polling runs via useRegionBuildPoll above.
 
 async function addRegion(): Promise<void> {
   const label = await prompt({ title: 'New region', label: 'Name', placeholder: 'e.g. Harbor Town', validate: (v) => (v.trim() ? null : 'Enter a name.') })

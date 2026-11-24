@@ -11,6 +11,7 @@ import { Maximize2, ZoomIn, ZoomOut } from 'lucide-vue-next'
 import type { MapLayout } from '@/types'
 import type { WorldSection } from '@/services/sectionService'
 import UiIconButton from '@/components/ui/UiIconButton.vue'
+import UiSpinner from '@/components/ui/UiSpinner.vue'
 import WorldMapViewport from '@/components/worldmap/WorldMapViewport.vue'
 import { formatTravel, type RegionLink } from '@/components/editor/regions/regionGraph'
 
@@ -49,7 +50,7 @@ function clamp(value: number): number {
 
 function startDrag(event: PointerEvent, id: string): void {
   moved.value = false
-  if (props.mode !== 'edit' || props.connectFrom !== null) return
+  if (props.mode !== 'edit' || props.connectFrom !== null || byId.value.get(id)?.status === 'generating') return
   const canvas = (event.currentTarget as HTMLElement).closest('[data-world-canvas]') as HTMLElement | null
   if (!canvas) return
   dragging.value = { id, canvas }
@@ -122,7 +123,7 @@ function counterScale(zoom: number): Record<string, string> {
           :aria-label="mode === 'navigate' ? `Open region ${section.label}` : `Region ${section.label}, drag to move`"
           :class="[
             'absolute flex flex-col items-center gap-1 rounded-md px-2 py-1',
-            mode === 'edit' && connectFrom === null ? 'cursor-grab' : 'cursor-pointer',
+            mode === 'edit' && connectFrom === null && section.status !== 'generating' ? 'cursor-grab' : 'cursor-pointer',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wb-accent',
           ]"
           :style="{ left: `${section.map_x}%`, top: `${section.map_y}%`, ...counterScale(zoom) }"
@@ -133,6 +134,16 @@ function counterScale(zoom: number): Record<string, string> {
           @click="click(section.id)"
         >
           <span
+            v-if="section.status === 'generating'"
+            :class="[
+              'inline-flex items-center justify-center w-6 h-6 rounded-full border border-wb-ai bg-wb-surface',
+              selectedId === section.id ? 'ring-2 ring-wb-ai ring-offset-2 ring-offset-wb-canvas' : '',
+            ]"
+          >
+            <UiSpinner size="sm" label="Building region" class="!text-wb-ai-text" />
+          </span>
+          <span
+            v-else
             :class="[
               'w-4 h-4 rounded-full border-2 border-wb-canvas',
               section.status === 'built' ? 'bg-wb-accent' : 'bg-wb-muted',
@@ -140,10 +151,15 @@ function counterScale(zoom: number): Record<string, string> {
             ]"
           />
           <!-- Solid chip: the name stays readable on any map image. -->
-          <span class="rounded-md border border-wb-line-strong bg-wb-surface px-2 py-0.5 text-center">
+          <span
+            :class="[
+              'rounded-md border bg-wb-surface px-2 py-0.5 text-center',
+              section.status === 'generating' ? 'border-wb-ai/60' : 'border-wb-line-strong',
+            ]"
+          >
             <span class="wb-label text-wb-strong whitespace-nowrap block">{{ section.label }}</span>
-            <span class="wb-hint whitespace-nowrap block">
-              {{ section.status === 'built' ? `${sceneCounts[section.id] || 0} scenes` : 'Planned' }}
+            <span :class="['wb-hint whitespace-nowrap block', section.status === 'generating' && '!text-wb-ai-text']">
+              {{ section.status === 'built' ? `${sceneCounts[section.id] || 0} scenes` : section.status === 'generating' ? 'Building…' : 'Planned' }}
             </span>
           </span>
         </button>

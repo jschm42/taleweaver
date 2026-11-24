@@ -74,6 +74,10 @@ function regionClick(id: string): void {
     emit('open-region', id)
     return
   }
+  if (byId.value.get(id)?.status === 'generating') {
+    toast.warn('This region is currently being built.')
+    return
+  }
   if (!connectFrom.value) {
     connectFrom.value = id
     return

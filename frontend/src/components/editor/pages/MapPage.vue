@@ -7,6 +7,7 @@
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
+import { useRegionBuildPoll } from '@/composables/editor/useRegionBuildPoll'
 import { useToast } from '@/composables/useToast'
 import { layoutOf, sectionsOf } from '@/services/sectionService'
 import ExitRoutePanel from '@/components/editor/ExitRoutePanel.vue'
@@ -23,6 +24,7 @@ const editor = useEditor()
 const toast = useToast()
 
 const sections = computed(() => sectionsOf(editor.debugData?.adventure))
+useRegionBuildPoll(() => sections.value, () => editor.fetchDebugInfo())
 const scenes = computed(() => (editor.editorScenes || []) as { id: string; label?: string; name?: string; section_id?: string | null }[])
 const exits = computed(() => editor.debugData?.exits || [])
 const regionId = ref<string | null>(lastRegion.get(editor.adventureId) ?? null)
@@ -51,6 +53,10 @@ const showWorld = computed(() => hasRegions.value && !regionId.value)
 
 function openRegion(id: string): void {
   const section = sections.value.find((s) => s.id === id)
+  if (section?.status === 'generating') {
+    toast.info(`${section.label} is currently being built. Check the Regions page for progress.`)
+    return
+  }
   if (section && section.status !== 'built' && !counts.value[id]) {
     toast.info(`${section.label} is planned and has no scenes yet. Build it on the Regions page.`)
     return
