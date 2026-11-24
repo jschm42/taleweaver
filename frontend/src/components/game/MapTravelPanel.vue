@@ -15,7 +15,7 @@ const props = defineProps<{
   currentRegionId: string | null
 }>()
 
-const emit = defineEmits<{ (e: 'travel', sceneId: string): void }>()
+const emit = defineEmits<{ (e: 'travel', sceneId: string, minutes?: number): void }>()
 
 const confirm = useConfirm()
 const options = ref<TravelOptions | null>(null)
@@ -62,7 +62,7 @@ async function travel(point: TravelPoint): Promise<void> {
     message: `The journey takes about ${duration(point.minutes)}.${companion}`,
     confirmLabel: 'Travel',
   })
-  if (ok) emit('travel', point.scene_id)
+  if (ok) emit('travel', point.scene_id, point.minutes)
 }
 </script>
 

@@ -246,6 +246,8 @@ class MapEngine:
                         "item_to_unlock": getattr(ex, "item_to_unlock", "") or "",
                         "rule_to_unlock": getattr(ex, "rule_to_unlock", "") or "",
                         "dynamic_zone": getattr(ex, "dynamic_zone", None),
+                        "travel_minutes": getattr(ex, "travel_minutes", None),
+                        "travel_label": getattr(ex, "travel_label", None),
                     }
                 )
             else:
@@ -263,6 +265,8 @@ class MapEngine:
                 matched_edge["item_to_unlock"] = ex.item_to_unlock or ""
                 matched_edge["rule_to_unlock"] = ex.rule_to_unlock or ""
                 matched_edge["dynamic_zone"] = getattr(ex, "dynamic_zone", None)
+                matched_edge["travel_minutes"] = getattr(ex, "travel_minutes", None)
+                matched_edge["travel_label"] = getattr(ex, "travel_label", None)
 
         MapEngine._add_revealed_exits(nodes, edges, exits)
         MapEngine._add_exits_between_visited(nodes, edges, exits)
@@ -375,6 +379,8 @@ class MapEngine:
                     "is_revealed": True,
                     "exit_type": exit_type,
                     "dynamic_zone": getattr(ex, "dynamic_zone", None),
+                    "travel_minutes": getattr(ex, "travel_minutes", None),
+                    "travel_label": getattr(ex, "travel_label", None),
                 }
             )
 
@@ -405,6 +411,8 @@ class MapEngine:
                     "is_locked": getattr(ex, "is_locked", False),
                     "exit_type": exit_type,
                     "dynamic_zone": getattr(ex, "dynamic_zone", None),
+                    "travel_minutes": getattr(ex, "travel_minutes", None),
+                    "travel_label": getattr(ex, "travel_label", None),
                 }
             )
 

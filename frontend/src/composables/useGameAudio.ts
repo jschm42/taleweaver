@@ -92,6 +92,9 @@ export function useGameAudio(audio: Readonly<Ref<AudioSnapshot | null>>): GameAu
   let current: Channel | null = null
   // URL of the track the player stopped (cleared when another track is due).
   let stoppedUrl = ''
+  // Monotonic sequence & pending URL to prevent overlapping fadeOutCurrent callbacks from opening duplicate channels.
+  let followSeq = 0
+  let pendingUrl = ''
   const isPlaying = ref(false)
   let unlockPending = false
 
@@ -189,6 +192,8 @@ export function useGameAudio(audio: Readonly<Ref<AudioSnapshot | null>>): GameAu
   function follow(snapshot: AudioSnapshot | null): void {
     const now = snapshot?.now ?? null
     if (!now) {
+      followSeq += 1
+      pendingUrl = ''
       stoppedUrl = ''
       fadeOutCurrent(0.5)
       return
@@ -199,17 +204,23 @@ export function useGameAudio(audio: Readonly<Ref<AudioSnapshot | null>>): GameAu
     if (now.url === stoppedUrl) return
     stoppedUrl = ''
     if (current?.url === now.url) {
+      pendingUrl = ''
       current.loop = now.loop
       isPlaying.value = true
       if (!muted.value) fade(current, targetVolume(), 0.5)
       return
     }
+    if (pendingUrl === now.url) return
     // Switching scenes/tracks: fade out previous audio quickly and cleanly before starting new track
+    const seq = ++followSeq
     const targetUrl = now.url
     const targetLoop = now.loop
     const targetFade = Math.min(now.fade, 1.5)
+    pendingUrl = targetUrl
     fadeOutCurrent(0.3, () => {
-      if (audio.value?.now?.url !== targetUrl) return
+      if (seq !== followSeq || audio.value?.now?.url !== targetUrl) return
+      pendingUrl = ''
+      if (current) release(current)
       current = openChannel(targetUrl, targetLoop)
       isPlaying.value = true
       if (!muted.value) startChannel(current, targetFade)
@@ -217,6 +228,8 @@ export function useGameAudio(audio: Readonly<Ref<AudioSnapshot | null>>): GameAu
   }
 
   function stopCurrent(): void {
+    followSeq += 1
+    pendingUrl = ''
     stoppedUrl = current?.url || audio.value?.now?.url || ''
     fadeOutCurrent(0.5)
     for (const ch of Array.from(activeChannels)) {
@@ -279,6 +292,8 @@ export function useGameAudio(audio: Readonly<Ref<AudioSnapshot | null>>): GameAu
   )
 
   function stopAll(): void {
+    followSeq += 1
+    pendingUrl = ''
     removeUnlock()
     for (const ch of Array.from(activeChannels)) {
       release(ch)

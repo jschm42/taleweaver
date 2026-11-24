@@ -89,12 +89,23 @@ const sheetDirty = ref(false)
 const showMap = ref(false)
 
 /** Fast travel chosen on the map: close it and walk the route as one player message. */
-async function handleFastTravel(sceneId: string): Promise<void> {
+async function handleFastTravel(sceneId: string, minutes?: number): Promise<void> {
   showMap.value = false
+  const regionInfo = resolveRegionTransition(sceneId)
+  sceneTransitionTarget.value = {
+    label: 'Fast Travel',
+    targetSceneName: resolveSceneName(sceneId) || 'New Location',
+    targetSceneId: sceneId,
+    targetSceneImage: resolveSceneImage(sceneId),
+    travelMinutes: minutes && minutes > 0 ? minutes : null,
+    ...regionInfo,
+  }
   try {
     await sendMessage(`/fast_travel ${sceneId}`)
   } catch (error: unknown) {
     addNotification(error instanceof Error ? error.message : 'Failed to travel.', 'error')
+  } finally {
+    sceneTransitionTarget.value = null
   }
 }
 const showQuests = ref(false)
@@ -163,6 +174,10 @@ const sceneTransitionTarget = ref<{
   targetSceneName: string
   targetSceneId: string
   targetSceneImage?: string | null
+  isRegionChange?: boolean
+  targetRegionName?: string | null
+  travelMinutes?: number | null
+  travelLabel?: string | null
 } | null>(null)
 
 const saveSessionNote = async (note: string) => {
@@ -1222,6 +1237,17 @@ watch(
   { deep: true },
 )
 
+const resolveRegionTransition = (targetSceneId?: string | null): { isRegionChange: boolean; targetRegionName: string | null } => {
+  if (!targetSceneId) return { isRegionChange: false, targetRegionName: null }
+  const currentSectionId = mapData.value?.current_section_id || null
+  const targetSectionId = findMapNode(targetSceneId)?.section_id || null
+  if (!currentSectionId || !targetSectionId || currentSectionId === targetSectionId) {
+    return { isRegionChange: false, targetRegionName: null }
+  }
+  const targetRegionName = mapData.value?.sections?.find((s) => s.id === targetSectionId)?.label || null
+  return { isRegionChange: true, targetRegionName }
+}
+
 const traverseSceneExit = async (exit: any, exitRef: string) => {
   exitTraversalBusy.value = exitRef
   const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim()
@@ -1231,11 +1257,17 @@ const traverseSceneExit = async (exit: any, exitRef: string) => {
       ? exit.target_scene_name
       : '') || knownName
   const targetSceneName = safeTargetName || 'New Location'
+  const regionInfo = resolveRegionTransition(targetId)
+  const travelMinutes = Number(exit?.travel_minutes) > 0 ? Number(exit.travel_minutes) : null
+  const travelLabel = typeof exit?.travel_label === 'string' && exit.travel_label.trim() ? exit.travel_label.trim() : null
   sceneTransitionTarget.value = {
     label: exitDisplayName(exit),
     targetSceneName,
     targetSceneId: targetId,
     targetSceneImage: exit?.target_scene_image || resolveSceneImage(targetId),
+    travelMinutes,
+    travelLabel,
+    ...regionInfo,
   }
   try {
     // Use the sendMessage pipeline so the scene transition triggers

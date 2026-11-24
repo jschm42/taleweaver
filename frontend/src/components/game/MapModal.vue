@@ -29,7 +29,7 @@ const props = defineProps<{
   gameId?: string
 }>()
 
-const emit = defineEmits<{ (e: 'close'): void; (e: 'travel', sceneId: string): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'travel', sceneId: string, minutes?: number): void }>()
 
 const mapContainer = ref<HTMLDivElement | null>(null)
 
@@ -1095,7 +1095,7 @@ onMounted(() => {
             :game-id="gameId"
             :regions="mapData?.sections || []"
             :current-region-id="mapData?.current_section_id || null"
-            @travel="(sceneId) => emit('travel', sceneId)"
+            @travel="(sceneId, minutes) => emit('travel', sceneId, minutes)"
           />
 
           <!-- Footer hint -->

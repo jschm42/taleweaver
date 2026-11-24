@@ -99,6 +99,10 @@ const props = defineProps<{
     targetSceneName: string
     targetSceneId?: string
     targetSceneImage?: string | null
+    isRegionChange?: boolean
+    targetRegionName?: string | null
+    travelMinutes?: number | null
+    travelLabel?: string | null
   } | null
   exitUnlockBusy?: boolean
   turnError?: { message: string; action: string } | null
@@ -598,6 +602,10 @@ defineExpose({
       :status-text="props.statusText"
       :background-image-url="transitionSceneImageUrl"
       :interlude="props.dynamicInterlude"
+      :is-region-change="Boolean(props.sceneTransitionTarget?.isRegionChange)"
+      :target-region-name="props.sceneTransitionTarget?.targetRegionName"
+      :travel-minutes="props.sceneTransitionTarget?.travelMinutes"
+      :travel-label="props.sceneTransitionTarget?.travelLabel"
     />
 
     <SceneImageViewer

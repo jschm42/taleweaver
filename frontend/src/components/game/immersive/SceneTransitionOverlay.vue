@@ -16,6 +16,10 @@ const props = defineProps<{
   exitLabel?: string | null
   statusText?: string | null
   backgroundImageUrl?: string | null
+  isRegionChange?: boolean
+  targetRegionName?: string | null
+  travelMinutes?: number | null
+  travelLabel?: string | null
   interlude?: {
     quote: string
     speaker_name?: string
@@ -30,6 +34,18 @@ const imageFailed = ref(false)
 
 const interludeSpeaker = computed((): string => {
   return (props.interlude?.speaker_name || props.interlude?.speaker || '').trim()
+})
+
+const regionTravelText = computed((): string => {
+  if (!props.isRegionChange) return ''
+  const mins = Number(props.travelMinutes || 0)
+  const label = (props.travelLabel || '').trim()
+  if (mins <= 0) return label
+  const days = Math.floor(mins / 1440)
+  const hours = Math.floor((mins % 1440) / 60)
+  const rem = mins % 60
+  const duration = [days ? `${days} d` : '', hours ? `${hours} h` : '', rem ? `${rem} min` : ''].filter(Boolean).join(' ')
+  return label ? `${label} (${duration})` : `Journey time: ${duration}`
 })
 
 watch(
@@ -94,8 +110,14 @@ function formatSceneTitle(name?: string | null): string {
 
       <!-- Destination Information -->
       <div class="flex flex-col items-center text-center max-w-md px-4 z-10">
+        <img
+          src="/assets/gif/ranger_wandering.webp"
+          alt=""
+          class="w-40 sm:w-48 h-auto mb-2 pointer-events-none select-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)]"
+          aria-hidden="true"
+        />
         <span class="tw-overlay-eyebrow text-[10px] sm:text-xs font-black uppercase tracking-[0.25em] mb-1.5 flex items-center gap-1.5">
-          <span>Traveling to</span>
+          <span>{{ props.targetRegionName ? `Traveling to ${props.targetRegionName}` : 'Traveling to' }}</span>
         </span>
 
         <h2 class="tw-overlay-title text-xl sm:text-3xl font-black tracking-wide">
@@ -117,6 +139,13 @@ function formatSceneTitle(name?: string | null): string {
           <template v-else>
             <span>The path unfolds into the unknown...</span>
           </template>
+        </p>
+
+        <p
+          v-if="regionTravelText"
+          class="tw-overlay-highlight text-xs sm:text-sm font-medium mt-1.5 drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]"
+        >
+          {{ regionTravelText }}
         </p>
 
         <!-- Atmospheric NPC Interlude Quote (Dynamic Scenes) -->

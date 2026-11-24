@@ -8,6 +8,8 @@ export type ArrivalTarget = {
   targetSceneName: string
   targetSceneId: string
   targetSceneImage?: string | null
+  isRegionChange?: boolean
+  targetRegionName?: string | null
 }
 
 /**
