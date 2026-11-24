@@ -56,6 +56,11 @@ Welcome to the TaleWeaver workspace! This file is the entry point for every codi
      7. **Editor autocomplete**: `frontend/src/utils/twScriptApiDefinitions.ts` for scripting API changes (see rule 4).
      8. **Tests**: add a test that the feature survives the whole path (generation schema → manifest applier, and blueprint key → parsed field), then run `tests/test_world_*.py`, `tests/test_world_builder_*.py` and the tests of the touched engine area.
 
+6. **Server-Side Image Generation Only**:
+   - Always generate adventure visuals (covers, scenes, NPCs, objects, protagonist portraits, cut-scene slides, and world map tiles) through TaleWeaver's server-side `MediaEngine` / editor endpoints (e.g. `POST /{template_id}/editor/cutscenes/image`, `scripts/adventure_api.py visuals`).
+   - **Never** use external or built-in agent image tools (such as the `image-generator` subagent) as a substitute.
+   - If the target user's `t2i_settings` or API keys are not configured, stop and inform the user instead of falling back to an external generator.
+
 ---
 
 ## 1. Workspace Rules (`.claude/rules/`)
