@@ -59,7 +59,8 @@ Welcome to the TaleWeaver workspace! This file is the entry point for every codi
 6. **Server-Side Image Generation Only**:
    - Always generate adventure visuals (covers, scenes, NPCs, objects, protagonist portraits, cut-scene slides, and world map tiles) through TaleWeaver's server-side `MediaEngine` / editor endpoints (e.g. `POST /{template_id}/editor/cutscenes/image`, `scripts/adventure_api.py visuals`).
    - **Never** use external or built-in agent image tools (such as the `image-generator` subagent) as a substitute.
-   - If the target user's `t2i_settings` or API keys are not configured, stop and inform the user instead of falling back to an external generator.
+   - **Settings lookup**: `t2i_settings` and `encrypted_api_keys` are stored globally on `ServerSettings` (`backend/models/server_settings.py`), not on `User` rows. When calling `MediaEngine` from a script outside FastAPI `get_current_user`, call `await apply_global_settings(db, user)` (`backend/core/global_settings.py`) before reading `user.t2i_settings` or `user.encrypted_api_keys`.
+   - If `t2i_settings` or API keys are still not configured after applying global settings, stop and inform the user instead of falling back to an external generator.
 
 ---
 
