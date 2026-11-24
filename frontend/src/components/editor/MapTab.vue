@@ -138,12 +138,14 @@ function updateLayout() {
     dynamicZone: Record<string, any>
     exitId: string
   }>()
+  const dimmedSet = new Set(props.dimmedSceneIds || [])
   const exits = props.debugData?.exits || []
   exits.forEach((edge: any) => {
     const fromId = safeId(edge.from_scene_id)
     const toId = safeId(edge.to_scene_id)
     const dynZone = (edge.dynamic_zone && typeof edge.dynamic_zone === 'object') ? edge.dynamic_zone : null
-    if (dynZone && toId && !g.hasNode(toId)) {
+    // Only create virtual dynamic zone nodes when their source scene is in the active region (not missing or dimmed).
+    if (dynZone && toId && g.hasNode(fromId) && !dimmedSet.has(String(edge.from_scene_id || '')) && !g.hasNode(toId)) {
       g.setNode(toId, { width: 160, height: 120 })
       virtualDynamicNodes.set(toId, {
         rawId: String(edge.to_scene_id || toId),
