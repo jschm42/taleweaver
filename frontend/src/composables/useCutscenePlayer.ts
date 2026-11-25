@@ -8,7 +8,7 @@
  * `effectiveAudio` plays that track instead of the scene audio (the game audio cross-fades back
  * afterwards). Spec: docs/specs/cutscenes.md.
  */
-import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, reactive, ref, watch, type ComputedRef, type Ref } from 'vue'
 import { api } from '@/composables/useApi'
 import type { AudioSnapshot, Cutscene } from '@/types'
 
@@ -17,6 +17,8 @@ const CUTSCENE_FADE_SECONDS = 1.5
 export interface CutscenePlayer {
   active: Ref<Cutscene | null>
   isActive: ComputedRef<boolean>
+  /** True while a cut-scene is playing or an unseen one is queued (e.g. before the ending card). */
+  isBlocking: ComputedRef<boolean>
   effectiveAudio: ComputedRef<AudioSnapshot | null>
   finish: () => Promise<void>
 }
@@ -25,16 +27,19 @@ export function useCutscenePlayer(
   serverCutscene: Ref<Cutscene | null>,
   gameId: () => string,
   audio: Ref<AudioSnapshot | null>,
+  defer?: Ref<boolean>,
 ): CutscenePlayer {
   const active = ref<Cutscene | null>(null)
-  const seenTokens = new Set<string>()
+  const seenTokens = reactive(new Set<string>())
 
   function open(candidate: Cutscene | null | undefined): void {
-    if (active.value || !candidate?.slides?.length || seenTokens.has(candidate.token)) return
+    if (defer?.value || active.value || !candidate?.slides?.length || seenTokens.has(candidate.token)) return
     active.value = candidate
   }
 
-  watch(serverCutscene, open, { immediate: true })
+  watch([serverCutscene, () => !!defer?.value], ([candidate, deferred]) => {
+    if (!deferred) open(candidate)
+  }, { immediate: true })
 
   async function finish(): Promise<void> {
     const current = active.value
@@ -70,5 +75,10 @@ export function useCutscenePlayer(
     }
   })
 
-  return { active, isActive: computed(() => Boolean(active.value)), effectiveAudio, finish }
+  const isActive = computed(() => Boolean(active.value))
+  const isBlocking = computed(() =>
+    Boolean(active.value || (serverCutscene.value?.slides?.length && !seenTokens.has(serverCutscene.value.token))),
+  )
+
+  return { active, isActive, isBlocking, effectiveAudio, finish }
 }

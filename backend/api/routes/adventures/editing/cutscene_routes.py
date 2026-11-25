@@ -31,7 +31,7 @@ from backend.core.style_catalog import resolve_tone_instruction
 from backend.engine.cutscenes.images import default_slide_prompt, style_instruction
 from backend.engine.cutscenes.library import (
     MAX_STYLE_CHARS,
-    intro_cutscene_or_none,
+    cutscene_ref_or_none,
     normalize_cutscenes,
 )
 from backend.models.adventure_template import AdventureTemplate
@@ -45,6 +45,10 @@ class CutscenesUpdate(BaseModel):
     cutscenes: list[dict[str, Any]] = Field(default_factory=list)
     # Shown right after a new session starts; must name one of ``cutscenes``.
     intro_cutscene_id: str | None = Field(default=None, max_length=40)
+    # Shown when the adventure is won (before the ending card); must name one of ``cutscenes``.
+    win_cutscene_id: str | None = Field(default=None, max_length=40)
+    # Shown on game over (before the ending card); must name one of ``cutscenes``.
+    game_over_cutscene_id: str | None = Field(default=None, max_length=40)
 
 
 class SlidePromptRequest(BaseModel):
@@ -91,10 +95,19 @@ async def update_cutscenes(
 ) -> dict:
     adv = await _get_owned_adventure_or_404(db, template_id, current_user.id)
     cutscenes = store_cutscenes(adv, payload.cutscenes)
-    intro = intro_cutscene_or_none(payload.intro_cutscene_id, cutscenes)
+    intro = cutscene_ref_or_none(payload.intro_cutscene_id, cutscenes)
+    win = cutscene_ref_or_none(payload.win_cutscene_id, cutscenes)
+    game_over = cutscene_ref_or_none(payload.game_over_cutscene_id, cutscenes)
     adv.intro_cutscene_id = intro  # type: ignore[assignment]
+    adv.win_cutscene_id = win  # type: ignore[assignment]
+    adv.game_over_cutscene_id = game_over  # type: ignore[assignment]
     await db.commit()
-    return {"cutscenes": cutscenes, "intro_cutscene_id": intro}
+    return {
+        "cutscenes": cutscenes,
+        "intro_cutscene_id": intro,
+        "win_cutscene_id": win,
+        "game_over_cutscene_id": game_over,
+    }
 
 
 @router.post(f"{_BASE}/image-prompt")

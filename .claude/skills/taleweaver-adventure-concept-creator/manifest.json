@@ -6,8 +6,8 @@
   "files": [
     {
       "path": "SKILL.md",
-      "sha256": "50c51a63f14190009bbb9c5d644d05a7f19345a941b0ab6e74cdc57e7a96d70c",
-      "size": 38921
+      "sha256": "04ae8198917900772b0c8a5d9c08b46b9e847ac13cd9625a799e00434ecda46c",
+      "size": 39049
     },
     {
       "path": "docs/scripting-enginge.md",
@@ -21,18 +21,18 @@
     },
     {
       "path": "docs/specs/adventure_format.md",
-      "sha256": "026c81779467fd86de1a942fa1a499c006e4a3e4cfb12bef7ea421234d3a9768",
-      "size": 44520
+      "sha256": "374e0a5b06ec350e41016f618e4ee69d32c33d4b2b4ef2d6af950e5ea5aa3190",
+      "size": 44795
     },
     {
       "path": "docs/world-builder-blueprint-manual.md",
-      "sha256": "89b280e088cbaa009f91a816619ea272bc956a025e270ae6ec4a61ae52e3e0a8",
-      "size": 40925
+      "sha256": "8b2134cf78466eeb64c276f8fd7f69b952ad2993eeefaecda9c4a2a317ca277c",
+      "size": 40999
     },
     {
       "path": "docs/world-builder-syntax.md",
-      "sha256": "661e03aaed6e5a4dc97dc19732ad2d63b14ff9616aef3b00f9718c169d963f8d",
-      "size": 43439
+      "sha256": "73396107ef9673db1d7aafd65990b29030b16515e23d846df9c261bd1d8741ed",
+      "size": 43823
     },
     {
       "path": "package.json",
@@ -69,7 +69,7 @@
     }
   ],
   "compatibility": {
-    "taleweaver": ">=0.8.1-beta",
+    "taleweaver": ">=0.9.0-beta",
     "agents": [
       "claude-code",
       "claude-skills",

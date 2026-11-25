@@ -33,8 +33,10 @@ reveal, a death, the ending).
 At most 100 cut-scenes. Image URLs other than `/data/...` and `assets/...` are dropped.
 
 A chapter (`sequence`) names its cut-scene in `start_cutscene_id`. The adventure names its
-intro in `AdventureTemplate.intro_cutscene_id` (migration `d9f1b3c5e7a2`): shown right after a
-new session starts. Only an id of the library is stored (`intro_cutscene_or_none`).
+intro in `AdventureTemplate.intro_cutscene_id` (migration `d9f1b3c5e7a2`, shown right after a
+new session starts) and its optional outcome cut-scenes in `win_cutscene_id` and
+`game_over_cutscene_id` (migration `e1a2b3c4d5e6`, shown when the adventure is won or lost,
+before the ending card). Only an id of the library is stored (`cutscene_ref_or_none`).
 
 ## 2. Showing a cut-scene
 
@@ -51,6 +53,10 @@ cut-scene that is already waiting is not queued again.
   (linear advance) and the script/activation start path queue `start_cutscene_id` **first**,
   before the chapter's start hook runs, so a chapter intro plays before cut-scenes its start
   script queued.
+- The adventure ends (`completed` or `game_over`): `gameplay_logic._finalize_session` queues
+  `win_cutscene_id` or `game_over_cutscene_id`. On the client, `useGameProgressState` holds
+  the terminal epilogue and ending card (`holdEnding`) until any lost-fight combat dialog and
+  any queued cut-scene (`useCutscenePlayer.isBlocking`) have finished.
 - `tw.cutscene.play(id)` (`engine/cutscenes/proxy.py`) records `ScriptChangeset.cutscene_ops`;
   every changeset applier (turn, `TriggerService`, session start) replays them with
   `apply_cutscene_ops`.
@@ -84,9 +90,9 @@ again.
 **Cut-scenes** page (Presentation group, `components/editor/pages/CutscenesPage.vue`): list,
 then the selected cut-scene's form (`components/editor/cutscenes/`): title, ID, image style
 (catalog names or free text), audio track, slides (text, image, order). One draft, saved with the
-save bar (`PUT /editor/cutscenes {cutscenes, intro_cutscene_id}`). **Adventure intro** above the
-list picks the cut-scene shown when a session starts; its tile carries an *Intro* badge, and
-renaming its id keeps it the intro. **Preview** plays it in the adventure's skin without speech.
+save bar (`PUT /editor/cutscenes {cutscenes, intro_cutscene_id, win_cutscene_id, game_over_cutscene_id}`). **Adventure intro**, **Victory**, and **Game over** above the
+list pick the cut-scenes shown at session start, victory, and defeat; their tiles carry badges, and
+renaming an id keeps those assignments. **Preview** plays it in the adventure's skin without speech.
 
 Slide images (`CutsceneSlideImageModal.vue`): the prompt comes from the slide text
 (`POST /editor/cutscenes/image-prompt`, `engine/cutscenes/images.py`) and can be edited;
@@ -99,18 +105,19 @@ stores the file under the adventure's `visuals/cutscene/`. The URL goes into the
 A chapter picks its cut-scene in the chapter dialog (Triggers tab, *Start cut-scene*).
 
 Validation (`core/world_validation/cutscenes.py`): `intro_cutscene_missing`,
-`chapter_cutscene_missing`,
+`win_cutscene_missing`, `game_over_cutscene_missing`, `chapter_cutscene_missing`,
 `cutscene_without_slides`, `cutscene_audio_missing`, `script_cutscene_missing` (a literal
 `tw.cutscene.play("ID")` with an unknown id).
 
 ## 4. World-Builder
 
-- **Generation:** `WorldManifesto.cutscenes` (`engine/world/world_cutscene_schema.py`) and
-  `SequenceSchema.start_cutscene_id`, `WorldManifesto.intro_cutscene_id`. The prompt allows at most three cut-scenes for the opening
+- **Generation:** `WorldManifesto.cutscenes` (`engine/world/world_cutscene_schema.py`),
+  `SequenceSchema.start_cutscene_id`, `WorldManifesto.intro_cutscene_id`,
+  `WorldManifesto.win_cutscene_id`, and `WorldManifesto.game_over_cutscene_id`. The prompt allows at most three cut-scenes for the opening
   and big turning points, 2-4 slides each, with English `image_prompt`s.
 - **Blueprint:** `[Cutscene: ID] Title` (`engine/blueprint/cutscene_blocks.py`): every body
   line is a slide, a `+` line a further passage of the slide above, `image N:` its picture, `style:` and `audio:` as above; chapters use
-  `cutscene: ID`, `[World]` uses `intro_cutscene: ID` (alias `cutscene`). The author's slides replace the LLM's for that id after generation; an LLM
+  `cutscene: ID`, `[World]` uses `intro_cutscene: ID` (alias `cutscene`), `win_cutscene: ID`, and `game_over_cutscene: ID`. The author's slides replace the LLM's for that id after generation; an LLM
   image prompt stays where the author gave none.
 - **Apply:** `manifest_apply/adventure_meta` merges the cut-scenes by id (a re-applied manifest
   keeps drawn images); `manifest_apply/cutscene_media.py` draws missing slide images when scene

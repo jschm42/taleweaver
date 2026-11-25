@@ -605,7 +605,7 @@ The generator only stores the prompts. Render the tracks in the editor's **Audio
 
 ### Cut-scenes
 
-A cut-scene opens a chapter like a short film: a few slides, each a picture with one or two sentences the narrator reads. Write one line per slide; a line starting with `+` adds a passage to the slide above it (for example a short exchange shown over the same picture); `image N:` describes slide N's picture (otherwise it is drawn from the slide's text), and `style:` gives the cut-scene its own look, for example a comic or watercolor cut-scene in a painterly fantasy adventure. Link it from the chapter with `cutscene:`, or make it the opening of the whole adventure with `intro_cutscene:` in `[World]` (shown right after a session starts, before the first chapter's).
+A cut-scene opens a chapter like a short film: a few slides, each a picture with one or two sentences the narrator reads. Write one line per slide; a line starting with `+` adds a passage to the slide above it (for example a short exchange shown over the same picture); `image N:` describes slide N's picture (otherwise it is drawn from the slide's text), and `style:` gives the cut-scene its own look, for example a comic or watercolor cut-scene in a painterly fantasy adventure. Link it from the chapter with `cutscene:`, or make it the adventure's opening, victory, or defeat cut-scene with `intro_cutscene:`, `win_cutscene:`, or `game_over_cutscene:` in `[World]` (shown right after a session starts, or before the victory / game-over card).
 
 ```text
 [Cutscene: INTRO] The Crimson Debt

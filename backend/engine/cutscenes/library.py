@@ -150,10 +150,15 @@ def find_cutscene(cutscenes: Any, cutscene_id: Any) -> Optional[dict[str, Any]]:
     )
 
 
-def intro_cutscene_or_none(value: Any, cutscenes: Any) -> Optional[str]:
-    """``value`` when it names a cut-scene of ``cutscenes`` (the adventure's intro), else None."""
+def cutscene_ref_or_none(value: Any, cutscenes: Any) -> Optional[str]:
+    """``value`` when it names a cut-scene of ``cutscenes``, else None."""
     wanted = cutscene_id_or_none(value)
     return wanted if wanted and wanted in cutscene_ids(cutscenes) else None
+
+
+def intro_cutscene_or_none(value: Any, cutscenes: Any) -> Optional[str]:
+    """``value`` when it names a cut-scene of ``cutscenes`` (the adventure's intro), else None."""
+    return cutscene_ref_or_none(value, cutscenes)
 
 
 def cutscene_ids(cutscenes: Any) -> set[str]:

@@ -18,6 +18,8 @@ BLUEPRINT = """A blood debt.
 
 [World]
 intro_cutscene: INTRO
+win_cutscene: INTRO
+game_over_cutscene: INTRO
 
 [Scene: VILLAGE] Ashford
 A village ringed by black fire.
@@ -70,6 +72,8 @@ def test_blueprint_cutscene_reaches_the_manifest_and_the_chapter():
     assert not any(key.startswith("image_") and key != "image_style" for key in cutscene)
     assert manifest["sequences"][0]["start_cutscene_id"] == "INTRO"
     assert manifest["intro_cutscene_id"] == "INTRO"
+    assert manifest["win_cutscene_id"] == "INTRO"
+    assert manifest["game_over_cutscene_id"] == "INTRO"
 
 
 def test_cutscene_without_slides_warns():
@@ -115,6 +119,8 @@ async def test_manifest_apply_stores_cutscenes(auth_client, setup_test_db, monke
             ],
             "cutscenes": [{"id": "intro", "title": "Intro", "slides": [{"text": "It begins."}]}],
             "intro_cutscene_id": "intro",
+            "win_cutscene_id": "intro",
+            "game_over_cutscene_id": "intro",
         }
 
         # Act
@@ -127,3 +133,5 @@ async def test_manifest_apply_stores_cutscenes(auth_client, setup_test_db, monke
         assert adventure.cutscenes[0]["slides"][0]["passages"] == ["It begins."]
         assert adventure.sequences[0]["start_cutscene_id"] == "INTRO"
         assert adventure.intro_cutscene_id == "INTRO"
+        assert adventure.win_cutscene_id == "INTRO"
+        assert adventure.game_over_cutscene_id == "INTRO"

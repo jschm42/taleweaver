@@ -125,9 +125,16 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "title_audio": _ref("title_track_id"),
     "title_song": _ref("title_track_id"),
     "title_music": _ref("title_track_id"),
-    # The adventure's intro: a [Cutscene] shown right after a session starts.
+    # The adventure's intro and outcome cut-scenes: [Cutscene] entries shown at start, win, or game over.
     "intro_cutscene": _ref("intro_cutscene_id"),
     "cutscene": _ref("intro_cutscene_id"),
+    "win_cutscene": _ref("win_cutscene_id"),
+    "victory_cutscene": _ref("win_cutscene_id"),
+    "completed_cutscene": _ref("win_cutscene_id"),
+    "game_over_cutscene": _ref("game_over_cutscene_id"),
+    "gameover_cutscene": _ref("game_over_cutscene_id"),
+    "lose_cutscene": _ref("game_over_cutscene_id"),
+    "defeat_cutscene": _ref("game_over_cutscene_id"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
     # At 0 HP: game_over (default) or respawn at the last revival point with a share of max HP.

@@ -513,6 +513,8 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "audio_tracks": deepcopy(adv.audio_tracks or []),
         "cutscenes": deepcopy(getattr(adv, "cutscenes", None) or []),
         "intro_cutscene_id": getattr(adv, "intro_cutscene_id", None),
+        "win_cutscene_id": getattr(adv, "win_cutscene_id", None),
+        "game_over_cutscene_id": getattr(adv, "game_over_cutscene_id", None),
         "audio_enabled": bool(getattr(adv, "audio_enabled", True)),
         "fast_travel_enabled": getattr(adv, "fast_travel_enabled", True) is not False,
         "world_map_layout": deepcopy(getattr(adv, "world_map_layout", None)),

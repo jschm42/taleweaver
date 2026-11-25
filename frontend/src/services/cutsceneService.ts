@@ -44,15 +44,25 @@ function json(method: string, body: unknown): RequestInit {
 }
 
 export const cutsceneService = {
-  /** Saves the list and the adventure's intro cut-scene (shown when a session starts). */
+  /** Saves the list and the adventure's intro / outcome cut-scenes. */
   saveCutscenes(
     adventureId: string,
     cutscenes: CutsceneDefinition[],
-    introCutsceneId: string,
-  ): Promise<{ cutscenes: CutsceneDefinition[], intro_cutscene_id: string | null }> {
+    refs: { introCutsceneId: string, winCutsceneId: string, gameOverCutsceneId: string },
+  ): Promise<{
+    cutscenes: CutsceneDefinition[]
+    intro_cutscene_id: string | null
+    win_cutscene_id: string | null
+    game_over_cutscene_id: string | null
+  }> {
     return send(
       base(adventureId),
-      json('PUT', { cutscenes, intro_cutscene_id: introCutsceneId || null }),
+      json('PUT', {
+        cutscenes,
+        intro_cutscene_id: refs.introCutsceneId || null,
+        win_cutscene_id: refs.winCutsceneId || null,
+        game_over_cutscene_id: refs.gameOverCutsceneId || null,
+      }),
       'Failed to save the cut-scenes.',
     )
   },

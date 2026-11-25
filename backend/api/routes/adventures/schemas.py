@@ -335,6 +335,8 @@ class AdventureTemplateResponse(BaseModel):
     audio_tracks: Optional[list[dict[str, Any]]] = None
     title_track_id: Optional[str] = None
     intro_cutscene_id: Optional[str] = None
+    win_cutscene_id: Optional[str] = None
+    game_over_cutscene_id: Optional[str] = None
     audio_enabled: bool = True
     fast_travel_enabled: bool = True
     ui_theme: Optional[dict[str, Any]] = None

@@ -309,8 +309,10 @@ const {
   loadOlderMessages,
 } = useGameSocket()
 
-// Cut-scenes (chapter intro, tw.cutscene.play): shown once; their track replaces the scene audio.
-const cutscenePlayer = useCutscenePlayer(cutscene, () => props.id, audio)
+// Set from showCombatDialog further down: a lost fight is shown before the outcome cut-scene and ending.
+const combatDialogOpen = ref(false)
+// Cut-scenes (adventure intro/win/game-over, chapter intro, tw.cutscene.play): shown once; their track replaces the scene audio.
+const cutscenePlayer = useCutscenePlayer(cutscene, () => props.id, audio, combatDialogOpen)
 const gameAudio = useGameAudio(cutscenePlayer.effectiveAudio)
 const { activeSkin: cutsceneSkin, skinStyle: cutsceneSkinStyle } = useSheetSkin(() => sheet.value)
 const { muted: audioMuted, playerVolume: audioVolume, hasAudio, isGenerating: isAudioGenerating, lastError: audioError, isPlaying: isAudioPlaying } = gameAudio
@@ -385,8 +387,6 @@ const confirmRestoreCheckpoint = async () => {
   }
 }
 
-// Set from showCombatDialog further down: a lost fight is shown before the ending is written.
-const combatDialogOpen = ref(false)
 const {
   trackedQuestId,
   clockTick,
@@ -401,7 +401,7 @@ const {
   gameSettings,
   createTerminalEpilogue,
   refreshUser,
-  holdEnding: combatDialogOpen,
+  holdEnding: computed(() => combatDialogOpen.value || cutscenePlayer.isBlocking.value),
 })
 
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))

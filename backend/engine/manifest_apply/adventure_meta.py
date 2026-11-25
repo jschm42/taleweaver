@@ -11,7 +11,7 @@ from sqlalchemy import select
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.conversations.settings import normalize_conversation_settings
-from backend.engine.cutscenes.library import intro_cutscene_or_none
+from backend.engine.cutscenes.library import cutscene_ref_or_none
 from backend.engine.cutscenes.transfer import merged_cutscenes
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
@@ -180,11 +180,10 @@ def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
     adventure.cutscenes = merged_cutscenes(  # type: ignore[assignment]
         adventure.cutscenes, adventure_field(ctx.manifest, "cutscenes")
     )
-    intro = intro_cutscene_or_none(
-        adventure_field(ctx.manifest, "intro_cutscene_id"), adventure.cutscenes
-    )
-    if intro:
-        adventure.intro_cutscene_id = intro  # type: ignore[assignment]
+    for field in ("intro_cutscene_id", "win_cutscene_id", "game_over_cutscene_id"):
+        ref = cutscene_ref_or_none(adventure_field(ctx.manifest, field), adventure.cutscenes)
+        if ref:
+            setattr(adventure, field, ref)
     _apply_sections(ctx, adventure)
     adventure.cover_appearance = clean_appearance(adventure.cover_appearance)  # type: ignore[assignment]
 

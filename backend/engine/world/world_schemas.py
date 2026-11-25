@@ -1026,6 +1026,20 @@ class WorldManifesto(WorldBaseSchema):
             "(the adventure's opening). Use empty string for none."
         ),
     )
+    win_cutscene_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of a cut-scene in `cutscenes` shown when the adventure is won "
+            "(before the victory card). Use empty string for none."
+        ),
+    )
+    game_over_cutscene_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of a cut-scene in `cutscenes` shown on game over "
+            "(before the game-over card). Use empty string for none."
+        ),
+    )
     cutscenes: list[CutsceneSchema] = Field(
         default=[],
         description=(

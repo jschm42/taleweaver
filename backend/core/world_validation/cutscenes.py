@@ -102,24 +102,37 @@ def _script_findings(ctx: ValidationContext, known: set[str]) -> list[Validation
     ]
 
 
+def _adventure_ref_findings(ctx: ValidationContext, known: set[str]) -> list[ValidationFinding]:
+    specs = (
+        ("intro_cutscene_id", "intro_cutscene_missing", "intro", "no intro is shown"),
+        ("win_cutscene_id", "win_cutscene_missing", "victory", "no victory cut-scene is shown"),
+        (
+            "game_over_cutscene_id",
+            "game_over_cutscene_missing",
+            "game-over",
+            "no game-over cut-scene is shown",
+        ),
+    )
+    findings: list[ValidationFinding] = []
+    for field, code, label, effect in specs:
+        cid = ctx.adventure.get(field)
+        if cid and cutscene_id_or_none(cid) not in known:
+            findings.append(
+                finding(
+                    "warn",
+                    code,
+                    f"The adventure's {label} cut-scene '{cid}' does not exist; {effect}.",
+                    cutscene_id=cid,
+                )
+            )
+    return findings
+
+
 def check_cutscene_refs(ctx: ValidationContext) -> list[ValidationFinding]:
     cutscenes = normalize_cutscenes(ctx.adventure.get("cutscenes"))
     known = {c["id"] for c in cutscenes}
-    intro = ctx.adventure.get("intro_cutscene_id")
-    intro_findings = (
-        [
-            finding(
-                "warn",
-                "intro_cutscene_missing",
-                f"The adventure's intro cut-scene '{intro}' does not exist; no intro is shown.",
-                cutscene_id=intro,
-            )
-        ]
-        if intro and cutscene_id_or_none(intro) not in known
-        else []
-    )
     return [
-        *intro_findings,
+        *_adventure_ref_findings(ctx, known),
         *_chapter_findings(ctx, known),
         *_library_findings(ctx, cutscenes),
         *_script_findings(ctx, known),

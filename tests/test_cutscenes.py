@@ -248,6 +248,8 @@ def test_validator_reports_unknown_cutscene_references():
             ],
             "init_script": "tw.cutscene.play('GHOST')\ntw.cutscene.play('INTRO')",
             "intro_cutscene_id": "NOWHERE",
+            "win_cutscene_id": "NO_WIN",
+            "game_over_cutscene_id": "NO_LOSS",
         },
         "protagonist": {},
         "scenes": [],
@@ -263,10 +265,86 @@ def test_validator_reports_unknown_cutscene_references():
     # Assert
     assert {
         "intro_cutscene_missing",
+        "win_cutscene_missing",
+        "game_over_cutscene_missing",
         "chapter_cutscene_missing",
         "cutscene_audio_missing",
         "script_cutscene_missing",
     } <= codes
+
+
+async def _finalize_and_fetch_cutscene(auth_client, template_id: str, status: str) -> dict:
+    from types import SimpleNamespace
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from backend.api.routes.adventures.gameplay_logic import GameTurnManager
+
+    start = await auth_client.post(
+        f"/api/adventures/{template_id}/sessions/start", headers=_headers("ender")
+    )
+    game_id = start.json()["game_id"]
+    async with TestSessionLocal() as db:
+        state = (
+            await db.execute(
+                select(SessionState)
+                .where(SessionState.session_id == game_id)
+                .options(selectinload(SessionState.session))
+            )
+        ).scalar_one()
+        adv = await db.get(AdventureTemplate, template_id)
+        mgr = GameTurnManager.__new__(GameTurnManager)
+        mgr.db = db
+        mgr.game_id = game_id
+        mgr.state = state
+        mgr.adventure = adv
+        mgr.user = await db.get(User, adv.owner_id)
+        mgr._session_helper = SimpleNamespace(
+            set_terminal_epilogue_sent=lambda _s, sent=True: None,
+        )
+        await mgr._finalize_session(status, status)
+        await db.commit()
+    res = await auth_client.get(f"/api/adventures/{game_id}/chat", headers=_headers("ender"))
+    assert res.status_code == 200
+    return res.json()["cutscene"]
+
+
+@pytest.mark.asyncio
+async def test_finalize_session_queues_outcome_cutscene(auth_client, setup_test_db):
+    # Arrange
+    async with TestSessionLocal() as db:
+        user = User(username="ender", hashed_password="x", role="admin")
+        db.add(user)
+        await db.flush()
+        template = AdventureTemplate(
+            title="Ending",
+            owner_id=user.id,
+            version="2.0.0",
+            is_ready=True,
+            creation_status="Ready",
+            original_manifest={"version": "2.0.0", "start_scene_id": "HALL"},
+            cutscenes=[
+                {"id": "WIN_CS", "slides": [{"text": "You triumphed!"}]},
+                {"id": "LOSS_CS", "slides": [{"text": "Darkness falls."}]},
+            ],
+            win_cutscene_id="WIN_CS",
+            game_over_cutscene_id="LOSS_CS",
+        )
+        db.add(template)
+        await db.flush()
+        db.add(WorldScene(id="HALL", template_id=template.id, label="Hall", description="A hall."))
+        db.add(Avatar(user_id=user.id, template_id=template.id, name="Hero", inventory=[]))
+        await db.commit()
+        template_id = template.id
+
+    # Act & Assert
+    assert (await _finalize_and_fetch_cutscene(auth_client, template_id, "completed"))[
+        "id"
+    ] == "WIN_CS"
+    assert (await _finalize_and_fetch_cutscene(auth_client, template_id, "game_over"))[
+        "id"
+    ] == "LOSS_CS"
 
 
 def test_every_autocompleted_cutscene_method_exists_on_the_proxy():

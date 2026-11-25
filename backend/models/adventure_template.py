@@ -81,6 +81,10 @@ class AdventureTemplate(Base, TimestampMixin):
     cutscenes: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     # Cut-scene of the library shown right after a new session starts (before chapter 1's).
     intro_cutscene_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Cut-scene of the library shown when the adventure is won (before the ending card).
+    win_cutscene_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Cut-scene of the library shown on game over (before the ending card).
+    game_over_cutscene_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     # World sections (regions) that group the scenes; None = no sections (engine/world/sections.py).
     world_sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
     # The drawn world map as a grid of image tiles (engine/world/world_map_layout.py).

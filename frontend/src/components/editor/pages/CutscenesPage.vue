@@ -31,6 +31,10 @@ interface CutscenesDraft {
   cutscenes: CutsceneDefinition[]
   /** Shown right after a new session starts ('' = none). */
   introId: string
+  /** Shown when the adventure is won, before the victory card ('' = none). */
+  winId: string
+  /** Shown on game over, before the game-over card ('' = none). */
+  gameOverId: string
 }
 
 const editor = useEditor()
@@ -43,6 +47,8 @@ const adventure = computed(() => editor.debugData?.adventure as Record<string, a
 const { draft, isDirty, changedCount, isSaving, reset, commit } = useDraft<CutscenesDraft>(() => ({
   cutscenes: cutscenesOf(adventure.value),
   introId: String(adventure.value?.intro_cutscene_id || ''),
+  winId: String(adventure.value?.win_cutscene_id || ''),
+  gameOverId: String(adventure.value?.game_over_cutscene_id || ''),
 }))
 useUnsavedGuard(isDirty)
 
@@ -61,19 +67,26 @@ const audioTracks = computed(() =>
 const chapters = computed(() => (editor.adventure?.sequences || []) as { title?: string, id?: string, start_cutscene_id?: string }[])
 
 function usedBy(id: string): string[] {
+  const uses: string[] = []
+  if (draft.value.introId === id) uses.push('the adventure (session start)')
+  if (draft.value.winId === id) uses.push('the adventure (victory)')
+  if (draft.value.gameOverId === id) uses.push('the adventure (game over)')
   const chapterTitles = chapters.value.filter((c) => c.start_cutscene_id === id).map((c) => `chapter ${c.title || c.id || ''}`)
-  return draft.value.introId === id ? ['the adventure (session start)', ...chapterTitles] : chapterTitles
+  return [...uses, ...chapterTitles]
 }
 
-const introOptions = computed(() =>
+const cutsceneOptions = computed(() =>
   cutscenes.value.map((c) => ({ value: c.id, label: c.title ? `${c.title} (${c.id})` : c.id })),
 )
 
-// Renaming the intro cut-scene's id keeps it the intro (same position, new id).
+// Renaming a cut-scene's id keeps its adventure-level assignments (same position, new id).
 watch(
   () => [selectedIndex.value, selected.value?.id] as const,
   ([index, id], [oldIndex, oldId]) => {
-    if (index === oldIndex && id && oldId && draft.value.introId === oldId) draft.value.introId = id
+    if (index !== oldIndex || !id || !oldId) return
+    if (draft.value.introId === oldId) draft.value.introId = id
+    if (draft.value.winId === oldId) draft.value.winId = id
+    if (draft.value.gameOverId === oldId) draft.value.gameOverId = id
   },
 )
 
@@ -110,6 +123,8 @@ async function deleteCutscene(cutscene: CutsceneDefinition): Promise<void> {
   if (!ok) return
   draft.value.cutscenes = cutscenes.value.filter((c) => c !== cutscene)
   if (draft.value.introId === cutscene.id) draft.value.introId = ''
+  if (draft.value.winId === cutscene.id) draft.value.winId = ''
+  if (draft.value.gameOverId === cutscene.id) draft.value.gameOverId = ''
   selectedIndex.value = -1
 }
 
@@ -135,7 +150,11 @@ async function save(): Promise<void> {
   }
   try {
     await commit(async (value) => {
-      await cutsceneService.saveCutscenes(editor.adventureId, value.cutscenes, value.introId)
+      await cutsceneService.saveCutscenes(editor.adventureId, value.cutscenes, {
+        introCutsceneId: value.introId,
+        winCutsceneId: value.winId,
+        gameOverCutsceneId: value.gameOverId,
+      })
       await editor.fetchDebugInfo()
     })
     toast.success('Cut-scenes saved.')
@@ -162,12 +181,26 @@ async function save(): Promise<void> {
 
     <template v-else>
       <UiCard>
-        <UiField
-          label="Adventure intro"
-          hint="Shown right after a new session starts, before the first chapter's cut-scene."
-        >
-          <UiSelect v-model="draft.introId" :options="introOptions" placeholder="None" />
-        </UiField>
+        <div class="grid gap-4 md:grid-cols-3">
+          <UiField
+            label="Adventure intro"
+            hint="Shown right after a new session starts, before the first chapter's cut-scene."
+          >
+            <UiSelect v-model="draft.introId" :options="cutsceneOptions" placeholder="None" />
+          </UiField>
+          <UiField
+            label="Victory"
+            hint="Shown when the adventure is won, before the victory card."
+          >
+            <UiSelect v-model="draft.winId" :options="cutsceneOptions" placeholder="None" />
+          </UiField>
+          <UiField
+            label="Game over"
+            hint="Shown on game over, before the game-over card."
+          >
+            <UiSelect v-model="draft.gameOverId" :options="cutsceneOptions" placeholder="None" />
+          </UiField>
+        </div>
       </UiCard>
 
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -193,7 +226,11 @@ async function save(): Promise<void> {
             <span class="wb-label block truncate !text-wb-strong">{{ cutscene.title || cutscene.id }}</span>
             <span class="wb-mono block truncate text-wb-muted">{{ cutscene.id }}</span>
             <span class="wb-hint block">{{ cutscene.slides.length }} slide{{ cutscene.slides.length === 1 ? '' : 's' }}</span>
-            <UiBadge v-if="cutscene.id === draft.introId" class="mt-1">Intro</UiBadge>
+            <div class="mt-1 flex flex-wrap gap-1">
+              <UiBadge v-if="cutscene.id === draft.introId">Intro</UiBadge>
+              <UiBadge v-if="cutscene.id === draft.winId">Victory</UiBadge>
+              <UiBadge v-if="cutscene.id === draft.gameOverId">Game over</UiBadge>
+            </div>
           </span>
         </button>
       </div>

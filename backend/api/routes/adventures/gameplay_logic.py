@@ -53,7 +53,7 @@ from backend.core.narration_styles import (
 from backend.core.narrator_voices import narrator_voice_rules
 from backend.core.prose_craft import PROSE_CRAFT_RULES
 from backend.core.voice_tags import vocal_tag_reminder
-from backend.engine.cutscenes.queue import apply_cutscene_ops
+from backend.engine.cutscenes.queue import apply_cutscene_ops, queue_cutscene
 from backend.engine.rules.fast_travel import TRAVEL_KEY, apply_travel_ops
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.debug_script_command import (
@@ -2554,6 +2554,22 @@ class GameTurnManager:
         if stream_callback:
             await stream_callback(message)
 
+    def _queue_outcome_cutscene(self, status: str) -> None:
+        field = "win_cutscene_id" if status == "completed" else "game_over_cutscene_id"
+        cutscene_id = getattr(self.adventure, field, None)
+        if not cutscene_id or not self.state:
+            return
+        entity_states = dict(self.state.entity_states or {})
+        if not queue_cutscene(entity_states, cutscene_id):
+            return
+        self.state.entity_states = entity_states
+        try:
+            flag_modified(self.state, "entity_states")
+        except Exception:
+            logger.debug(
+                "Could not flag entity_states as modified on %r", type(self.state).__name__
+            )
+
     async def _finalize_session(self, status: str, note: str | None = None):
         """Updates the session status and records the outcome in the user's game log."""
         previous_status = self.state.session.status if self.state and self.state.session else None
@@ -2563,6 +2579,7 @@ class GameTurnManager:
 
         if status in {"completed", "game_over"} and previous_status != status:
             self._set_terminal_epilogue_sent(status, sent=False)
+            self._queue_outcome_cutscene(status)
 
         if status == "completed":
             self.state.is_completed = True
