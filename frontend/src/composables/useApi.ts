@@ -727,6 +727,17 @@ export const api = {
     return request(`/settings/models?${params.toString()}`, { timeoutMs: 30000 })
   },
 
+  getLumigenOptions(baseUrl?: string): Promise<{
+    profiles: Array<{ id: number | string; name: string; model?: string | null; aspect_ratio?: string | null }>
+    categories: Array<{ id: number | string; name: string }>
+    error?: string | null
+  }> {
+    const params = new URLSearchParams()
+    if (baseUrl) params.set('base_url', baseUrl)
+    const qs = params.toString()
+    return request(`/settings/models/lumigen-options${qs ? `?${qs}` : ''}`, { timeoutMs: 15000 })
+  },
+
   /** Reads the setup wizard state of the current admin. */
   getSetupWizard(): Promise<SetupWizardStatus> {
     return request('/settings/setup-wizard')
@@ -945,7 +956,9 @@ export const api = {
   testVision(payload: any): Promise<any> {
     const timeoutMs = payload.provider === 'comfyui'
       ? (Math.min(3600, Math.max(1, Number(payload.comfyui_timeout) || 600)) + 30) * 1000
-      : 180000
+      : payload.provider === 'lumigen'
+        ? (Math.min(3600, Math.max(5, Number(payload.lumigen_timeout) || 300)) + 30) * 1000
+        : 180000
     return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload), timeoutMs })
   },
 

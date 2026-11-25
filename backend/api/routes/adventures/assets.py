@@ -413,7 +413,10 @@ async def regenerate_visual(
         adv=adv,
         template_id=template_id,
         payload=payload,
-        user_config={"t2i_settings": current_user.t2i_settings},
+        user_config={
+            "t2i_settings": current_user.t2i_settings,
+            "adventure_title": adv.title,
+        },
         api_keys=current_user.encrypted_api_keys,
         t2i=current_user.t2i_settings or {},
         style_instruction=style_instruction,

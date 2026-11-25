@@ -52,6 +52,7 @@ from backend.engine.media.image_generation_support import (
     retry_openrouter_minimal,
 )
 from backend.engine.media.image_prompt_context import appearance_context, with_context
+from backend.engine.media.lumigen import generate_image as generate_lumigen_image
 from backend.utils.image_generator import (
     OrganicGradientStrategy,
     PlaceholderImageGenerator,
@@ -643,6 +644,7 @@ class MediaEngine:
         provider_options = provider_options or {}
         direct_generators = {
             "comfyui": generate_comfyui_image,
+            "lumigen": generate_lumigen_image,
             "openrouter": MediaEngine._generate_image_openrouter_direct,
             "black_forest_labs": MediaEngine._generate_image_black_forest_labs_direct,
             "stable_diffusion": MediaEngine._generate_image_stable_diffusion_from_options,
@@ -1035,18 +1037,32 @@ class MediaEngine:
 
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
+        if user_config.get("adventure_title"):
+            options.setdefault("session_title", user_config["adventure_title"])
         options["comfyui_profile"] = "advanced" if use_advanced_model else "simple"
         if use_advanced_model:
             options["steps"] = t2i.get("advanced_steps")
             options["cfg_scale"] = t2i.get("advanced_cfg_scale")
             options["sampler_name"] = t2i.get("advanced_sampler_name")
             options["scheduler"] = t2i.get("advanced_scheduler")
+            options["lumigen_profile"] = t2i.get("advanced_lumigen_profile") or t2i.get(
+                "lumigen_profile"
+            )
+            options["lumigen_categories"] = (
+                t2i.get("advanced_lumigen_categories") or t2i.get("lumigen_categories") or []
+            )
             min_long_edge = t2i.get("advanced_min_long_edge")
         else:
             options["steps"] = t2i.get("simple_steps")
             options["cfg_scale"] = t2i.get("simple_cfg_scale")
             options["sampler_name"] = t2i.get("simple_sampler_name")
             options["scheduler"] = t2i.get("simple_scheduler")
+            options["lumigen_profile"] = t2i.get("simple_lumigen_profile") or t2i.get(
+                "lumigen_profile"
+            )
+            options["lumigen_categories"] = (
+                t2i.get("simple_lumigen_categories") or t2i.get("lumigen_categories") or []
+            )
             min_long_edge = t2i.get("simple_min_long_edge")
 
         if provider in ("stable_diffusion", "ollama", "comfyui"):
@@ -1111,18 +1127,32 @@ class MediaEngine:
 
         # Resolve steps and cfg_scale for simple or advanced model
         options = dict(t2i)
+        if user_config.get("adventure_title"):
+            options.setdefault("session_title", user_config["adventure_title"])
         options["comfyui_profile"] = "advanced" if use_advanced_model else "simple"
         if use_advanced_model:
             options["steps"] = t2i.get("advanced_steps")
             options["cfg_scale"] = t2i.get("advanced_cfg_scale")
             options["sampler_name"] = t2i.get("advanced_sampler_name")
             options["scheduler"] = t2i.get("advanced_scheduler")
+            options["lumigen_profile"] = t2i.get("advanced_lumigen_profile") or t2i.get(
+                "lumigen_profile"
+            )
+            options["lumigen_categories"] = (
+                t2i.get("advanced_lumigen_categories") or t2i.get("lumigen_categories") or []
+            )
             min_long_edge = t2i.get("advanced_min_long_edge")
         else:
             options["steps"] = t2i.get("simple_steps")
             options["cfg_scale"] = t2i.get("simple_cfg_scale")
             options["sampler_name"] = t2i.get("simple_sampler_name")
             options["scheduler"] = t2i.get("simple_scheduler")
+            options["lumigen_profile"] = t2i.get("simple_lumigen_profile") or t2i.get(
+                "lumigen_profile"
+            )
+            options["lumigen_categories"] = (
+                t2i.get("simple_lumigen_categories") or t2i.get("lumigen_categories") or []
+            )
             min_long_edge = t2i.get("simple_min_long_edge")
 
         if (entity_type or "").upper() in PORTRAIT_ENTITY_TYPES:
@@ -1213,6 +1243,7 @@ class MediaEngine:
         options["comfyui_profile"] = "advanced"
         # Covers are portrait so they fill the 3:4 tale cards; the portal hero fades them in.
         options["aspect_ratio"] = COVER_ASPECT_RATIO
+        options.setdefault("session_title", title)
         existing_neg = options.get("negative_prompt") or ""
         anti_split_neg = "split screen, multi-panel, panels, comic strip, collage, triptych, diptych, multiple views, storyboard, frames, borders, dividers"
         options["negative_prompt"] = (
@@ -1222,6 +1253,12 @@ class MediaEngine:
         options["cfg_scale"] = t2i.get("advanced_cfg_scale")
         options["sampler_name"] = t2i.get("advanced_sampler_name")
         options["scheduler"] = t2i.get("advanced_scheduler")
+        options["lumigen_profile"] = t2i.get("advanced_lumigen_profile") or t2i.get(
+            "lumigen_profile"
+        )
+        options["lumigen_categories"] = (
+            t2i.get("advanced_lumigen_categories") or t2i.get("lumigen_categories") or []
+        )
         min_long_edge = t2i.get("advanced_min_long_edge")
 
         if provider in ("stable_diffusion", "ollama", "comfyui"):

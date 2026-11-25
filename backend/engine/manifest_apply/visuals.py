@@ -87,7 +87,10 @@ def t2i_config(ctx: ApplyContext) -> tuple[dict, dict]:
     user = ctx.user
     keys = user.encrypted_api_keys if user else None
     # copy.copy keeps EffectiveKeys.sources (the key policy); dict() would drop it.
-    return {"t2i_settings": user.t2i_settings if user else None}, copy.copy(keys) if keys else {}
+    return {
+        "t2i_settings": user.t2i_settings if user else None,
+        "adventure_title": ctx.adventure.title if ctx.adventure else None,
+    }, copy.copy(keys) if keys else {}
 
 
 def uses_advanced_model(ctx: ApplyContext, setting: str, default: str) -> bool:

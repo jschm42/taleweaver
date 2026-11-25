@@ -187,3 +187,25 @@ async def fetch_comfyui(
         for name in checkpoints
         if isinstance(name, str)
     ]
+
+
+async def fetch_lumigen(
+    client: httpx.AsyncClient, api_key: Optional[str], base_url: str
+) -> list[DiscoveredModel]:
+    from backend.engine.media.lumigen import list_models
+
+    try:
+        models = await list_models(client, base_url, api_key)
+    except (httpx.HTTPError, ValueError) as exc:
+        raise DiscoveryError(str(exc)) from exc
+    result: list[DiscoveredModel] = []
+    for entry in models:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or entry.get("model") or entry.get("id") or "").strip()
+        if not name:
+            continue
+        provider = str(entry.get("provider") or "").strip()
+        label = f"{name} ({provider})" if provider else name
+        result.append(DiscoveredModel(id=name, label=label, kinds=IMAGE))
+    return result

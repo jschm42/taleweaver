@@ -86,6 +86,14 @@ class SettingsService {
     comfyui_timeout: 600,
     simple_comfyui_workflow: 'sdxl',
     advanced_comfyui_workflow: 'sdxl',
+    lumigen_url: 'https://127.0.0.1:7003/mcp',
+    lumigen_timeout: 300,
+    lumigen_profile: '',
+    lumigen_categories: [] as string[],
+    simple_lumigen_profile: '',
+    advanced_lumigen_profile: '',
+    simple_lumigen_categories: [] as string[],
+    advanced_lumigen_categories: [] as string[],
     width: null as number | null,
     height: null as number | null,
     steps: null as number | null,
@@ -409,6 +417,20 @@ class SettingsService {
       advanced_min_long_edge: cleanNum(payload.advanced_min_long_edge),
       seed: cleanNum(payload.seed),
       image_quality: cleanNum(payload.image_quality),
+      lumigen_url: cleanStr(payload.lumigen_url),
+      lumigen_timeout: cleanNum(payload.lumigen_timeout),
+      lumigen_profile: cleanStr(payload.lumigen_profile) ?? '',
+      lumigen_categories: Array.isArray(payload.lumigen_categories)
+        ? payload.lumigen_categories.map((c: unknown) => String(c).trim()).filter(Boolean)
+        : [],
+      simple_lumigen_profile: cleanStr(payload.simple_lumigen_profile) ?? '',
+      advanced_lumigen_profile: cleanStr(payload.advanced_lumigen_profile) ?? '',
+      simple_lumigen_categories: Array.isArray(payload.simple_lumigen_categories)
+        ? payload.simple_lumigen_categories.map((c: unknown) => String(c).trim()).filter(Boolean)
+        : [],
+      advanced_lumigen_categories: Array.isArray(payload.advanced_lumigen_categories)
+        ? payload.advanced_lumigen_categories.map((c: unknown) => String(c).trim()).filter(Boolean)
+        : [],
     }
 
     this.t2iForm.value = cleanedPayload

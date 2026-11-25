@@ -85,6 +85,8 @@ async def _generate_tier_image(
 
     t2i = dict(getattr(user, "t2i_settings", None) or {})
     provider, model, options = _tier_options(t2i, tier)
+    if getattr(adventure, "title", None):
+        options.setdefault("session_title", adventure.title)
     if not model:
         return None
     api_keys = dict(getattr(user, "encrypted_api_keys", None) or {})

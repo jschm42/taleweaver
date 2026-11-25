@@ -22,6 +22,7 @@ const asset = reactive({ provider: '', model: '' })
 const ollamaUrl = ref(t2iForm.value.ollama_url || 'http://localhost:11434')
 const stableDiffusionUrl = ref(t2iForm.value.stable_diffusion_url || 'http://127.0.0.1:7860')
 const comfyuiUrl = ref(t2iForm.value.comfyui_url || 'http://127.0.0.1:8188')
+const lumigenUrl = ref(t2iForm.value.lumigen_url || 'https://127.0.0.1:7003/mcp')
 const comfyuiTimeout = ref(t2iForm.value.comfyui_timeout || 600)
 const simpleWorkflow = ref<'sd15' | 'sdxl'>(t2iForm.value.simple_comfyui_workflow === 'sd15' ? 'sd15' : 'sdxl')
 const advancedWorkflow = ref<'sd15' | 'sdxl'>(t2iForm.value.advanced_comfyui_workflow === 'sd15' ? 'sd15' : 'sdxl')
@@ -100,6 +101,7 @@ async function save(): Promise<boolean> {
     comfyui_timeout: comfyuiTimeout.value,
     simple_comfyui_workflow: simpleWorkflow.value,
     advanced_comfyui_workflow: advancedWorkflow.value,
+    lumigen_url: lumigenUrl.value,
   })
   if (settingsService.statusMessage.value?.type === 'error') {
     errorMessage.value = settingsService.statusMessage.value.text
@@ -178,6 +180,11 @@ defineExpose({ save })
         :simple="asset.provider === 'comfyui'"
         :advanced="scene.provider === 'comfyui'"
       />
+
+      <div v-if="usesProvider('lumigen')">
+        <label :class="wizardStyles.label" for="wizard-t2i-lumigen">Lumigen MCP URL</label>
+        <input id="wizard-t2i-lumigen" v-model="lumigenUrl" :class="wizardStyles.input" />
+      </div>
 
       <div v-if="usesProvider('ollama')">
         <label :class="wizardStyles.label" for="wizard-t2i-ollama">Ollama URL</label>

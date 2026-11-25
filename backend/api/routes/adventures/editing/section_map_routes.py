@@ -130,7 +130,7 @@ async def generate_world_map_tile(
         url = await MediaEngine.generate_scene_image(
             prompt,
             template_id,
-            {"t2i_settings": current_user.t2i_settings},
+            {"t2i_settings": current_user.t2i_settings, "adventure_title": adv.title},
             copy.copy(keys) if keys else {},
             style_instruction=_style(adv, current_user) if request.use_style else None,
         )

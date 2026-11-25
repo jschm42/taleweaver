@@ -55,6 +55,7 @@ export function useSettingsActions() {
       testService.testVision(
         p.key, p.model, p.provider, p.ollama_url, p.stable_diffusion_url, p.steps, p.cfg_scale, p.width,
         p.height, p.sampler_name, p.scheduler, p.min_long_edge, p.comfyui_url, p.comfyui_timeout, p.comfyui_workflow,
+        p.lumigen_url, p.lumigen_timeout, p.lumigen_profile, p.lumigen_categories,
       ),
     // The backend tests the saved settings, so the form is saved first; otherwise a provider
     // switched in the form would still be tested with the previous one.

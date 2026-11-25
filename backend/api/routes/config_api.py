@@ -540,6 +540,14 @@ class T2ISettingsPayload(ComfySettings):
     provider: str  # Legacy
     ollama_url: Optional[str] = None
     stable_diffusion_url: Optional[str] = None
+    lumigen_url: Optional[str] = None
+    lumigen_timeout: Optional[int] = Field(default=None, ge=5, le=3600)
+    lumigen_profile: Optional[str] = None
+    lumigen_categories: Optional[list[str]] = None
+    simple_lumigen_profile: Optional[str] = None
+    advanced_lumigen_profile: Optional[str] = None
+    simple_lumigen_categories: Optional[list[str]] = None
+    advanced_lumigen_categories: Optional[list[str]] = None
     width: Optional[int] = None
     height: Optional[int] = None
     steps: Optional[int] = None
@@ -1031,6 +1039,14 @@ class TestVisionPayload(ComfyTestOptions):
     provider: str
     ollama_url: Optional[str] = None
     stable_diffusion_url: Optional[str] = None
+    lumigen_url: Optional[str] = None
+    lumigen_timeout: Optional[int] = Field(default=None, ge=5, le=3600)
+    lumigen_profile: Optional[str] = None
+    lumigen_categories: Optional[list[str]] = None
+    simple_lumigen_profile: Optional[str] = None
+    advanced_lumigen_profile: Optional[str] = None
+    simple_lumigen_categories: Optional[list[str]] = None
+    advanced_lumigen_categories: Optional[list[str]] = None
     steps: Optional[int] = None
     cfg_scale: Optional[float] = None
     sampler_name: Optional[str] = None
@@ -1065,12 +1081,21 @@ def _build_vision_provider_options(payload: "TestVisionPayload", provider_key: s
     options: dict[str, Any] = {}
     if provider_key == "comfyui":
         options.update(ComfyTestOptions.model_validate(payload.model_dump()).model_dump())
-    for key in ("ollama_url", "stable_diffusion_url", "sampler_name", "scheduler"):
+    for key in (
+        "ollama_url",
+        "stable_diffusion_url",
+        "lumigen_url",
+        "lumigen_profile",
+        "sampler_name",
+        "scheduler",
+    ):
         if getattr(payload, key):
             options[key] = getattr(payload, key)
-    for key in ("steps", "cfg_scale"):
+    for key in ("steps", "cfg_scale", "lumigen_timeout", "lumigen_categories"):
         if getattr(payload, key) is not None:
             options[key] = getattr(payload, key)
+    if provider_key == "lumigen":
+        options.setdefault("aspect_ratio", "4:5")
 
     # Test vision generates a wizard portrait (CHARACTER/4:5 aspect ratio)
     if provider_key in _LOCAL_IMAGE_PROVIDERS and not payload.width and not payload.height:

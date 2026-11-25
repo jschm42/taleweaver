@@ -16,6 +16,7 @@ from backend.core.models_config import (
     PREDEFINED_IMAGE_MODELS,
     PREDEFINED_LLM_MODELS,
 )
+from backend.engine.media.lumigen import DEFAULT_LUMIGEN_URL, ssl_verify_for_url
 from backend.services.model_discovery import fetchers
 from backend.services.model_discovery.classify import IMAGE, LLM, ModelKind
 from backend.services.model_discovery.fetchers import DiscoveredModel, DiscoveryError, Fetcher
@@ -56,6 +57,9 @@ PROVIDERS: dict[str, ProviderSpec] = {
     ),
     "comfyui": ProviderSpec(
         fetchers.fetch_comfyui, "http://127.0.0.1:8188", needs_key=False, custom_base=True
+    ),
+    "lumigen": ProviderSpec(
+        fetchers.fetch_lumigen, DEFAULT_LUMIGEN_URL, needs_key=True, custom_base=True
     ),
     "stable_diffusion": ProviderSpec(
         fetchers.fetch_stable_diffusion, "http://127.0.0.1:7860", needs_key=False, custom_base=True
@@ -130,7 +134,9 @@ async def _fetch(
 ) -> list[DiscoveredModel]:
     if client is not None:
         return await spec.fetch(client, api_key, base_url)
-    async with httpx.AsyncClient(timeout=_FETCH_TIMEOUT) as own_client:
+    async with httpx.AsyncClient(
+        timeout=_FETCH_TIMEOUT, verify=ssl_verify_for_url(base_url)
+    ) as own_client:
         return await spec.fetch(own_client, api_key, base_url)
 
 

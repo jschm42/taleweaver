@@ -38,7 +38,14 @@ def _tier_options(t2i: dict[str, Any], tier: str) -> tuple[str, str, dict[str, A
     model = str(t2i.get(f"{prefix}_model") or "")
     options = dict(t2i)
     options["comfyui_profile"] = prefix
-    for key in ("steps", "cfg_scale", "sampler_name", "scheduler"):
+    for key in (
+        "steps",
+        "cfg_scale",
+        "sampler_name",
+        "scheduler",
+        "lumigen_profile",
+        "lumigen_categories",
+    ):
         options[key] = t2i.get(f"{prefix}_{key}")
     return provider, model, options
 
@@ -75,6 +82,8 @@ def make_script_image_generator(
         if not safe_game_id:
             raise ValueError("Missing game session for image generation.")
         provider, model, options = _tier_options(t2i, tier)
+        if getattr(adventure, "title", None):
+            options.setdefault("session_title", adventure.title)
         if not model:
             raise ValueError(f"No {tier} image model is configured in the Visual Preferences.")
         api_key = MediaEngine._resolve_api_key(provider, api_keys)

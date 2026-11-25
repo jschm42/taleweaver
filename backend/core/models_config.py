@@ -22,6 +22,7 @@ IMAGE_PROVIDERS = [
     {"id": "ollama", "name": "Ollama (Local)"},
     {"id": "stable_diffusion", "name": "Stable Diffusion (Local)"},
     {"id": "comfyui", "name": "ComfyUI (Local, Experimental)"},
+    {"id": "lumigen", "name": "Lumigen MCP"},
 ]
 
 TTS_PROVIDERS = [
@@ -73,6 +74,7 @@ PREDEFINED_IMAGE_MODELS = {
     "ollama": ["x/flux2-klein", "stable-diffusion-v1-5"],
     "stable_diffusion": ["default"],
     "comfyui": [],
+    "lumigen": [],
 }
 
 PREDEFINED_TTS_MODELS = {

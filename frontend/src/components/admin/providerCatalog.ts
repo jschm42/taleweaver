@@ -88,6 +88,14 @@ export const PROVIDERS: ProviderMeta[] = [
     docsUrl: 'https://docs.bfl.ml',
   },
   {
+    id: 'lumigen',
+    name: 'Lumigen MCP',
+    category: 'specialized',
+    capabilities: ['T2I (MCP)'],
+    description: 'Lumigen image generation MCP server (Bearer token).',
+    docsUrl: 'https://github.com/jschm42/lumigen',
+  },
+  {
     id: 'elevenlabs',
     name: 'ElevenLabs',
     category: 'specialized',

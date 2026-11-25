@@ -435,6 +435,7 @@ tests = [
     "test_image_*.py",
     "test_media_engine.py",
     "test_comfyui.py",
+    "test_lumigen_mcp.py",
     "test_visual_regenerate_errors.py",
     "test_script_image.py",
     "test_session_map_images.py",

@@ -181,7 +181,11 @@ class TestService {
     minLongEdge?: number | null,
     comfyuiUrl?: string,
     comfyuiTimeout?: number,
-    comfyuiWorkflow?: string
+    comfyuiWorkflow?: string,
+    lumigenUrl?: string,
+    lumigenTimeout?: number,
+    lumigenProfile?: string,
+    lumigenCategories?: string[],
   ) {
     this.testResults.value[key] = { status: 'loading', message: 'Generating test image...' }
 
@@ -205,6 +209,10 @@ class TestService {
         comfyui_url: cleanStr(comfyuiUrl),
         comfyui_timeout: cleanNum(comfyuiTimeout),
         comfyui_workflow: cleanStr(comfyuiWorkflow),
+        lumigen_url: cleanStr(lumigenUrl),
+        lumigen_timeout: cleanNum(lumigenTimeout),
+        lumigen_profile: cleanStr(lumigenProfile),
+        lumigen_categories: Array.isArray(lumigenCategories) ? lumigenCategories : undefined,
         steps: cleanNum(steps),
         cfg_scale: cleanNum(cfgScale),
         sampler_name: cleanStr(samplerName),
