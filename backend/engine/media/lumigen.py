@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import math
 import ssl
@@ -14,13 +15,26 @@ from backend.utils.path_security import validate_provider_url
 
 DEFAULT_LUMIGEN_URL = "https://127.0.0.1:7003/mcp"
 DEFAULT_LUMIGEN_TIMEOUT = 300
-_LOOPBACK_HOSTS = frozenset(("127.0.0.1", "localhost", "::1"))
+_LOOPBACK_HOSTS = frozenset(("127.0.0.1", "localhost", "::1", "host.docker.internal", "lumigen"))
+
+
+def _is_local_or_private_host(hostname: str) -> bool:
+    normalized = hostname.lower().rstrip(".")
+    if not normalized:
+        return False
+    if normalized in _LOOPBACK_HOSTS:
+        return True
+    try:
+        ip = ipaddress.ip_address(normalized)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local
 
 
 def ssl_verify_for_url(url: str) -> bool | ssl.SSLContext:
-    """Allow self-signed TLS certificates on local loopback Lumigen Docker endpoints."""
+    """Allow self-signed TLS certificates on local, Docker, and private Lumigen endpoints."""
     parsed = urlparse(url)
-    if parsed.scheme == "https" and (parsed.hostname or "").lower() in _LOOPBACK_HOSTS:
+    if parsed.scheme == "https" and _is_local_or_private_host(parsed.hostname or ""):
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE

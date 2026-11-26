@@ -2,6 +2,7 @@
 
 import base64
 import json
+import ssl
 from io import BytesIO
 from unittest.mock import patch
 
@@ -135,3 +136,29 @@ async def test_discover_lumigen_options():
 
     assert res["profiles"] == [{"id": 1, "name": "Default"}]
     assert res["categories"] == [{"id": 2, "name": "Cover"}]
+
+
+@pytest.mark.parametrize(
+    ("url", "expect_self_signed"),
+    [
+        ("https://127.0.0.1:7003/mcp", True),
+        ("https://localhost:7003/mcp", True),
+        ("https://[::1]:7003/mcp", True),
+        ("https://host.docker.internal:7003/mcp", True),
+        ("https://lumigen:7003/mcp", True),
+        ("https://192.168.178.57:7003/mcp", True),
+        ("https://10.0.0.5:7003/mcp", True),
+        ("https://172.18.0.3:7003/mcp", True),
+        ("https://lumigen.example.com/mcp", False),
+        ("https://8.8.8.8/mcp", False),
+        ("http://host.docker.internal:7003/mcp", False),
+    ],
+)
+def test_ssl_verify_for_url(url: str, expect_self_signed: bool):
+    result = lumigen.ssl_verify_for_url(url)
+    if expect_self_signed:
+        assert isinstance(result, ssl.SSLContext)
+        assert result.verify_mode == ssl.CERT_NONE
+        assert result.check_hostname is False
+    else:
+        assert result is True
