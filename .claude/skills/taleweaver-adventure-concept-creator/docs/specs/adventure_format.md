@@ -20,9 +20,10 @@ The manifest represents the complete blueprint of a generated or exported world.
 ```json
 {
   "format": "TaleWeaver",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "adventure": { ... },
   "protagonist": { ... },
+  "sections": [ ... ],
   "scenes": [ ... ],
   "npcs": [ ... ],
   "objects": [ ... ],
@@ -42,7 +43,8 @@ first 512 bytes of each `adventure.adv` without downloading the whole file.
 
 | Manifest version | Status |
 | --- | --- |
-| `1.4.0` (current) | Current format. Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, companions (NPC `companion`, exit and sequence `companions_allowed`), and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
+| `1.5.0` (current) | Current format. Adds world sections (regions: top-level `sections`, scene `section_id`), travel time on exits (`travel_minutes`, `travel_label`), fast travel (scene `is_fast_travel_point` / `fast_travel_unlock`, adventure `fast_travel_enabled`, sequence `fast_travel_allowed`) and cut-scenes (adventure `cutscenes`, sequence `start_cutscene_id`). |
+| `1.4.0` up to below `1.5.0` | Supported: importable and playable without restrictions (no world sections). Adds dynamic scenes (`dynamic_generation` / `dynamic_zone`), item visuals, companions (NPC `companion`, exit and sequence `companions_allowed`), and respawning (`game_over_rules.on_zero_hp`, scene `is_respawn_point`, sequence `respawn_allowed`). |
 | `1.3.1` up to below `1.4.0` | Supported: importable and playable without restrictions (predates optional `dynamic_generation` / `dynamic_zone` fields, companions, and respawning). |
 | `1.3` up to below `1.3.1` | **Deprecated**: still importable and playable, shown with a *Deprecated* badge on imported adventures and in the adventure library dialog (listed by default after all current adventures; unticking *Show deprecated* hides them for the rest of the browser session). `CONSTRUCTABLE` recipes from these versions lack `result_item_ids` / `kept_ingredients`, so crafting may not work. |
 | `1.0` up to below `1.3` | **Legacy**: importable, but must be migrated before it can be played (*Migrate adventure*). Only the version decides: an adventure without sequences stays playable. |
@@ -76,6 +78,12 @@ General configuration, narrative constraints, and gameplay settings.
 | `audio_tracks` | `array` | Optional audio library: `[{"id", "name", "prompt", "url", "source", "reference_scene_id", "created_at"}]`. `id` is a slug (`A-Z a-z 0-9 _ -`, max 50, accepted on import); IDs set in the editor use upper-case letters, digits and underscores, max 30 (e.g. `CRYPT_THEME`). `url` is an `assets/` path in `.adz` bundles and a `/data/` URL into the adventure's own library folder in the database; anything else (other adventures' files, external URLs, `.adv` uploads without the file) is dropped, leaving a *planned* track that the editor can render from its `prompt`. `source`: `generated`, `uploaded` or `planned`. |
 | `title_track_id` | `string` \| `null` | Optional title track: `id` of a `audio_tracks` entry, played while the adventure's library tile is hovered. Without it the tile stays silent. |
 | `audio_enabled` | `boolean` | Default `true`. `false` switches scene audio off (script audio via `tw.audio` still plays). |
+| `cutscenes` | `array` | Optional cut-scenes: `[{"id", "title", "image_style", "audio_track_id", "slides": [{"id", "passages", "image_url", "image_prompt"}]}]`. `passages` are 1-6 texts shown one after another over the slide's picture (a single `text` is read as the first passage). `id` is upper case (`A-Z 0-9 _`, max 40); at most 100 cut-scenes with 12 slides each. `image_style` overrides the adventure's image style for the slide images (catalog id or name, or a free description; empty = the adventure's style). `audio_track_id` names an `audio_tracks` entry. Slide `image_url` is an `assets/` path in `.adz` bundles and a `/data/` URL in the database; other URLs are dropped on import. A chapter shows one with `start_cutscene_id`, scripts with `tw.cutscene.play(id)`. See [Cut-scenes](cutscenes.md). *(since 1.5.0)* |
+| `intro_cutscene_id` | `string` \| `null` | Optional `id` of a `cutscenes` entry shown right after a new session starts, before the first chapter's cut-scene. *(since 1.5.0)* |
+| `win_cutscene_id` | `string` \| `null` | Optional `id` of a `cutscenes` entry shown when the adventure is won, before the victory card. |
+| `game_over_cutscene_id` | `string` \| `null` | Optional `id` of a `cutscenes` entry shown on game over, before the game-over card. |
+| `world_map_layout` | `object \| null` | Optional drawn world map shown behind the regions: `{cols, rows, tiles: [{col, row, url}]}`, a grid of up to 6 x 6 images in 16:9 (each `url` an `assets/` path in `.adz` bundles). Region `map_x` / `map_y` are percent of the whole map. *(since 1.5.0)* |
+| `fast_travel_enabled` | `boolean` | Default `true`. `false` switches fast travel off for the whole adventure (see [Fast travel](#fast-travel)). *(since 1.5.0)* |
 | `narrator_voice` | `object` \| `null` | Optional voice of the Game Master: how the narration is worded (diction, sentence rhythm, attitude), not how long it is. `{"id": "noir-detective", "name": "Hardboiled Noir Detective", "description": "...", "instruction": "Narrate like ...", "sample": "Rain hit the neon sign ..."}`. `instruction` is required (max. 1500 characters); `sample` is an optional style sample (max. 500). `id` is the catalog voice the author picked, or `"custom"` for a voice written in the editor. The full voice is stored, so an import works without the admin's voice catalog. Without it, the GM narrates in the neutral default voice. |
 | `ui_theme` | `object` \| `string` | Optional in-game dialog skin: `{"skin": "chronicle", "accent": "#8a2b1a"}`. `skin` is one of `classic`, `chronicle`, `noir`, `terminal`, `grimoire`, `eldritch`, `toon`, `ancient`, `starship`, `pixel`, `thriller`, `sitcom`; `accent` is a `#rrggbb` color. A bare string is shorthand for the skin. Any other key or value is dropped on import (no custom CSS). Without it, the skin is derived from `selected_tone`. The skin also styles the combat dialog (ability cards, item tiles, chronicle, and the arena's player/accent colors). |
 | `selected_image_styles`| `array` | List of visual style IDs from the style catalog. |
@@ -118,6 +126,54 @@ The baseline state and attributes of the player character.
 
 ---
 
+### 2.2a World sections (`sections`)
+
+Regions that group the scenes of a large world on a world map (a town, a mine, a mountain
+range). Every adventure has at least one built region: a manifest without `sections` (or with
+`[]`) gets the default region on import (id `MAIN`, named after the adventure), and scenes
+without a known built region are placed in the first built one. With a single region the
+adventure plays without a world map; it appears from two built regions on. Regions are purely
+spatial: they gate nothing; locks stay on exits. Spec and phases:
+[World sections](world_sections.md).
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `id` | `string` | Unique uppercase slug (e.g. `"HARBOR_TOWN"`, max 50). |
+| `label` | `string` | Region name shown to the player. |
+| `description` | `string` | One paragraph. While the player is in the region, the Game Master sees `Region: <label>: <description>` in the location block. |
+| `map_x`, `map_y` | `number` | Position on the world map in percent (0-100; 0/0 = top left). |
+| `order_index` | `number` | List order in the editor. |
+| `status` | `"built"` \| `"stub"` \| `"generating"` | `built` (default): the region holds scenes. `stub`: a planned region without scenes, visible to authors only. Sessions never receive stub regions or the author fields below. |
+| `brief` | `string` | Optional author directions for building a planned region. |
+| `summary` | `string` | Optional short summary of the region's content, used by later generation steps. |
+| `planned_links` | `array` | Planned routes of a planned region, whose exits do not exist yet: `[{"to_section_id", "travel_minutes", "note", "gateway_scene_ids"}]` (`gateway_scene_ids`: up to 8 scenes of the target region a generated region connects to first). Links between built regions come from exits whose two scenes lie in different regions. |
+| `generated` | `object` \| `null` | What the Region Builder added to a region it built (`scene_ids`, `entity_ids`, `quest_ids`, `award_keys`, `sequence_ids`, `script_ids`, old `planned_links`), so the editor can discard it. Author field. |
+| `generation_settings` | `object` \| `null` | The Region Builder's last settings of a planned region (`{mode, context, options}`), so the region can be built again the same way. Author field. |
+
+Exports always contain all regions, planned ones included, so a campaign can be continued
+from the file. A session copies the built regions into its adventure snapshot at start.
+
+---
+
+### 2.2b Fast travel
+
+Scenes with `is_fast_travel_point: true` become destinations once unlocked: on first entry
+(`fast_travel_unlock: "visit"`, also for the start scene) or by a script
+(`tw.game.unlock_fast_travel`). The player then travels there from any scene with
+`/fast_travel <place>` or the map's travel strip. Fast travel walks the cheapest known route
+(open exits between visited scenes, least travel time, avoiding solo passages while a
+companion follows) exit by exit with every hook (`on_exit_used`, companion follow, travel
+time, `on_enter_scene`, due time events) and narrates once on arrival. It stops early when
+something happens on the way (a hook or time event writes a message, a choice opens, a fight
+starts, a script moves the player, the next exit is locked). It is refused during a fight, with
+an open choice, when `fast_travel_enabled` is `false`, while the active sequence has
+`fast_travel_allowed: false`, or after `tw.game.set_fast_travel(False, reason)`. The session
+record lives in `entity_states["__travel__"]` (`unlocked`, `disabled`, `reason`) and is part
+of every checkpoint. `GET /api/adventures/{game_id}/travel/options` lists the unlocked points
+with route time.
+
+---
+
 ### 2.3 Scenes (`scenes`)
 
 The physical locations composing the world map.
@@ -131,6 +187,9 @@ The physical locations composing the world map.
 | `decorative_objects` | `array` | Up to 7 static background details (max 100 chars each). |
 | `audio_track_id` | `string` \| `null` | Optional `id` of the `adventure.audio_tracks` entry that plays in this scene. Scenes sharing a track keep it playing across a scene change; without one the audio fades out. |
 | `is_respawn_point` | `boolean` | Optional, default `false`. A revival point: in respawn mode a protagonist who falls to 0 HP wakes up at the last one reached (see [Respawn](#respawn)). *(since 1.4.0)* |
+| `section_id` | `string` \| `null` | `id` of the `sections` entry (region) the scene lies in. Missing, `null` or unknown: the first built region on import. A scene may not belong to a planned (`stub`) region. *(since 1.5.0)* |
+| `is_fast_travel_point` | `boolean` | Optional, default `false`. A fast travel point: once unlocked, the player can travel here from anywhere (see [Fast travel](#fast-travel)). *(since 1.5.0)* |
+| `fast_travel_unlock` | `"visit"` \| `"script"` | Optional, default `"visit"`: the point unlocks on first entry; `"script"`: only `tw.game.unlock_fast_travel(scene_id)` unlocks it. *(since 1.5.0)* |
 | `on_enter_scene_script` / `on_enter_scene_text` | `string` | Inline script / message when the player enters the scene. |
 | `on_leave_scene_script` / `on_leave_scene_text` | `string` | Inline script / message when the player leaves the scene. |
 | `helpers_script` | `string` | Optional scene helper block: functions and constants loaded into every script run after `init_script` and the sequence helpers, like its definitions. Sequences carry the same optional `helpers_script` field. See *Scene Helpers* in the [Scripting Engine guide](../scripting_engine.md). |
@@ -152,11 +211,13 @@ Connections and passageways between scenes.
 | `is_locked` | `boolean` | Whether the exit is initially locked/blocked. |
 | `is_revealed` | `boolean` | Optional, default `false`. The target scene is known from the start: the exit tile shows its image and `→ Target`, and the map shows the scene, before the player has visited it. |
 | `companions_allowed` | `boolean` | Optional, default `true`. `false` makes a solo passage: the protagonist's active companion stays behind when the exit is used. *(since 1.4.0)* |
+| `travel_minutes` | `integer` \| `null` | Optional in-game minutes the way takes (a long road, a ship passage). Using the exit advances the clock by this time instead of the narration tick, uncapped by `max_time_per_turn`; a paused clock stays put. `null`/`0`: no travel time. *(since 1.5.0)* |
+| `travel_label` | `string` \| `null` | Optional description of the journey (max 100 chars), shown as "The journey (two days by ship) takes 2 d." *(since 1.5.0)* |
 | `code_to_unlock` | `string \| null` | Code/word required to unlock (case-insensitive in gameplay). |
 | `item_to_unlock` | `string \| null` | Key item ID required in player inventory to open the exit. |
 | `rule_to_unlock` | `string \| null` | Special rule or puzzle description required for unlocking. |
 | `lock_description` | `string` | Narrative clue or description when encountering the lock. |
-| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "instructions": string \| null, "instructions_scope": "once" \| "first_scene" \| "max_depth" \| "all_scenes", "cluster_consistency": boolean, "depth": number, "max_depth": number, "danger_level": "peaceful" \| "low" \| "medium" \| "high" \| "deadly" \| "random", "max_npcs": number \| null, "npc_type_caps": object \| null, "spawn_chances": object \| null, "audio_mode": "inherit" \| "empty" \| "generate" \| null, "generation_model": "mechanics" \| "narration" \| "world_builder" \| null, "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean, "on_after_generated_script": string \| null}`. Optional `npc_type_caps`, `spawn_chances`, and `generation_model` override the adventure-level `dynamic_generation` defaults per exit (`null` inherits), `instructions_scope` (default `"once"`) controls whether freeform/Blueprint instructions run once per cluster or per depth, `cluster_consistency` (default `true`) passes global theme, root exit theme, instructions, and existing cluster scenes/NPCs/items into subsequent cluster scene generation, and `on_after_generated_script` runs right after materialization with access to `generated_scene` / `tw.generated_scene`. When set, entering the exit plans the whole cluster once as a small in-game adventure: a session-scoped cluster blueprint (mini-story arc, antagonist, key item, room nodes, and converging passage graph) in which every room gets its own sub-theme and generation instructions. Each room's session `dynamic_zone` then carries that room's `theme` and `instructions` (`instructions_source: "cluster_blueprint"`); the authored values stay in `root_theme` / `root_instructions` / `root_instructions_scope`. Loose author instructions are folded into the room instructions according to `instructions_scope`; Blueprint-block instructions stay unchanged and the room brief is added to the prompt. Scenes are materialized in-place as they are visited without mutating the base manifest. *(since 1.4.0)* |
+| `dynamic_zone` | `object \| null` | Optional procedural expansion zone configuration: `{"zone_id": string, "theme": string, "instructions": string \| null, "instructions_scope": "once" \| "first_scene" \| "max_depth" \| "all_scenes", "cluster_consistency": boolean, "depth": number, "max_depth": number, "danger_level": "peaceful" \| "low" \| "medium" \| "high" \| "deadly" \| "random", "max_npcs": number \| null, "npc_type_caps": object \| null, "spawn_chances": object \| null, "audio_mode": "inherit" \| "empty" \| "generate" \| null, "generation_model": "mechanics" \| "narration" \| "world_builder" \| null, "allowed_entity_types": array, "cul_de_sac_on_max_depth": boolean, "on_after_generated_script": string \| null, "required_entities": string \| null}`. Optional `npc_type_caps`, `spawn_chances`, and `generation_model` override the adventure-level `dynamic_generation` defaults per exit (`null` inherits), `instructions_scope` (default `"once"`) controls whether freeform/Blueprint instructions run once per cluster or per depth, `cluster_consistency` (default `true`) passes global theme, root exit theme, instructions, and existing cluster scenes/NPCs/items into subsequent cluster scene generation, `on_after_generated_script` runs right after materialization with access to `generated_scene` / `tw.generated_scene`, and `required_entities` holds Blueprint `[NPC]` / `[Item]` blocks (optional `depth: 1-10 | max`) that every cluster of the zone contains exactly once, in the first generated room of their depth (without depth: the first room), beyond `max_npcs` and the object limit (written by the blueprint for entities with `in: ZONE_ID`). When set, entering the exit plans the whole cluster once as a small in-game adventure: a session-scoped cluster blueprint (mini-story arc, antagonist, key item, room nodes, and converging passage graph) in which every room gets its own sub-theme and generation instructions. Each room's session `dynamic_zone` then carries that room's `theme` and `instructions` (`instructions_source: "cluster_blueprint"`); the authored values stay in `root_theme` / `root_instructions` / `root_instructions_scope`. Loose author instructions are folded into the room instructions according to `instructions_scope`; Blueprint-block instructions stay unchanged and the room brief is added to the prompt. Scenes are materialized in-place as they are visited without mutating the base manifest. *(since 1.4.0)* |
 
 ---
 

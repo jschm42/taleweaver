@@ -31,6 +31,7 @@ from backend.engine.rules.soft_rules import (
     sequence_soft_rules,
 )
 from backend.engine.sessions.memory_manager import MemoryManager
+from backend.engine.world.sections import region_line
 from backend.models.chat import ChatMessage
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
 
@@ -308,6 +309,11 @@ class TurnLlmContextBuilder:
             "time_config": state.time_config or adventure.time_config,
             "scene_map": {s.id: s.label for s in world.all_scenes},
             "hidden_entities": hidden,
+            # The world section (region) of the scene, for large worlds.
+            "region": region_line(
+                getattr(adventure, "world_sections", None),
+                getattr(world.current_scene, "section_id", None),
+            ),
         }
         mechanics_state_block = MemoryManager.build_state_block(
             self.manager.avatar,

@@ -40,6 +40,12 @@ class WorldScene(Base, TimestampMixin):
     dynamic_zone = Column(JSON, nullable=True)
     # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
     is_respawn_point = Column(Boolean, nullable=False, default=False, server_default="0")
+    # World section (region) of the scene: an id of AdventureTemplate.world_sections, or None.
+    section_id = Column(String(50), nullable=True)
+    # Fast travel point: once unlocked ("visit": on first entry, "script": by a script only)
+    # the player can travel here from anywhere (engine/rules/fast_travel.py).
+    is_fast_travel_point = Column(Boolean, nullable=False, default=False, server_default="0")
+    fast_travel_unlock = Column(String(20), nullable=False, default="visit", server_default="visit")
     adventure_id = synonym("template_id")
 
 
@@ -73,6 +79,10 @@ class WorldExit(Base, TimestampMixin):
     is_revealed = Column(Boolean, default=False, nullable=False, server_default="0")
     # False: a solo passage; the active companion stays behind when the player uses it.
     companions_allowed = Column(Boolean, default=True, nullable=False, server_default="1")
+    # In-game minutes the way takes (None/0 = none) and how the journey is described
+    # (engine/rules/travel_time.py).
+    travel_minutes = Column(Integer, nullable=True)
+    travel_label = Column(String(100), nullable=True)
     lock_description = Column(
         String(255), nullable=True
     )  # e.g. "The door is bolted from the other side."

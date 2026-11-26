@@ -48,6 +48,17 @@ TOP_LEVEL_TRIGGERS: tuple[tuple[str, str, str], ...] = (
         "once the protagonist overheard an NPC conversation topic (conversation_topics)",
         "Topic id (or None for any topic)",
     ),
+    (
+        "on_enter_section",
+        "when the protagonist enters a scene of another world section (region), after its "
+        "on_enter_scene scripts (a region's welcome, weather, danger)",
+        "Section id (or None for every region)",
+    ),
+    (
+        "on_leave_section",
+        "when the protagonist leaves a world section (region) for another one",
+        "Section id (or None for every region)",
+    ),
 )
 
 # Entity kind -> ((trigger base name, description), ...). Every base name has a
@@ -222,6 +233,9 @@ TW_API_REFERENCE = (
     "- tw.game (alias tw.session): time | win(reason) / game_won(reason), game_over(reason). "
     "Respawn mode: respawn_point (scene id or None), respawns (count), "
     "set_respawn_point(scene_id); on_respawn scripts run after a revival. "
+    "Fast travel: fast_travel_points (unlocked scene ids), fast_travel_enabled, "
+    "unlock_fast_travel(scene_id) / lock_fast_travel(scene_id) for scenes marked as fast travel "
+    "points, set_fast_travel(enabled, reason=None) to forbid fast travel for a while. "
     "Completing the last sequence does NOT win the adventure; use completed_guard_expression or tw.game.win()\n"
     "- tw.time: now, day, hour, minute, format() | set(t), advance(t), rewind(t), pause(), resume(), "
     "set_minutes_per_tick(t), allow_gm_time(bool) | at(t, handler), after(t, handler), "
@@ -252,6 +266,10 @@ TW_API_REFERENCE = (
     "or sequence's `helpers_script`; "
     "it may call tw.dialog.choose again for multi-step conversations. narrate=True lets the GM "
     "narrate the outcome.\n"
+    "- tw.cutscene.play(cutscene_id): shows a cut-scene of `cutscenes` (narrated slide show) over "
+    "the screen once the script is done; it does not wait. Chapters show theirs by "
+    "`start_cutscene_id`; use play() for other moments (a reveal, a death, the ending). Add "
+    "tw.story.skip_narration() when the cut-scene replaces the narration.\n"
     "- tw.dialog.tree(tree, on_end=None, on_action=None, speaker=None, start_node=None): RPG-style "
     "nested NPC conversation. tree = {'npc_id': ..., 'initial_node': 'root', 'nodes': {node_id: "
     "{'npc_text': ..., 'responses': [{'text': ..., 'next_node': node_id or None (ends), "

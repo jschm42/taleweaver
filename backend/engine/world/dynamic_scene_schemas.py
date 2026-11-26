@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from backend.engine.world.dynamic_pseudoname import (
     build_dynamic_placeholder_scene_id,
@@ -209,6 +209,9 @@ class DynamicZoneConfig(BaseModel):
     cluster_consistency: bool = True
     root_theme: Optional[str] = Field(default=None, max_length=1000)
     on_after_generated_script: Optional[str] = Field(default=None, max_length=8000)
+    # Blueprint text of the NPCs/items the author placed in this zone (``in: ZONE_ID``); each is
+    # created once per cluster (engine/world/dynamic_required_entities.py).
+    required_entities: Optional[str] = Field(default=None, max_length=8000)
 
     @model_validator(mode="after")
     def normalize_dynamic_fields(self) -> DynamicZoneConfig:
@@ -334,6 +337,10 @@ class DynamicGeneratedChildExit(BaseModel):
 
 class DynamicGeneratedScenePayload(BaseModel):
     """Compact LLM output schema for a single procedurally generated dynamic scene."""
+
+    # Keys of the author-placed zone entities (dynamic_required_entities.py); not part of the
+    # LLM schema. They are kept beyond the NPC and object caps when the scene is persisted.
+    _required_keys: set[str] = PrivateAttr(default_factory=set)
 
     name: str = Field(..., min_length=1, max_length=120)
     description: str = Field(..., min_length=1, max_length=2000)
@@ -488,6 +495,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
     root_theme = (raw_root_theme or theme)[:1000]
     raw_after_script = raw.get("on_after_generated_script")
     after_script = str(raw_after_script).strip() if raw_after_script is not None else ""
+    required = str(raw.get("required_entities") or "").strip()[:8000]
 
     dumped = DynamicZoneConfig(
         enabled=True,
@@ -514,6 +522,7 @@ def normalize_dynamic_zone(raw: Any) -> Optional[dict[str, Any]]:
         cluster_consistency=bool(cluster_consistency),
         root_theme=root_theme,
         on_after_generated_script=after_script[:8000] if after_script else None,
+        required_entities=required or None,
     ).model_dump()
     return _attach_runtime_zone_flags(dumped, raw)
 

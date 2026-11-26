@@ -14,6 +14,9 @@ import dagre from 'dagre'
 import type { WorldMapData } from '@/types'
 import { getImageUrl } from '@/utils/game_icons'
 import { useDialogSkin } from '@/skins/dialogSkin'
+import MapTravelPanel from '@/components/game/MapTravelPanel.vue'
+import PlayerRegionMap from '@/components/game/PlayerRegionMap.vue'
+import { NO_REGION, filterRegionMap, knownScenesPerRegion } from '@/utils/regionMapView'
 
 const { activeSkin, skinStyle } = useDialogSkin()
 
@@ -22,11 +25,38 @@ const props = defineProps<{
   mapData: WorldMapData | null
   nodes: Record<string, any>
   isDebug?: boolean
+  /** Session id; enables the regions and fast travel strip. */
+  gameId?: string
 }>()
 
-const emit = defineEmits<{ (e: 'close'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'travel', sceneId: string, minutes?: number): void }>()
 
 const mapContainer = ref<HTMLDivElement | null>(null)
+
+// World first: with regions the dialog opens on the world map; a region shows its scenes.
+const regionView = ref<string | null>(null)
+const hasRegions = computed(() => (props.mapData?.sections || []).length > 0)
+const showWorld = computed(() => hasRegions.value && !regionView.value)
+const regionCounts = computed(() => knownScenesPerRegion(props.mapData))
+const viewData = computed<WorldMapData | null>(() =>
+  props.mapData && hasRegions.value && regionView.value ? filterRegionMap(props.mapData, regionView.value) : props.mapData,
+)
+const regionTitle = computed(() =>
+  regionView.value === NO_REGION
+    ? 'Other places'
+    : (props.mapData?.sections || []).find((r) => r.id === regionView.value)?.label || '',
+)
+const defaultLocalRegionId = computed(() => {
+  if (props.mapData?.current_section_id) return props.mapData.current_section_id
+  const first = props.mapData?.sections?.[0]?.id
+  return first || NO_REGION
+})
+function openLocalMap(): void {
+  regionView.value = defaultLocalRegionId.value
+}
+watch(() => props.open, (isOpen) => {
+  if (isOpen) regionView.value = null
+})
 
 // Tooltip State
 const hoveredNodeId = ref<string | null>(null)
@@ -82,18 +112,18 @@ const mysteriousSaying = computed(() => {
 function resetView() {
   zoom.value = 1
   offset.value = { x: 0, y: 0 }
-  if (props.mapData?.current_scene_id) {
+  if (viewData.value?.current_scene_id) {
     // Center on current node so the player sees where they are right now
     nextTick(() => {
       focusOnCurrentNode()
-      lastFocusedSceneId.value = props.mapData?.current_scene_id || null
+      lastFocusedSceneId.value = viewData.value?.current_scene_id || null
     })
   }
 }
 
 function focusOnCurrentNode() {
   if (!layoutData.value || !mapContainer.value) return
-  const currentId = props.mapData?.current_scene_id
+  const currentId = viewData.value?.current_scene_id
   const node = currentId
     ? layoutData.value.nodes.find(n => n.id === safeId(currentId))
     : layoutData.value.nodes[0]
@@ -160,7 +190,7 @@ const layoutData = ref<{
 } | null>(null)
 
 function updateLayout() {
-  if (!props.mapData) {
+  if (!viewData.value) {
     layoutData.value = null
     return
   }
@@ -169,10 +199,10 @@ function updateLayout() {
   g.setGraph({ rankdir: 'LR', nodesep: 64, edgesep: 40, ranksep: 110 })
   g.setDefaultEdgeLabel(() => ({}))
 
-  const visitedIdsList = Object.keys(props.mapData.nodes).sort()
+  const visitedIdsList = Object.keys(viewData.value.nodes).sort()
   const firstId = visitedIdsList[0]
   const visitedIds = new Set(visitedIdsList)
-  const currentId = props.mapData.current_scene_id
+  const currentId = viewData.value.current_scene_id
   if (currentId) visitedIds.add(currentId)
 
   // 1. Set Nodes in graph
@@ -182,7 +212,7 @@ function updateLayout() {
   })
 
   // 2. Set Edges
-  props.mapData.edges.forEach(edge => {
+  viewData.value.edges.forEach(edge => {
     const fromId = safeId(edge.from)
     const toId = safeId(edge.to)
     if (!g.hasNode(fromId) || !g.hasNode(toId)) return
@@ -199,7 +229,7 @@ function updateLayout() {
 
   const nodes = g.nodes().map(id => {
     const node = g.node(id)
-    const sessionNode = props.mapData!.nodes[id]
+    const sessionNode = viewData.value!.nodes[id]
     const isUnknown = !!sessionNode?.is_unknown
     const isCurrent = id === currentId
     // Revealed scenes (a revealed exit leads there) are known, but not visited yet.
@@ -230,7 +260,7 @@ function updateLayout() {
 
   const edges = g.edges().map(e => {
     const edge = g.edge(e)
-    const rawEdge = props.mapData!.edges.find(re => 
+    const rawEdge = viewData.value!.edges.find(re => 
       (safeId(re.from) === e.v && safeId(re.to) === e.w) ||
       (safeId(re.from) === e.w && safeId(re.to) === e.v)
     )
@@ -261,9 +291,9 @@ function updateLayout() {
 
 // Image of the scene the player is in, used as the map's blurred backdrop.
 const currentSceneImage = computed(() => {
-  const currentId = props.mapData?.current_scene_id
+  const currentId = viewData.value?.current_scene_id
   if (!currentId) return null
-  const raw = props.mapData?.nodes?.[currentId]?.image_url || props.nodes[currentId]?.image_url
+  const raw = viewData.value?.nodes?.[currentId]?.image_url || props.nodes[currentId]?.image_url
   return raw ? getImageUrl(raw) : null
 })
 
@@ -502,14 +532,14 @@ watch(() => props.open, (isOpen) => {
     updateLayout()
     nextTick(() => {
       focusOnCurrentNode()
-      lastFocusedSceneId.value = props.mapData?.current_scene_id || null
+      lastFocusedSceneId.value = viewData.value?.current_scene_id || null
     })
   } else {
     lastFocusedSceneId.value = null
   }
 })
 
-watch(() => props.mapData, (newMapData) => {
+watch(() => viewData.value, (newMapData) => {
   if (props.open) {
     updateLayout()
     if (newMapData && newMapData.current_scene_id !== lastFocusedSceneId.value) {
@@ -526,7 +556,7 @@ onMounted(() => {
     updateLayout()
     nextTick(() => {
       focusOnCurrentNode()
-      lastFocusedSceneId.value = props.mapData?.current_scene_id || null
+      lastFocusedSceneId.value = viewData.value?.current_scene_id || null
     })
   }
 })
@@ -555,7 +585,7 @@ onMounted(() => {
             <div class="flex items-center gap-2 sm:gap-3 min-w-0">
               <i class="ra ra-map tw-dialog-eyebrow text-xl sm:text-2xl shrink-0"></i>
               <div class="min-w-0">
-                <h2 class="tw-dialog-title text-base sm:text-2xl">World Map</h2>
+                <h2 class="tw-dialog-title text-base sm:text-2xl">{{ regionView ? regionTitle || 'World Map' : 'World Map' }}</h2>
                 <p class="tw-muted hidden sm:block text-xs mt-0.5">Tactical Sketch of your journey</p>
               </div>
             </div>
@@ -590,8 +620,38 @@ onMounted(() => {
                 </span>
               </div>
 
+              <div
+                v-if="hasRegions"
+                role="tablist"
+                aria-label="Map view"
+                class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !p-1 gap-1 text-sm border border-white/20 bg-black/40"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="showWorld"
+                  class="px-3.5 py-1.5 rounded-full transition-colors flex items-center gap-1.5 cursor-pointer font-medium whitespace-nowrap"
+                  :class="showWorld ? 'bg-amber-500/25 text-amber-100 border border-amber-400/50 shadow-sm' : 'text-slate-300 hover:text-white hover:bg-white/10 border border-transparent'"
+                  @click="regionView = null"
+                >
+                  <i class="ra ra-map text-base" aria-hidden="true"></i>
+                  <span>World map</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  :aria-selected="!showWorld"
+                  class="px-3.5 py-1.5 rounded-full transition-colors flex items-center gap-1.5 cursor-pointer font-medium whitespace-nowrap"
+                  :class="!showWorld ? 'bg-amber-500/25 text-amber-100 border border-amber-400/50 shadow-sm' : 'text-slate-300 hover:text-white hover:bg-white/10 border border-transparent'"
+                  @click="openLocalMap"
+                >
+                  <i class="ra ra-compass text-base" aria-hidden="true"></i>
+                  <span>Local map</span>
+                </button>
+              </div>
+
               <!-- Map Controls -->
-              <div class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !px-1.5 !py-1 gap-0.5 sm:gap-1">
+              <div v-if="!showWorld" class="tw-dialog-chip !opacity-100 flex items-center !rounded-full !px-1.5 !py-1 gap-0.5 sm:gap-1">
                 <button
                   @click="zoom = Math.max(0.2, zoom - 0.1)"
                   class="tw-map-tool p-1.5 rounded-full transition-colors"
@@ -646,6 +706,26 @@ onMounted(() => {
               <i class="ra ra-compass text-6xl mb-4 opacity-50"></i>
               <p class="text-lg font-medium">No map data yet</p>
               <p class="text-sm mt-1">Start your adventure to reveal the world.</p>
+            </div>
+
+            <!-- World map: the regions; a click opens the region's scenes -->
+            <div v-else-if="showWorld" class="w-full h-full flex flex-col gap-3 relative z-10">
+              <PlayerRegionMap
+                class="flex-grow"
+                :regions="mapData.sections || []"
+                :links="mapData.section_links || []"
+                :current-region-id="mapData.current_section_id || null"
+                :layout="mapData.world_map_layout || null"
+                @open="(id) => (regionView = id)"
+              />
+              <button
+                v-if="regionCounts[NO_REGION]"
+                type="button"
+                class="tw-dialog-chip !opacity-100 self-start text-xs"
+                @click="regionView = NO_REGION"
+              >
+                Other places ({{ regionCounts[NO_REGION] }})
+              </button>
             </div>
 
             <!-- Redesigned view layer -->
@@ -1007,6 +1087,16 @@ onMounted(() => {
               </Transition>
             </Teleport>
           </div>
+
+          <!-- Regions and fast travel points -->
+          <MapTravelPanel
+            v-if="gameId"
+            :open="open"
+            :game-id="gameId"
+            :regions="mapData?.sections || []"
+            :current-region-id="mapData?.current_section_id || null"
+            @travel="(sceneId, minutes) => emit('travel', sceneId, minutes)"
+          />
 
           <!-- Footer hint -->
           <div class="tw-dialog-divider tw-muted px-4 sm:px-8 py-2 sm:py-3 border-t text-[11px] sm:text-xs flex justify-between items-center gap-2 shrink-0">

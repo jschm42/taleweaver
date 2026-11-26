@@ -89,3 +89,28 @@ async def test_exported_creator_flag_is_applied_to_target(auth_client, setup_tes
         adventure = await _load(db, TARGET_ID)
         assert manifest["adventure"]["is_adventure_generator"] is True
         assert adventure.is_adventure_generator is True
+
+
+async def test_manifest_styles_and_requested_styles_together(auth_client, setup_test_db):
+    # Arrange: a blueprint image_style puts styles into the manifest while the creation
+    # request passes its own selection too.
+    async with TestSessionLocal() as db:
+        user = (await db.execute(select(User).limit(1))).scalars().first()
+        db.add(_template(TARGET_ID, user.id, creator_flag=False))
+        await db.commit()
+        manifest = {
+            "selected_image_styles": [{"id": "noir", "label": "Noir"}],
+            "scenes": [{"id": "START", "label": "Start", "description": "A room."}],
+        }
+
+        # Act
+        await apply_manifest(db, TARGET_ID, manifest, selected_image_styles=[{"id": "watercolor"}])
+
+    # Assert
+    async with TestSessionLocal() as db:
+        scenes = (
+            (await db.execute(select(WorldScene).where(WorldScene.template_id == TARGET_ID)))
+            .scalars()
+            .all()
+        )
+        assert [s.id for s in scenes] == ["START"]

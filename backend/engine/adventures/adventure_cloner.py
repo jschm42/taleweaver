@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.adventure_identity import new_origin_id
 from backend.core.config import settings
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.transfer import cloned_cutscenes
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -111,6 +112,18 @@ def clone_disk_assets(old_template_id: str, new_template_id: str) -> None:
         os.makedirs(new_dir, exist_ok=True)
 
 
+def clone_map_layout(layout: Any, old_id: str, new_id: str) -> Any:
+    """The world map tiles with their URLs pointing into the clone's library."""
+    if not isinstance(layout, dict):
+        return None
+    tiles = [
+        {**tile, "url": rewrite_asset_url(tile.get("url"), old_id, new_id)}
+        for tile in layout.get("tiles") or []
+        if isinstance(tile, dict)
+    ]
+    return {**deepcopy(layout), "tiles": tiles}
+
+
 def clone_audio_tracks(
     tracks: Optional[list[dict[str, Any]]], old_id: str, new_id: str
 ) -> Optional[list[dict[str, Any]]]:
@@ -199,8 +212,17 @@ def _create_cloned_template_entity(
         selected_tone=(deepcopy(original.selected_tone) if original.selected_tone else None),
         narrator_voice=deepcopy(original.narrator_voice),
         audio_tracks=clone_audio_tracks(original.audio_tracks, original.id, new_id),
+        world_sections=deepcopy(original.world_sections) if original.world_sections else None,
+        fast_travel_enabled=original.fast_travel_enabled is not False,
+        world_map_layout=clone_map_layout(original.world_map_layout, original.id, new_id),
+        cutscenes=cloned_cutscenes(
+            original.cutscenes, lambda url: rewrite_asset_url(url, original.id, new_id)
+        ),
         audio_enabled=original.audio_enabled,
         title_track_id=original.title_track_id,
+        intro_cutscene_id=original.intro_cutscene_id,
+        win_cutscene_id=original.win_cutscene_id,
+        game_over_cutscene_id=original.game_over_cutscene_id,
         ui_theme=(deepcopy(original.ui_theme) if original.ui_theme else None),
         game_over_rules=(deepcopy(original.game_over_rules) if original.game_over_rules else None),
         npc_conversations=normalize_conversation_settings(original.npc_conversations),
@@ -311,6 +333,9 @@ async def _clone_scenes(db: AsyncSession, old_id: str, new_id: str) -> None:
             audio_track_id=s.audio_track_id,
             dynamic_zone=deepcopy(s.dynamic_zone) if s.dynamic_zone else None,
             is_respawn_point=bool(s.is_respawn_point),
+            section_id=s.section_id,
+            is_fast_travel_point=bool(s.is_fast_travel_point),
+            fast_travel_unlock=s.fast_travel_unlock or "visit",
         )
         db.add(cloned)
 
@@ -333,6 +358,8 @@ async def _clone_exits(db: AsyncSession, old_id: str, new_id: str) -> None:
             is_locked=e.is_locked,
             is_revealed=bool(e.is_revealed),
             companions_allowed=e.companions_allowed is not False,
+            travel_minutes=e.travel_minutes,
+            travel_label=e.travel_label,
             lock_description=e.lock_description,
             code_to_unlock=e.code_to_unlock,
             item_to_unlock=e.item_to_unlock,

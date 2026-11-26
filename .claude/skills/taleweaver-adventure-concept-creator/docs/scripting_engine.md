@@ -31,6 +31,7 @@ The **TaleWeaver Scripting Engine** provides a secure, sandboxed environment for
    - [tw.dice](#twdice)
    - [tw.dialog (Choice Dialogs)](#twdialog-choice-dialogs)
    - [tw.dialog.tree (Nested NPC Dialogues)](#twdialogtree-nested-npc-dialogues)
+   - [tw.cutscene (Cut-scenes)](#twcutscene-cut-scenes)
    - [tw.llm & tw.json (Ask the LLM & Structured JSON)](#twllm--twjson-ask-the-llm--structured-json)
    - [tw.image & tw.media (In-Game Image Generation)](#twimage--twmedia-in-game-image-generation)
    - [tw.turn (Player Message & Turn Info)](#twturn-player-message--turn-info)
@@ -136,6 +137,8 @@ Scripts declare a trigger event and an optional target entity or scene.
 | `on_turn_end` | When the current in-game turn ends, i.e. when the player's scene or the active sequence changed (before `on_turn_start` of the next turn). | Global (`*` or empty). |
 | `on_respawn` | Respawn mode only (`game_over_rules.on_zero_hp: "respawn"`): after a protagonist who fell to 0 HP woke up at the revival point, after the revival scene's `on_enter_scene` scripts. Use it for penalties (e.g. `tw.player.add_xp(-25)`), a healer's line, or to heal the enemies. A `tw.game.game_over()` here ends the adventure. | Global (`*` or empty). |
 | `on_conversation_heard` | Once the protagonist overheard an NPC [conversation topic](world-builder-syntax.md#npc-conversations): right after the engine handed the topic to the narration (chatter or `/listen`), after the topic's own `on_heard_script`. | Topic id, or empty for any topic. |
+| `on_enter_section` | The protagonist reached a scene of another world section (region): after an exit, on each fast travel step, after a Game Master transition and after a respawn; after the scene's `on_enter_scene` scripts. Not for script teleports or `/debug goto`. A message it writes stops a fast travel at the border. | Section id, or empty for every region. |
+| `on_leave_section` | The protagonist left a world section for another one (same moves as `on_enter_section`, runs right before it). | Section id, or empty for every region. |
 | `on_time_reached` | Once, when the in-game clock reaches the target time (elapsed time since the adventure started). It fires again only after the time was set back below the target. See [tw.time](#twtime-in-game-clock). | **Required**: the elapsed time, e.g. `90`, `2h 30m`, `1d 4h`, `1:30`. |
 
 > **In-game turns vs. player messages:** An in-game turn spans all player messages within one scene and sequence. Status-effect ticks and the `on_turn_end` / `on_turn_start` hooks only fire on a scene or sequence change. The **clock** is different: it advances once per narrated player message (see [tw.time](#twtime-in-game-clock)). Use `on_logic_pass_done` or `on_narration_done` for logic that must run on every player message.
@@ -669,6 +672,17 @@ tw.story.narrate("Mother Agnes patched you up. 'Mind that ogre next time.'")
 tw.npcs.get('OGRE').heal(999)
 ```
 
+- Fast travel (see *World sections* in `docs/specs/world_sections.md`): scenes marked as **fast travel points** become destinations once unlocked; the player then travels there from anywhere along the known route (`/fast_travel <place>`, or the map's travel strip). A point with the unlock mode *On first visit* unlocks itself on entry; a point with *By a script* waits for `unlock_fast_travel`.
+  - `tw.game.fast_travel_points`: Scene IDs of the unlocked points (includes this script's changes).
+  - `tw.game.unlock_fast_travel(scene_id: str)` / `tw.game.lock_fast_travel(scene_id: str)`: Adds or removes a destination (the scene must be marked as a fast travel point).
+  - `tw.game.set_fast_travel(enabled: bool, reason: str = None)`: Switches fast travel off for a while (players see `reason`) or on again. `tw.game.fast_travel_enabled` reads it. The adventure switch (**Time & pacing → Fast travel**) and a chapter's **Fast travel allowed** are separate and both must allow it.
+
+```python
+# on_interact of the waystone: activating it unlocks the point, a storm later closes the roads
+tw.game.unlock_fast_travel('WAYSTONE')
+tw.story.narrate("The runes glow. You will find your way back here.")
+```
+
 > [!NOTE]
 > **When finishing the last sequence ends the adventure** (linear and dynamic modes): if the adventure has a deterministic win guard (`completed_guard_expression`), completing the final sequence does **not** end it; only that guard or a script calling `tw.game.win()` / `tw.game.game_won()` does, and the player stays in the world until then (e.g. for a finale scripted at a later time). Without a win guard, completing every sequence ends the adventure in victory. The Game Master can additionally end it when the soft `completed_condition` is met.
 >
@@ -680,6 +694,7 @@ The in-game time is the number of minutes (units for the *units* time system) th
 **How time passes**
 - **Narration tick**: after every narrated player message the clock advances by the *minutes per tick* (the adventure's **Round Pacing** in the editor's **Time & Pacing** tab, `time_per_turn`, default 5). One player message is one tick, even when it chains a follow-up narration. The opening prologue, choice dialogs and script output (`tw.narrate`, dialog narration) do not tick.
 - **Game Master**: when **GM May Change Time** is enabled in the editor's **Time & Pacing** tab (`gm_time_control`, default on), the GM may add extra time for long actions ("the search took 20 minutes", `extra_time_minutes`) or jump the clock (`time_override_minutes`, `start_datetime_override`). Tick plus extra time of one message is capped by **Max Time per Turn (GM Limit)**. With the flag off, while the clock is paused, or after `tw.time.allow_gm_time(False)`, GM time requests are ignored and Pass 1 is told `TIME CONTROL: LOCKED`.
+- **Travel time**: an exit with a travel time (the exit's **Travel time** in the editor, `travel_minutes`) adds that time when the player uses it, instead of the narration tick, and is not capped by the GM limit. Fast travel adds the travel time of every exit on its route. A paused clock stays put. Timers and `on_time_reached` scripts that came due on the way fire on arrival, after the narration.
 - **Scripts and debug commands** can set or move the time at any moment, also while the clock is paused.
 
 **Reading**
@@ -914,6 +929,21 @@ RPG-style conversations as a tree of nodes. The NPC says a node's `npc_text`; ea
 A response script that opens another dialog (`tw.dialog.choose` or `tw.dialog.tree`) or ends the adventure (`tw.game.win`, `tw.game.game_over`) stops the conversation; `on_end` is not called then. The tree's text is shown as written: there is no LLM narration of tree steps.
 
 See [Example 16](#example-16-blacksmith-conversation-dialogue-tree) for a complete conversation.
+
+### `tw.cutscene` (Cut-scenes)
+Shows a cut-scene of the adventure's library: a narrated slide show (image + text per slide, optional audio track) over the whole play view, in the colors of the active skin. Cut-scenes are made on the editor's **Cut-scenes** page (Presentation) or in a blueprint (`[Cutscene: ID]`). A chapter shows its own with its *Start cut-scene* (`start_cutscene_id`); scripts play one at any other moment.
+
+- `tw.cutscene.play(cutscene_id) -> bool` (alias `tw.cutscene.show`, namespace alias `tw.cutscenes`): queues the cut-scene. Returns `False` for an invalid id. The call does not wait: the client shows the cut-scene once the script's turn reaches it, before the turn's narration. A slide's text passages follow each other over its picture and are read aloud when the player has auto-speech on; the narration waits until the cut-scene ends. Holding Space or the mouse button skips the current passage, Escape the whole cut-scene.
+- Several calls queue several cut-scenes (at most 5 waiting); a cut-scene that is already waiting is not queued twice. A chapter's start cut-scene plays before cut-scenes its start script queued.
+- Combine it with `tw.story.skip_narration()` when the cut-scene should replace the turn's narration. The queue lives in `entity_states["__cutscene__"]`, so it is part of every save.
+
+```python
+# on_defeat_script of the dragon: the ending as a cut-scene instead of a narration.
+tw.cutscene.play("DRAGON_FALLS")
+tw.story.skip_narration()
+```
+
+The editor validation warns (`script_cutscene_missing`) when a script plays an id the library does not have.
 
 ### `tw.llm` & `tw.json` (Ask the LLM & Structured JSON)
 

@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useEditor } from '@/composables/editor/editorContext'
 import type { Chapter, ProgressionMode } from '@/composables/editor/useChapters'
+import { cutscenesOf } from '@/services/cutsceneService'
 import ScriptEditor from '@/components/editor/ScriptEditor.vue'
 import TriggerScriptField from '@/components/editor/entity/TriggerScriptField.vue'
+import UiField from '@/components/ui/UiField.vue'
+import UiSelect from '@/components/ui/UiSelect.vue'
 
 /** Start / end triggers of a chapter and its helper functions. */
 const chapter = defineModel<Chapter>({ required: true })
@@ -10,11 +14,23 @@ const chapter = defineModel<Chapter>({ required: true })
 const props = defineProps<{ mode: ProgressionMode }>()
 
 const dynamic = computed(() => props.mode === 'dynamic')
+
+const editor = useEditor()
+const cutsceneOptions = computed(() =>
+  cutscenesOf(editor.debugData?.adventure).map((c) => ({ value: c.id, label: c.title ? `${c.title} (${c.id})` : c.id })),
+)
 </script>
 
 <template>
   <div class="space-y-6">
     <div class="space-y-6">
+      <UiField
+        label="Start cut-scene"
+        hint="Shown over the play view when this chapter starts, before its narration."
+        info="Create cut-scenes on the Cut-scenes page (Presentation). Scripts can also play one with tw.cutscene.play(&quot;ID&quot;)."
+      >
+        <UiSelect v-model="chapter.start_cutscene_id" :options="cutsceneOptions" placeholder="None" />
+      </UiField>
       <TriggerScriptField
         v-model:script="chapter.on_start_sequence_script"
         v-model:text="chapter.on_start_sequence_text"

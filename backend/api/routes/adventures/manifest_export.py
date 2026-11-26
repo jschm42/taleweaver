@@ -3,6 +3,7 @@
 from typing import Any, Optional
 
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 
 _LEGACY_EQUIPMENT_SLOTS = (
@@ -41,7 +42,13 @@ def backfill_manifest_metadata(manifest: dict[str, Any], adventure: AdventureTem
     # Edited in the template only, so the template column wins over the stored manifest.
     manifest["narrator_voice"] = adventure.narrator_voice
     manifest["audio_tracks"] = adventure.audio_tracks or []
+    manifest["cutscenes"] = adventure.cutscenes or []
+    manifest["intro_cutscene_id"] = adventure.intro_cutscene_id
+    manifest["win_cutscene_id"] = adventure.win_cutscene_id
+    manifest["game_over_cutscene_id"] = adventure.game_over_cutscene_id
+    manifest["sections"] = normalize_sections(adventure.world_sections)
     manifest["audio_enabled"] = adventure.audio_enabled
+    manifest["fast_travel_enabled"] = adventure.fast_travel_enabled is not False
     manifest["title_track_id"] = adventure.title_track_id
     manifest["npc_conversations"] = normalize_conversation_settings(adventure.npc_conversations)
 
@@ -172,6 +179,8 @@ def serialize_exit(world_exit: Any) -> dict[str, Any]:
         "is_locked": world_exit.is_locked,
         "is_revealed": bool(world_exit.is_revealed),
         "companions_allowed": world_exit.companions_allowed is not False,
+        "travel_minutes": world_exit.travel_minutes,
+        "travel_label": world_exit.travel_label,
         "lock_description": world_exit.lock_description,
         "code_to_unlock": world_exit.code_to_unlock,
         "item_to_unlock": world_exit.item_to_unlock,

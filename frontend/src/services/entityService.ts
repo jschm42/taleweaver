@@ -50,6 +50,14 @@ export interface EntityEditData {
   companions_allowed?: boolean
   /** Scenes: revival point for the respawn mode. */
   is_respawn_point?: boolean
+  /** Scenes: world section (region) id; '' takes the scene out of its section. */
+  section_id?: string
+  /** Scenes: fast travel point and how it is unlocked. */
+  is_fast_travel_point?: boolean
+  fast_travel_unlock?: 'visit' | 'script'
+  /** Exits: in-game minutes the way takes (0 = none) and how the journey is described. */
+  travel_minutes?: number
+  travel_label?: string
   code_to_unlock?: string
   item_to_unlock?: string
   rule_to_unlock?: string
@@ -138,6 +146,9 @@ export interface ExitCreateData {
   from_scene_id: string
   to_scene_id: string
   label: string
+  /** In-game minutes the way takes (a long journey between regions). */
+  travel_minutes?: number | null
+  travel_label?: string
   exit_type?: 'one_way' | 'bidirectional'
   is_locked?: boolean
   is_revealed?: boolean

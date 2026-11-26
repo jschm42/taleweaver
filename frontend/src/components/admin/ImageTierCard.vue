@@ -7,6 +7,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiDisclosure from '@/components/ui/UiDisclosure.vue'
 import UiField from '@/components/ui/UiField.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import UiMultiCombobox from '@/components/ui/UiMultiCombobox.vue'
 import UiSelect from '@/components/ui/UiSelect.vue'
 import { CONTROL_INPUT_CLASS } from '@/components/ui/fieldContext'
 import TestResultNote from './TestResultNote.vue'
@@ -22,6 +23,8 @@ const props = defineProps<{
   availableConstants: any
   configuredKeys: Record<string, { masked: string; is_env: boolean }>
   testResult?: { status: string; message: string; image_url?: string } | null
+  lumigenProfiles?: Array<{ id: number | string; name: string }>
+  lumigenCategories?: Array<{ id: number | string; name: string }>
 }>()
 
 const emit = defineEmits<{ test: [payload: Record<string, unknown>] }>()
@@ -62,6 +65,7 @@ const providerOptions = computed(() =>
 /** Self-hosted endpoints whose discovered model list depends on the configured URL. */
 const modelBaseUrl = computed((): string => {
   if (provider.value === 'comfyui') return form.value.comfyui_url || ''
+  if (provider.value === 'lumigen') return form.value.lumigen_url || ''
   if (provider.value === 'ollama') return form.value.ollama_url || ''
   if (provider.value === 'stable_diffusion') return form.value.stable_diffusion_url || ''
   return ''
@@ -89,6 +93,24 @@ watch(provider, (next, previous) => {
   }
 })
 
+const lumigenProfileOptions = computed(() => {
+  const seen = new Set<string>()
+  const opts = [{ value: '', label: 'Default (server)' }]
+  for (const p of props.lumigenProfiles || []) {
+    if (!seen.has(p.name)) {
+      seen.add(p.name)
+      opts.push({ value: p.name, label: p.name })
+    }
+  }
+  const current = String(form.value[key('lumigen_profile')] || '').trim()
+  if (current && !seen.has(current)) opts.push({ value: current, label: current })
+  return opts
+})
+
+const lumigenCategoryOptions = computed(() =>
+  (props.lumigenCategories || []).map((c) => c.name).filter(Boolean),
+)
+
 function runTest(): void {
   emit('test', {
     key: `${props.tier}_v`,
@@ -103,6 +125,10 @@ function runTest(): void {
     comfyui_url: form.value.comfyui_url,
     comfyui_timeout: form.value.comfyui_timeout,
     comfyui_workflow: form.value[key('comfyui_workflow')],
+    lumigen_url: form.value.lumigen_url,
+    lumigen_timeout: form.value.lumigen_timeout,
+    lumigen_profile: form.value[key('lumigen_profile')],
+    lumigen_categories: form.value[key('lumigen_categories')],
     min_long_edge: form.value[key('min_long_edge')],
   })
 }
@@ -134,6 +160,19 @@ function runTest(): void {
             :provider="provider"
             :base-url="modelBaseUrl"
             :input-class="`${CONTROL_INPUT_CLASS} wb-mono pr-10`"
+          />
+        </UiField>
+      </div>
+
+      <div v-if="provider === 'lumigen'" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <UiField label="Profile" hint="Optional Lumigen generation profile.">
+          <UiSelect v-model="form[key('lumigen_profile')]" :options="lumigenProfileOptions" />
+        </UiField>
+        <UiField label="Categories" hint="Select or type categories for generated images.">
+          <UiMultiCombobox
+            v-model="form[key('lumigen_categories')]"
+            :options="lumigenCategoryOptions"
+            placeholder="Select categories..."
           />
         </UiField>
       </div>

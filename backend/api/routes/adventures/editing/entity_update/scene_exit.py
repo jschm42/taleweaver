@@ -17,7 +17,10 @@ from backend.api.routes.adventures.editing.entity_update.fields import (
     validated_new_id,
 )
 from backend.api.routes.adventures.editing.schemas import EntityUpdateRequest
+from backend.api.routes.adventures.editing.section_crud import resolve_target_section
 from backend.engine.audio.audio_library import track_id_or_none
+from backend.engine.rules.fast_travel import normalize_unlock_mode
+from backend.engine.rules.travel_time import normalize_travel_label, normalize_travel_minutes
 from backend.engine.world.dynamic_scene_schemas import (
     build_dynamic_placeholder_scene_id,
     normalize_dynamic_zone,
@@ -26,6 +29,8 @@ from backend.engine.world.scene_fields import (
     SCENE_AUDIO_FIELDS,
     SCENE_RESPAWN_FIELDS,
     SCENE_SCRIPT_FIELDS,
+    SCENE_SECTION_FIELDS,
+    SCENE_TRAVEL_FIELDS,
 )
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -38,6 +43,8 @@ _EXIT_MANIFEST_FIELDS = (
     "is_locked",
     "is_revealed",
     "companions_allowed",
+    "travel_minutes",
+    "travel_label",
     "lock_description",
     "code_to_unlock",
     "item_to_unlock",
@@ -116,7 +123,13 @@ def _sync_scene_manifest(adv: AdventureTemplate, scene: WorldScene) -> None:
     if entry is None:
         entry = {"id": scene.id, "name": scene.label, "description": scene.description}
         scenes.append(entry)
-    fields = (*SCENE_SCRIPT_FIELDS, *SCENE_AUDIO_FIELDS, *SCENE_RESPAWN_FIELDS)
+    fields = (
+        *SCENE_SCRIPT_FIELDS,
+        *SCENE_AUDIO_FIELDS,
+        *SCENE_RESPAWN_FIELDS,
+        *SCENE_SECTION_FIELDS,
+        *SCENE_TRAVEL_FIELDS,
+    )
     entry.update({f: getattr(scene, f) for f in fields})
     entry["dynamic_zone"] = scene.dynamic_zone
     manifest["scenes"] = scenes
@@ -154,10 +167,24 @@ async def update_scene(
     if given(payload, "audio_track_id"):
         scene.audio_track_id = track_id_or_none(payload.audio_track_id)
     _update_scene_dynamic_zone(scene, payload)
-    if given(payload, "is_respawn_point"):
-        scene.is_respawn_point = payload.is_respawn_point is True
+    _update_scene_places(scene, adv, payload)
     copy_scripts(scene, payload, SCENE_SCRIPT_FIELDS)
     _sync_scene_manifest(adv, scene)
+
+
+def _update_scene_places(
+    scene: WorldScene, adv: AdventureTemplate, payload: EntityUpdateRequest
+) -> None:
+    """Revival point, region and fast travel point of a scene."""
+    if given(payload, "is_respawn_point"):
+        scene.is_respawn_point = payload.is_respawn_point is True
+    # Every scene keeps a region: an empty value leaves the current one.
+    if given(payload, "section_id") and (payload.section_id or "").strip():
+        scene.section_id = resolve_target_section(adv, payload.section_id)
+    if given(payload, "is_fast_travel_point"):
+        scene.is_fast_travel_point = payload.is_fast_travel_point is True
+    if given(payload, "fast_travel_unlock"):
+        scene.fast_travel_unlock = normalize_unlock_mode(payload.fast_travel_unlock)
 
 
 def _update_exit_lock(world_exit: WorldExit, payload: EntityUpdateRequest) -> None:
@@ -215,6 +242,20 @@ def _update_exit_dynamic_zone(world_exit: WorldExit, payload: EntityUpdateReques
         )
 
 
+def _update_exit_flags(world_exit: WorldExit, payload: EntityUpdateRequest) -> None:
+    """Lock, reveal, companion and travel settings of an exit."""
+    if given(payload, "locked"):
+        world_exit.is_locked = bool(payload.locked)
+    if given(payload, "revealed"):
+        world_exit.is_revealed = bool(payload.revealed)
+    if given(payload, "companions_allowed"):
+        world_exit.companions_allowed = payload.companions_allowed is not False
+    if given(payload, "travel_minutes"):
+        world_exit.travel_minutes = normalize_travel_minutes(payload.travel_minutes)
+    if given(payload, "travel_label"):
+        world_exit.travel_label = normalize_travel_label(payload.travel_label)
+
+
 async def update_exit(
     db: AsyncSession, template_id: str, adv: AdventureTemplate, payload: EntityUpdateRequest
 ) -> None:
@@ -232,12 +273,7 @@ async def update_exit(
         if not label:
             raise HTTPException(status_code=400, detail="Exit label is required.")
         world_exit.label = label
-    if given(payload, "locked"):
-        world_exit.is_locked = bool(payload.locked)
-    if given(payload, "revealed"):
-        world_exit.is_revealed = bool(payload.revealed)
-    if given(payload, "companions_allowed"):
-        world_exit.companions_allowed = payload.companions_allowed is not False
+    _update_exit_flags(world_exit, payload)
     if given(payload, "description"):
         world_exit.lock_description = payload.description
     if given(payload, "exit_type"):

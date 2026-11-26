@@ -20,6 +20,7 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.engine.world.sections import player_sections, session_manifest
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
 
@@ -56,8 +57,14 @@ def _json_safe(value: Any) -> Any:
 
 
 def template_columns(adventure: AdventureTemplate) -> dict[str, Any]:
-    """Every play-relevant template column as JSON-safe data."""
-    return {key: _json_safe(getattr(adventure, key, None)) for key in _column_keys()}
+    """Every play-relevant template column as JSON-safe data.
+
+    World sections are reduced to the built ones without author fields: stubs never reach a
+    session (docs/specs/world_sections.md).
+    """
+    columns = {key: _json_safe(getattr(adventure, key, None)) for key in _column_keys()}
+    columns["world_sections"] = player_sections(columns.get("world_sections")) or None
+    return columns
 
 
 def build_session_snapshot(adventure: Optional[AdventureTemplate]) -> dict[str, Any]:
@@ -66,7 +73,7 @@ def build_session_snapshot(adventure: Optional[AdventureTemplate]) -> dict[str, 
         return {}
     return {
         "adventure": {**template_columns(adventure), "is_ready": True, "creation_status": "Ready"},
-        "original_manifest": deepcopy(adventure.original_manifest or {}),
+        "original_manifest": session_manifest(adventure.original_manifest),
     }
 
 
@@ -100,7 +107,7 @@ def _backfill(state: SessionState, snapshot: dict[str, Any], template: Adventure
         "adventure": {**template_columns(template), **existing},
         "original_manifest": manifest
         if isinstance(manifest, dict)
-        else deepcopy(template.original_manifest or {}),
+        else session_manifest(template.original_manifest),
     }
     _store_snapshot(state, completed)
     logger.info("[SessionAdventure] Completed adventure snapshot for session %s", state.session_id)

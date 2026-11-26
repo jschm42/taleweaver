@@ -9,6 +9,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiField from '@/components/ui/UiField.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiModal from '@/components/ui/UiModal.vue'
+import UiSelect, { type SelectOption } from '@/components/ui/UiSelect.vue'
 
 /** Creates or edits one side quest; "Save quest" stores the quest list. */
 const open = defineModel<boolean>('open', { required: true })
@@ -21,6 +22,8 @@ const props = defineProps<{
   textReferences: Array<{ id: string; name?: string; imageUrl?: string | null }>
   generatingQuest: boolean
   generatingDescription: boolean
+  /** Regions of the adventure; the select is shown only when there are some. */
+  regionOptions?: SelectOption[]
 }>()
 
 const emit = defineEmits<{ save: []; 'draft-quest': []; 'draft-description': [] }>()
@@ -104,6 +107,18 @@ function toReward(value: string | number | null): number {
           </UiButton>
         </div>
       </div>
+
+      <UiField
+        v-if="regionOptions?.length"
+        label="Region"
+        hint="Where the quest continues; shown to the Play-Agent as a hint."
+      >
+        <UiSelect
+          :model-value="quest.section_id || ''"
+          :options="[{ value: '', label: 'No region' }, ...regionOptions]"
+          @update:model-value="(v) => (quest.section_id = String(v || ''))"
+        />
+      </UiField>
 
       <UiField label="Goal (soft rule)" hint="Judged by the Game Master to decide when the quest is done.">
         <UiInput v-model="quest.goal" placeholder="e.g. Return the merchant's lost ledger to him in the marketplace." />

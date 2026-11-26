@@ -5,17 +5,19 @@ Built from the same data as the player's map dialog: the scenes visited in this 
 Only player-visible facts go in: hidden exits are left out, a place that was never visited
 shows up as "unexplored" behind its exit, and lock secrets (codes, key items) never appear.
 
-``find_route`` walks open exits between visited places for the ``/travel`` command.
+``find_route`` takes the cheapest route (travel time, then exits) over open exits between
+visited places for the ``/travel`` command (``engine/interaction/route_finder.py``).
 """
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from sqlalchemy import select
 
+from backend.engine.interaction.route_finder import cheapest_route
+from backend.engine.rules.travel_time import format_duration, travel_minutes_of
 from backend.engine.world.exit_labels import exit_display_name
 from backend.models.world_entity import WorldExit, WorldScene
 from backend.models.world_map import WorldMap
@@ -32,6 +34,8 @@ class MapExit:
     target: str
     name: str
     locked: bool
+    travel_minutes: int = 0
+    companions_allowed: bool = True
 
 
 @dataclass
@@ -81,7 +85,15 @@ def build_known_map(
                 continue
             name = exit_display_name(exit_row.label, labels.get(target, target))
             known.exits.setdefault(scene_id, []).append(
-                MapExit(str(exit_row.id), scene_id, target, name, bool(exit_row.is_locked))
+                MapExit(
+                    str(exit_row.id),
+                    scene_id,
+                    target,
+                    name,
+                    bool(exit_row.is_locked),
+                    travel_minutes_of(exit_row),
+                    getattr(exit_row, "companions_allowed", True) is not False,
+                )
             )
     return known
 
@@ -100,7 +112,24 @@ async def load_known_map(db: Any, game_id: str, state: Any) -> KnownMap:
 def _exit_line(known: KnownMap, map_exit: MapExit) -> str:
     target = known.label(map_exit.target) if known.is_visited(map_exit.target) else UNEXPLORED
     status = "LOCKED" if map_exit.locked else "OPEN"
-    return f"{map_exit.name} -> {target} [{status}]"
+    journey = (
+        f", {format_duration(map_exit.travel_minutes)} journey" if map_exit.travel_minutes else ""
+    )
+    return f"{map_exit.name} -> {target} [{status}{journey}]"
+
+
+def format_fast_travel(points: list[Any]) -> str:
+    """The FAST TRAVEL block of the agent prompt: unlocked points the agent can travel to."""
+    usable = [p for p in points if p.available]
+    if not usable:
+        return ""
+    lines = [
+        f"- {p.label}" + (f" ({format_duration(p.minutes)})" if p.minutes else "") for p in usable
+    ]
+    return (
+        "FAST TRAVEL (unlocked places; `/fast_travel <place>` walks the whole known route in one "
+        "step, its travel time passes):\n" + "\n".join(lines)
+    )
 
 
 def format_known_map(known: KnownMap) -> str:
@@ -137,32 +166,6 @@ def match_place(known: KnownMap, ref: str) -> Optional[str]:
     return next((s for s in known.visited if wanted in _norm(known.label(s))), None)
 
 
-def find_route(known: KnownMap, goal: str) -> Optional[list[MapExit]]:
-    """Shortest path from the current place to ``goal`` over open exits between visited places."""
-    if goal == known.current:
-        return []
-    previous: dict[str, MapExit] = {}
-    queue = deque([known.current])
-    seen = {known.current}
-    while queue:
-        scene_id = queue.popleft()
-        for map_exit in known.exits.get(scene_id, []):
-            target = map_exit.target
-            if map_exit.locked or target in seen or not known.is_visited(target):
-                continue
-            previous[target] = map_exit
-            if target == goal:
-                return _walk_back(previous, known.current, goal)
-            seen.add(target)
-            queue.append(target)
-    return None
-
-
-def _walk_back(previous: dict[str, MapExit], start: str, goal: str) -> list[MapExit]:
-    route = []
-    node = goal
-    while node != start:
-        step = previous[node]
-        route.append(step)
-        node = step.source
-    return list(reversed(route))
+def find_route(known: KnownMap, goal: str, *, avoid_solo: bool = False) -> Optional[list[MapExit]]:
+    """Cheapest route from the current place to ``goal`` over open exits between visited places."""
+    return cheapest_route(known.exits, known.current, goal, known.is_visited, avoid_solo=avoid_solo)

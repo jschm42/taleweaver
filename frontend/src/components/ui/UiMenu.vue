@@ -14,16 +14,40 @@ export interface MenuItem {
   onSelect: () => void
 }
 
-/** Action menu behind a "…" button. Closes on selection, outside click and Esc. */
-withDefaults(defineProps<{ items: MenuItem[]; label?: string; align?: 'left' | 'right' }>(), {
+/**
+ * Action menu behind a "…" button. Closes on selection, outside click, Esc, scroll and resize.
+ * The list is teleported to <body> with a fixed position next to the button, so cards with
+ * `overflow-hidden` or later siblings in a grid can neither clip nor cover it. It opens upward
+ * when there is not enough room below.
+ */
+const props = withDefaults(defineProps<{ items: MenuItem[]; label?: string; align?: 'left' | 'right' }>(), {
   label: 'More actions',
   align: 'right',
 })
+
+const MENU_WIDTH = 208
+const GAP = 4
+const EDGE = 8
 
 const open = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
 const menuEl = ref<HTMLElement | null>(null)
 const menuId = `menu-${useId()}`
+const position = ref<Record<string, string>>({})
+
+function placeMenu(): void {
+  const trigger = rootEl.value?.getBoundingClientRect()
+  if (!trigger) return
+  const left = props.align === 'right' ? trigger.right - MENU_WIDTH : trigger.left
+  const clampedLeft = Math.min(Math.max(EDGE, left), window.innerWidth - MENU_WIDTH - EDGE)
+  const height = menuEl.value?.offsetHeight ?? 0
+  const roomBelow = window.innerHeight - trigger.bottom
+  const openUp = height > 0 && roomBelow < height + GAP + EDGE && trigger.top > roomBelow
+  position.value = {
+    left: `${clampedLeft}px`,
+    top: openUp ? `${Math.max(EDGE, trigger.top - height - GAP)}px` : `${trigger.bottom + GAP}px`,
+  }
+}
 
 const TONE = {
   default: 'text-wb-body hover:bg-wb-raised hover:text-wb-strong',
@@ -36,7 +60,15 @@ function entries(): HTMLButtonElement[] {
 }
 
 function handleDocumentClick(event: MouseEvent): void {
-  if (rootEl.value && !rootEl.value.contains(event.target as Node)) close()
+  const target = event.target as Node
+  if (rootEl.value?.contains(target) || menuEl.value?.contains(target)) return
+  close()
+}
+
+function handleViewportChange(event: Event): void {
+  // Scrolling inside the menu itself must not close it.
+  if (event.type === 'scroll' && menuEl.value?.contains(event.target as Node)) return
+  close()
 }
 
 async function toggle(): Promise<void> {
@@ -44,15 +76,21 @@ async function toggle(): Promise<void> {
     close()
     return
   }
+  placeMenu()
   open.value = true
   document.addEventListener('click', handleDocumentClick, true)
+  window.addEventListener('scroll', handleViewportChange, true)
+  window.addEventListener('resize', handleViewportChange)
   await nextTick()
+  placeMenu()
   entries()[0]?.focus()
 }
 
 function close(): void {
   open.value = false
   document.removeEventListener('click', handleDocumentClick, true)
+  window.removeEventListener('scroll', handleViewportChange, true)
+  window.removeEventListener('resize', handleViewportChange)
 }
 
 function select(item: MenuItem): void {
@@ -87,16 +125,16 @@ onBeforeUnmount(close)
         @click.stop="toggle"
       />
     </slot>
+    <Teleport to="body">
     <div
       v-if="open"
       :id="menuId"
       ref="menuEl"
       role="menu"
       :aria-label="label"
-      :class="[
-        'absolute top-full z-50 mt-1 w-52 rounded-xl border border-wb-line-strong bg-wb-overlay py-1 shadow-wb-float font-wb',
-        align === 'right' ? 'right-0' : 'left-0',
-      ]"
+      class="fixed z-[1000] w-52 rounded-xl border border-wb-line-strong bg-wb-overlay py-1 shadow-wb-float font-wb"
+      :style="position"
+      @keydown.esc.stop="handleEscape"
       @keydown.down.prevent="moveFocus(1)"
       @keydown.up.prevent="moveFocus(-1)"
     >
@@ -118,5 +156,6 @@ onBeforeUnmount(close)
         </button>
       </template>
     </div>
+    </Teleport>
   </div>
 </template>

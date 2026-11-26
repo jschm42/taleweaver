@@ -75,6 +75,11 @@ _KIND_ALIASES: dict[str, tuple[str, str]] = {
     "audio": ("audio", ""),
     "track": ("audio", ""),
     "music": ("audio", ""),
+    "section": ("section", ""),
+    "cutscene": ("cutscene", ""),
+    "cut_scene": ("cutscene", ""),
+    "cinematic": ("cutscene", ""),
+    "region": ("section", ""),
     "ability": ("ability", ""),
     "talent": ("talent", ""),
 }
@@ -87,6 +92,8 @@ _NAME_FIELDS = {
     "sidequest": "title",
     "award": "title",
     "audio": "name",
+    "cutscene": "title",
+    "section": "label",
     "script": "name",
     "ability": "name",
     "talent": "name",
@@ -129,7 +136,16 @@ def parse_blueprint(text: str) -> Blueprint:
     state.blueprint.premise = "\n".join(state.premise).strip() or state.blueprint.title
     for block in state.blueprint.blocks:
         _derive_implied_fields(block)
+    _attach_sources(state.blueprint.blocks, lines)
     return state.blueprint
+
+
+def _attach_sources(blocks: list[BlueprintBlock], lines: list[str]) -> None:
+    """Gives each top-level block its source text (tag line up to the next tag)."""
+    starts = [block.line for block in blocks]
+    for index, block in enumerate(blocks):
+        end = starts[index + 1] - 1 if index + 1 < len(starts) else len(lines)
+        block.source = "\n".join(lines[block.line - 1 : end]).rstrip()
 
 
 def _match_tag(

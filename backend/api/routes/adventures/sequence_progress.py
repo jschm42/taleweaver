@@ -7,10 +7,19 @@ from typing import Any, Optional
 
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.engine.cutscenes.queue import queue_chapter_cutscene
 from backend.models.avatar import Avatar
 from backend.models.session_state import SessionState
 
 logger = logging.getLogger(__name__)
+
+
+def _queue_intro(state: SessionState, sequence: Any) -> None:
+    """Queues the chapter's intro cut-scene (``start_cutscene_id``) before its start hook runs."""
+    entity_states = dict(state.entity_states or {})
+    if queue_chapter_cutscene(entity_states, sequence, front=True):
+        state.entity_states = entity_states
+        _flag(state, "entity_states")
 
 
 def _flag(obj: Any, *attributes: str) -> None:
@@ -278,6 +287,7 @@ async def _advance_and_trigger(
     state.active_sequence_id = seq_id
     state.active_sequence_order = next_seq.get("order", next_index + 1)
     _flag(state, "active_sequence_id", "active_sequence_order")
+    _queue_intro(state, next_seq)
 
     title = next_seq.get("title") or seq_id
     unlock_msg = f"New Sequence unlocked: {title}"
@@ -375,6 +385,7 @@ async def _handle_sequence_start(
     state.active_sequence_id = new_id
     state.active_sequence_order = order
     _flag(state, "active_sequence_id", "active_sequence_order")
+    _queue_intro(state, matched)
 
     title = (matched.get("title") or new_id) if matched else new_id
     start_msg = f"Sequence started: {title}"

@@ -603,6 +603,117 @@ audio: CRYPT_DRONE
 
 The generator only stores the prompts. Render the tracks in the editor's **Audio** tab (or upload your own); its **AI Prompt** button writes a prompt from the tone and a reference scene and always adds the loop instruction.
 
+### Cut-scenes
+
+A cut-scene opens a chapter like a short film: a few slides, each a picture with one or two sentences the narrator reads. Write one line per slide; a line starting with `+` adds a passage to the slide above it (for example a short exchange shown over the same picture); `image N:` describes slide N's picture (otherwise it is drawn from the slide's text), and `style:` gives the cut-scene its own look, for example a comic or watercolor cut-scene in a painterly fantasy adventure. Link it from the chapter with `cutscene:`, or make it the adventure's opening, victory, or defeat cut-scene with `intro_cutscene:`, `win_cutscene:`, or `game_over_cutscene:` in `[World]` (shown right after a session starts, or before the victory / game-over card).
+
+```text
+[Cutscene: INTRO] The Crimson Debt
+style: loose watercolor
+The village of Ashford burns inside a ring of black fire.
+On the hill, a shadow wolf waits for its debtor.
++ "You owe me a life," it whispers.
+image 2: a black wolf made of smoke on a moonlit hill
+
+[Sequence: 1] The Debt
+cutscene: INTRO
+```
+
+Keep slides short and free of solutions: they are shown, not played. Players skip a passage by holding Space or the mouse button. A script shows a cut-scene at any other moment with `tw.cutscene.play("INTRO")`. Without `[Cutscene]` tags the World-Builder may still write up to three cut-scenes for important chapter starts; edit or delete them on the editor's **Cut-scenes** page.
+
+### Regions for a large world
+
+Every adventure has at least one region: without `[Section]` tags it gets a default region named after the adventure, and players see no world map. A world with many scenes reads better in several regions: each region gets its own scene map in the editor, and from two regions on a world map shows how they connect. Declare them with `[Section: ID] Label`, place them with `position: x, y` (percent of the world map) and put scenes in with `section: ID` (a scene without it goes into the first built region). A region you only plan for later is `status: planned`; it has no scenes yet, players never see it, and `links` notes the planned routes.
+
+```text
+[Section: HARBOR_TOWN] Harbor Town
+position: 20, 65
+A fishing port under a broken lighthouse.
+
+[Section: GLOOM_PEAKS] Gloom Peaks
+status: planned
+brief: Dwarven ruins above the tree line, cold, few NPCs.
+links: HARBOR_TOWN 8h
+
+[Scene: PIER] The Pier
+section: HARBOR_TOWN
+
+[Scene: LIGHTHOUSE] The Lighthouse
+section: HARBOR_TOWN
+```
+
+Regions gate nothing: a route between two regions is an ordinary exit between their scenes, with the usual locks. Manage regions later on the editor's **Regions** page and filter the **Map** by region. To grow a small adventure into a campaign, rename its default region there and add new ones next to it; the last built region cannot be deleted, and the scenes of a deleted region move to the first remaining built one.
+
+**Region scripts** react when the player crosses a region border: a script with `trigger: on_enter_section` (or `on_leave_section`) and the region's ID as `target` runs once per crossing, e.g. to change the music, start a chapter or warn about the cold. A side quest can name the region where it continues with `region: ID`.
+
+**Events on the road** belong in the exit's `on_use` script, which runs when the player takes the way (also during fast travel, where any message it writes stops the trip at that place):
+
+```text
+[Exit: HARBOR_SQUARE -> PASS_FOOT] the mountain road
+travel: 8h
+on_use: |
+  if tw.dice.random() < 0.3:
+      tw.time.advance('2h')
+      tw.story.narrate("A rockslide blocks the road. Finding a way around costs two hours.")
+```
+
+On the world map (Map and Regions pages), **Map images** paints the map from the regions and their positions, with an editable prompt and, if you like, the adventure's image style and tone; you can also upload your own image or download it. A large map is built from several images: add tiles to the right or below (up to 6 x 6); each tile's prompt names the regions on it. The map is the background of the editor's and the players' world map (no lettering; the names are drawn on top); zoom with the mouse wheel or the buttons and drag the map to move it. **Connect regions** draws a new route: between two built regions it creates an exit between a scene of each, with a planned region it plans a route. Click a route's time chip to change its travel time (or estimate it from the map distance). The Map page and the players' map open on the world map; a click on a region shows its scenes. On the editor's scene map, exits into another region are drawn blue and dashed; hovering such an exit names the region it leads into, and hovering a scene names its region. A planned region does not have to be written by hand. **Generate adventure** builds one connected world in a single region (the page says so); more regions are added afterwards in the World-Editor. On the **Regions** page, **Plan regions** proposes new planned regions with a brief each, derived from the adventure's plot, and **Generate** under a region's description or brief writes that field from the plot, the region's other fields, its routes, its scenes and the other regions (into the draft, so you review and save it); the scenes of the selected region are shown as tiles below its fields (a click opens the scene); **Build region...** then opens the Region Builder for one planned region: name, description and region idea, which parts of your world the World-Builder reads (other regions, chapters with walkthroughs, quests, plot, world rules, characters, scenes, items; all on by default, each shows its estimated token cost), and the region's size (Simple: small, medium or large; Advanced: every count, event scripts, strictness and the detail of each context part). **Build region** creates the scenes with characters, items, exits to its neighbours and fast travel points in the background; the builder remembers the settings for the next build of that region. **Images & voices** draws pictures for the new scenes, characters and items in the adventure's image style and gives the new characters voices; **Validate & fix afterwards** checks the region and applies one AI fix per problem it introduced. A region the builder built can be taken out again with **Discard region...** on the Regions page: its scenes, characters, items, exits, quests, awards, chapters and scripts are removed and it becomes a planned region you can rebuild (players who already took it in keep their copy). A generated id that already exists in the adventure is renamed (`KEY` becomes `KEY_2`, with every reference inside the region) and listed in the region's notes. Players who started the adventure earlier are offered the new region when they open their session. While regions are still planned, finishing the last chapter does not end the adventure: players get a *To be continued* notice and keep exploring (a win guard or `tw.game.win()` still ends it).
+
+### A blueprint for one region
+
+The Region Builder's **Region idea** accepts the same blueprint syntax, in *region mode*: the blueprint describes only the new region and is checked against the adventure that already exists.
+
+```text
+Frozen dwarven ruins above the harbor. The surveyor's trail ends at a collapsed gatehouse.
+
+[Scene: GP_GATEHOUSE] Ruined Gatehouse
+fast_travel: yes
+Ice-crusted gate, a broken winch.
+
+[Exit: HARBOR_SQUARE -> GP_GATEHOUSE] the mountain road
+travel: 8h
+
+[NPC: GP_HERMIT] Old Brann
+in: GP_GATEHOUSE
+~ Knows where the surveyor went, but wants the drowned bell first.
+
+[Sequence: 1] Into the peaks
+goal_scene: GP_GATEHOUSE
+```
+
+- Text before the first tag is the region's brief; the blocks pin scenes, characters, items, exits, chapters, scripts, side quests and awards.
+- Ids that already exist may be **referenced** (an exit from `HARBOR_SQUARE`, an existing key item, a quest requirement) but never declared again; a block such as `[NPC: HARBORMASTER]` for an existing character is an error. The builder only adds content.
+- An exit must touch at least one new scene. An exit to a scene outside the region's linked regions works, but you get a note.
+- Scenes belong to the region being built; `section:` naming another region is an error.
+- `[World]`, `[Protagonist]` and `[Audio]` are global and ignored; `[Section]` too, because the region is edited in the builder's Region card.
+- Chapters are numbered from 1 within the region and follow the existing chapters after the build.
+
+The builder checks the blueprint while you type: the Region idea card lists its errors and notes, and **Build region** stays disabled while there are errors.
+
+### Long journeys and fast travel
+
+A way between distant places can cost in-game time: `travel` on an exit moves the clock when the player uses it. Mark central places with `fast_travel: yes`; once the player has been there, the map offers to travel back from anywhere (the route is walked with all its events and travel time). A waystone that must be activated first uses `fast_travel_unlock: script` and a script that unlocks it.
+
+```text
+[Scene: HARBOR_SQUARE] Harbor Square
+fast_travel: yes
+
+[Scene: WAYSTONE] Old Waystone
+fast_travel: yes
+fast_travel_unlock: script
+
+[Item: RUNE_STONE] Rune Stone
+type: switch
+on_interact: tw.game.unlock_fast_travel('WAYSTONE')
+
+[Exit: HARBOR_SQUARE -> WAYSTONE] the mountain road
+travel: 8h
+travel_label: a day's march uphill
+
+[Sequence: 3] The Siege
+fast_travel: no
+```
+
 ### Procedural Dynamic Zones (`[Exit: FROM -> ZONE]`) & Pre-Mapped Dynamic Scenes (`[DynamicScene: ID]`)
 
 Combine author-designed map topology with on-demand AI generation in two complementary ways:
@@ -642,6 +753,27 @@ allowed_entities: hostile_npc, container, consumable, scenery
 ```
 
 You can also write `[Exit: HALL -> ?]` and specify `zone: iron_mines`. The pre-flight check automatically skips missing-scene warnings for dynamic exit targets, and the engine assigns a deterministic `DYN_*` pseudo-name scene ID. When `cluster_consistency` is enabled (`yes` by default), the scene generator receives the adventure's global theme, the root dynamic exit theme, and all already-generated scenes, NPCs, and items in the same `zone_id` cluster. With `instructions_scope: once` (the default), freeform instructions run only on the first generated scene in a cluster and Blueprint blocks automatically skip entities that were already spawned (with optional per-block `depth: 1` or `depth: max` inside Blueprint instructions).
+
+**Characters and items that must be there.** Instructions are suggestions; to make sure a character or item appears in a procedural zone, declare it as a normal `[NPC]` or `[Item]` with `in:` set to the zone's ID and pick the room with `depth:` (a number or `max` for the deepest room; without it, the first room). It appears exactly once per cluster, even when the zone's NPC or item limits are already reached, and the cluster's story is planned around it:
+
+```text
+[NPC: FOREMAN] Ghost Foreman
+in: IRON_MINES
+depth: max
+type: BEING
+A pale shade who still counts the carts.
+
+[Container: ORE_CART] Overturned Ore Cart
+in: IRON_MINES
+depth: 2
+contains: MINE_KEY
+
+[Item: MINE_KEY] Rusty Lift Key
+in: IRON_MINES
+depth: 2
+```
+
+These entities do not exist before their room is generated, so do not make a quest or lock of the normal world depend on them; scripts can react to them in the zone's `on_after_generated` hook. In the editor they appear as the dynamic exit's **Placed NPCs & items**.
 
 When the player enters a dynamic cluster, the engine first plans the whole cluster as a small in-game adventure (one LLM call): story arc, antagonist, key item, and for every room a label, a room-specific sub-theme and concrete generation instructions (which NPCs, items, puzzles, where the key lies and what it opens). Every room is then generated from its own brief, so the rooms follow one red thread instead of repeating the same theme and prompt. Your freeform `instructions` are the premise of this cluster adventure (e.g. `Alex fights through the dungeon to free Edgar from his cell; goblins captured him.`): the arc, antagonist, key item and climax are built around them. `instructions_scope` only limits where entities or loot named in the premise are spawned; the story always spans the whole cluster. The in-game debug inspector shows each room's brief.
 

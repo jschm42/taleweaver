@@ -2,7 +2,7 @@
 import { Sparkles } from 'lucide-vue-next'
 import UiInfoPopover from '@/components/ui/UiInfoPopover.vue'
 import BlueprintSyntaxHelp from '@/components/create-adventure/BlueprintSyntaxHelp.vue'
-import StoryIdeaLengthHint from '@/components/create-adventure/StoryIdeaLengthHint.vue'
+import StoryIdeaLengthHint from '@/components/game/generator/StoryIdeaLengthHint.vue'
 
 const props = defineProps<{
   title: string

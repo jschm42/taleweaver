@@ -392,6 +392,42 @@ export interface PendingDialog {
   options: DialogOption[]
 }
 
+/** One slide of a cut-scene as the player sees it. */
+export interface CutsceneSlide {
+  id: string
+  /** Shown one after another over the slide's picture. */
+  passages: string[]
+  image_url?: string | null
+}
+
+/** The next cut-scene to show (`cutscene` of `GET /chat` and of the pre-narration event). */
+export interface Cutscene {
+  /** Confirms this showing with `POST /{game_id}/cutscene/seen`. */
+  token: string
+  id: string
+  title?: string
+  slides: CutsceneSlide[]
+  audio?: { id: string, url: string } | null
+}
+
+/** A cut-scene of the adventure's library as the editor stores it (`AdventureTemplate.cutscenes`). */
+export interface CutsceneDefinition {
+  id: string
+  title: string
+  audio_track_id?: string | null
+  /** Overrides the adventure's image style for the slide images; empty = the adventure's style. */
+  image_style?: string
+  slides: CutsceneDefinitionSlide[]
+}
+
+export interface CutsceneDefinitionSlide {
+  id: string
+  /** Text passages shown one after another over the same picture. */
+  passages: string[]
+  image_url?: string | null
+  image_prompt?: string
+}
+
 /** What a chapter banner in the story feed shows (`sequence_details` of `GET /chat`). */
 export interface SequenceDetail {
   title: string
@@ -447,6 +483,61 @@ export interface WorldMapData {
   nodes: Record<string, MapNode>
   edges: MapEdge[]
   current_scene_id: string | null
+  /** World sections (regions) the player discovered; empty without regions. */
+  sections?: MapRegion[]
+  /** Links between discovered regions (known exits between their scenes). */
+  section_links?: MapRegionLink[]
+  current_section_id?: string | null
+  /** Drawn world map behind the regions (a grid of image tiles), if the author made one. */
+  world_map_layout?: MapLayout | null
+}
+
+/** The drawn world map: a grid of 16:9 image tiles (AdventureTemplate.world_map_layout). */
+export interface MapLayout {
+  cols: number
+  rows: number
+  tiles: Array<{ col: number; row: number; url: string }>
+}
+
+export interface MapRegion {
+  id: string
+  label: string
+  description: string
+  map_x: number
+  map_y: number
+  /** visited: a scene of it was entered; revealed: only seen behind a revealed exit. */
+  discovery: 'visited' | 'revealed'
+}
+
+export interface MapRegionLink {
+  from: string
+  to: string
+  is_locked: boolean
+}
+
+/** A region offered to a running session (GET /adventures/{game}/expansion). */
+export interface RegionSummary {
+  id: string
+  label: string
+  description: string
+}
+
+/** A fast travel point as GET /adventures/{game}/travel/options returns it. */
+export interface TravelPoint {
+  scene_id: string
+  label: string
+  section_id: string | null
+  available: boolean
+  reason: string
+  minutes: number
+  hops: number
+  solo_passage: boolean
+}
+
+export interface TravelOptions {
+  /** Why fast travel is not possible right now; empty when it is. */
+  blocked: string
+  points: TravelPoint[]
 }
 
 /** Summary of a game session returned by GET /api/adventures. */

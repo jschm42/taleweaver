@@ -77,6 +77,22 @@ class AdventureTemplate(Base, TimestampMixin):
     audio_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default="1"
     )
+    # Cut-scenes: slide shows for chapter starts and tw.cutscene.play (engine/cutscenes/library.py).
+    cutscenes: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # Cut-scene of the library shown right after a new session starts (before chapter 1's).
+    intro_cutscene_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Cut-scene of the library shown when the adventure is won (before the ending card).
+    win_cutscene_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Cut-scene of the library shown on game over (before the ending card).
+    game_over_cutscene_id: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # World sections (regions) that group the scenes; None = no sections (engine/world/sections.py).
+    world_sections: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSON, nullable=True)
+    # The drawn world map as a grid of image tiles (engine/world/world_map_layout.py).
+    world_map_layout: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # Whether the player may fast travel to unlocked fast travel points (engine/rules/fast_travel.py).
+    fast_travel_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
     # Dialog skin chosen by the author: {"skin": <id>, "accent": "#rrggbb"} (see core/ui_theme.py)
     ui_theme: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 

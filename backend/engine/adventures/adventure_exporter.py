@@ -16,7 +16,9 @@ from backend.core.config import settings
 from backend.core.manifest_extensions import EXTENSIONS_KEY, manifest_extensions
 from backend.core.npc_extensions import split_npc_extensions
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.transfer import localized_cutscenes
 from backend.engine.sessions.start_scene import resolve_initial_scene_id
+from backend.engine.world.sections import normalize_sections
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.world_entity import WorldEntity, WorldExit, WorldScene
@@ -509,7 +511,13 @@ def _build_adventure_section(adv: AdventureTemplate) -> dict[str, Any]:
         "selected_tone": adv.selected_tone,
         "narrator_voice": adv.narrator_voice,
         "audio_tracks": deepcopy(adv.audio_tracks or []),
+        "cutscenes": deepcopy(getattr(adv, "cutscenes", None) or []),
+        "intro_cutscene_id": getattr(adv, "intro_cutscene_id", None),
+        "win_cutscene_id": getattr(adv, "win_cutscene_id", None),
+        "game_over_cutscene_id": getattr(adv, "game_over_cutscene_id", None),
         "audio_enabled": bool(getattr(adv, "audio_enabled", True)),
+        "fast_travel_enabled": getattr(adv, "fast_travel_enabled", True) is not False,
+        "world_map_layout": deepcopy(getattr(adv, "world_map_layout", None)),
         "title_track_id": adv.title_track_id,
         "ui_theme": adv.ui_theme,
         "selected_image_styles": adv.selected_image_styles,
@@ -625,6 +633,12 @@ def _localize_manifest_images(
     adventure["image_url"] = _localize_asset_path(
         adventure.get("image_url"), adventure_dir, asset_mapping
     )
+    for tile in (adventure.get("world_map_layout") or {}).get("tiles") or []:
+        tile["url"] = _localize_asset_path(tile.get("url"), adventure_dir, asset_mapping)
+    adventure["cutscenes"] = localized_cutscenes(
+        adventure.get("cutscenes"),
+        lambda url: _localize_asset_path(url, adventure_dir, asset_mapping),
+    )
     if manifest["protagonist"]:
         manifest["protagonist"]["profile_image"] = _localize_asset_path(
             manifest["protagonist"].get("profile_image"), adventure_dir, asset_mapping
@@ -688,6 +702,8 @@ class AdventureExporter:
             "adventure": {**_build_adventure_section(adv), "start_scene_id": start_scene_id},
             "protagonist": _build_protagonist_section(avatar, inventory, equipment),
             "start_scene_id": start_scene_id,
+            # World sections incl. stubs, so an author can continue a campaign from the file.
+            "sections": normalize_sections(adv.world_sections),
             "scenes": [_record_to_dict(s) for s in scenes],
             "exits": [_record_to_dict(e) for e in exits],
             "npcs": [_serialize_world_entity(ent) for ent in entities if ent.entity_type == "NPC"],

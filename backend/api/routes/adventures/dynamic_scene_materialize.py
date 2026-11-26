@@ -34,6 +34,7 @@ from backend.api.routes.adventures.dynamic_scene_media import (
     register_pending_dynamic_visuals,
     sync_dynamic_scene_audio,
 )
+from backend.engine.world.dynamic_required_entities import npcs_to_persist, objects_to_persist
 from backend.engine.world.dynamic_scene_generator import (
     generate_dynamic_interlude_quote,
     generate_dynamic_scene_payload,
@@ -428,7 +429,7 @@ async def _persist_existing_scene_contents(
     party_hp = await compute_party_hp_budget(db, state)
     danger = str(zone.get("danger_level") or "medium")
     max_npcs = max(0, int(zone.get("max_npcs", 2)))
-    for idx, npc in enumerate(payload.npcs[:max_npcs]):
+    for idx, npc in enumerate(npcs_to_persist(payload, max_npcs)):
         for npc_entity, is_primary in build_dynamic_npc_clones(
             session_id=state.session_id,
             target_id=target_id,
@@ -463,7 +464,7 @@ async def _persist_existing_scene_contents(
     is_climax = int(zone.get("depth") or 1) >= int(zone.get("max_depth") or 3) and bool(
         zone.get("cul_de_sac_on_max_depth", True)
     )
-    for idx, obj in enumerate(list(payload.objects[:5])):
+    for idx, obj in enumerate(objects_to_persist(payload)):
         scale_dynamic_object_stats(
             obj,
             party_hp=party_hp,

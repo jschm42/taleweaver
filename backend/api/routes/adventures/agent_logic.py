@@ -20,7 +20,11 @@ from backend.api.routes.adventures.agent_instruction import (
     instruction_prompt,
     normalize_instruction,
 )
-from backend.api.routes.adventures.agent_known_map import format_known_map, load_known_map
+from backend.api.routes.adventures.agent_known_map import (
+    format_fast_travel,
+    format_known_map,
+    load_known_map,
+)
 from backend.api.routes.adventures.agent_memory import format_memories
 from backend.api.routes.adventures.agent_objectives import format_objectives
 from backend.api.routes.adventures.agent_party_view import format_abilities_and_party
@@ -31,6 +35,7 @@ from backend.api.routes.adventures.agent_world_view import (
     load_room_entities,
     opened_container_ids,
 )
+from backend.api.routes.adventures.fast_travel_plan import load_travel_plan
 from backend.api.routes.adventures.turn_context_helpers import (
     _find_active_sequence,
     resolve_sequence_guidance,
@@ -462,6 +467,10 @@ class AgentService:
         )
         scene_exits = await load_scene_exits(db, game_id, state.current_scene_id)
         known_map = format_known_map(await load_known_map(db, game_id, state))
+        travel_plan = await load_travel_plan(db, state, adventure)
+        fast_travel_block = "" if travel_plan.blocked else format_fast_travel(travel_plan.points)
+        if fast_travel_block:
+            known_map += "\n\n" + fast_travel_block
         player_world_context = build_player_perception_context(
             adventure, state, ctx, f"{format_exits_for_agent(scene_exits)}\n\n{known_map}"
         )

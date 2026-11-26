@@ -23,6 +23,7 @@ from backend.engine.world.dynamic_cluster_node_zone import (
     root_instructions_scope,
     root_instructions_text,
 )
+from backend.engine.world.dynamic_required_entities import required_entities_summary
 from backend.engine.world.dynamic_scene_schemas import (
     normalize_generation_model,
     resolve_effective_dynamic_rules,
@@ -118,6 +119,9 @@ def _build_architect_user_prompt(
         if instructions
         else ""
     )
+    placed = required_entities_summary(zone)
+    if placed:
+        author_block += f"\n{placed}"
     return (
         f"Adventure Title: {adventure_title}\n"
         f"Adventure Tone: {adventure_tone or 'Atmospheric'}\n"

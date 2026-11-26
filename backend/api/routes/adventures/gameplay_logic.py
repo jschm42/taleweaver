@@ -13,6 +13,8 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
+from backend.api.routes.adventures.cutscene_routes import cutscene_snapshot
+from backend.api.routes.adventures.section_triggers import run_section_change_scripts
 from backend.api.routes.adventures.listen_mode_command import (
     handle_listen_mode_command,
     is_listen_mode_command,
@@ -29,6 +31,7 @@ from backend.api.routes.adventures.agent_commands import (
     handle_playagent_command,
 )
 from backend.api.routes.adventures.after_narration import run_after_narration
+from backend.api.routes.adventures.fast_travel import handle_fast_travel, is_fast_travel_command
 from backend.api.routes.adventures.game_clock_flow import tick_after_narration
 from backend.api.routes.adventures.history_compression_window import messages_to_compress
 from backend.api.routes.adventures.story_continuation import (
@@ -50,6 +53,8 @@ from backend.core.narration_styles import (
 from backend.core.narrator_voices import narrator_voice_rules
 from backend.core.prose_craft import PROSE_CRAFT_RULES
 from backend.core.voice_tags import vocal_tag_reminder
+from backend.engine.cutscenes.queue import apply_cutscene_ops, queue_cutscene
+from backend.engine.rules.fast_travel import TRAVEL_KEY, apply_travel_ops
 from backend.engine.rules.dice_command import handle_roll_command, is_roll_command
 from backend.api.routes.adventures.debug_script_command import (
     handle_script_command,
@@ -408,6 +413,8 @@ class GameTurnManager:
         self._turn_anchor: tuple[Any, Any] | None = None
         # True while the player's message still owes its narration tick (game_clock_flow).
         self.clock_tick_pending = False
+        # True after a journey moved the clock: its time events fire after the narration.
+        self.travel_events_pending = False
 
     def _queue_checkpoint(
         self, reason: str, *, scene_label: str | None = None, label: str | None = None
@@ -934,6 +941,12 @@ class GameTurnManager:
             async for chunk in handle_script_command(self, user_msg):
                 yield chunk
             yield await self._command_final_event()
+            return
+
+        # /fast_travel <place>: walk the known route to a fast travel point, narrate once
+        if is_fast_travel_command(user_msg):
+            async for chunk in handle_fast_travel(self, user_msg, language=language):
+                yield chunk
             return
 
         # traverse_exit internal command: move scene, then run LLM narration pass
@@ -1548,6 +1561,12 @@ class GameTurnManager:
                         )
                         rule_violations.extend(cs_scene.rejected_actions)
                         sys_msgs = await self._apply_script_changeset(cs_scene, game_event)
+                        sys_msgs = [
+                            *sys_msgs,
+                            *await run_section_change_scripts(
+                                self, self.state.current_scene_id, game_event.new_scene_id
+                            ),
+                        ]
                         for sm in sys_msgs:
                             yield sse_role_message(sm)
 
@@ -1870,6 +1889,8 @@ class GameTurnManager:
                 "sequence_id": self.state.active_sequence_id,
                 # Audio a script started (or speech it stopped) applies before the narration.
                 "audio": await build_audio_snapshot(self.db, self.state, None, self.user),
+                # A chapter intro or tw.cutscene.play of this turn opens before the narration.
+                "cutscene": cutscene_snapshot(self.state, self.adventure),
                 **self._build_prompt_suggestions_payload(),
                 **self._build_terminal_flags_payload(),
                 "status": "success",
@@ -2533,6 +2554,22 @@ class GameTurnManager:
         if stream_callback:
             await stream_callback(message)
 
+    def _queue_outcome_cutscene(self, status: str) -> None:
+        field = "win_cutscene_id" if status == "completed" else "game_over_cutscene_id"
+        cutscene_id = getattr(self.adventure, field, None)
+        if not cutscene_id or not self.state:
+            return
+        entity_states = dict(self.state.entity_states or {})
+        if not queue_cutscene(entity_states, cutscene_id):
+            return
+        self.state.entity_states = entity_states
+        try:
+            flag_modified(self.state, "entity_states")
+        except Exception:
+            logger.debug(
+                "Could not flag entity_states as modified on %r", type(self.state).__name__
+            )
+
     async def _finalize_session(self, status: str, note: str | None = None):
         """Updates the session status and records the outcome in the user's game log."""
         previous_status = self.state.session.status if self.state and self.state.session else None
@@ -2542,6 +2579,7 @@ class GameTurnManager:
 
         if status in {"completed", "game_over"} and previous_status != status:
             self._set_terminal_epilogue_sent(status, sent=False)
+            self._queue_outcome_cutscene(status)
 
         if status == "completed":
             self.state.is_completed = True
@@ -3012,6 +3050,7 @@ class GameTurnManager:
             audio_library=getattr(self.adventure, "audio_tracks", None),
             party=session_overrides.get(PARTY_KEY),
             respawn=session_overrides.get(RESPAWN_KEY),
+            travel=session_overrides.get(TRAVEL_KEY),
             npc_memory=session_overrides.get(NPC_MEMORY_STATE_KEY),
             conversations=session_overrides.get(CONVERSATIONS_STATE_KEY),
             story_flags=story_flags,
@@ -3190,11 +3229,13 @@ class GameTurnManager:
             changeset.respawn_point is not None
             or changeset.npc_memory_ops
             or changeset.conversation_ops
+            or changeset.travel_ops
         ):
             states = dict(self.state.entity_states or {})
             apply_respawn_point(states, changeset.respawn_point)
             apply_npc_memory_ops(states, changeset.npc_memory_ops)
             apply_conversation_ops(states, changeset.conversation_ops)
+            apply_travel_ops(states, changeset.travel_ops)
             self.state.entity_states = states
             flag_modified(self.state, "entity_states")
         if changeset.teleport_scene_id or getattr(changeset, "teleport_dynamic_request", None):
@@ -3247,6 +3288,7 @@ class GameTurnManager:
         apply_changeset_clock(self.state, entity_states, changeset.clock_ops)
         apply_audio_ops(entity_states, changeset.audio_ops)
         store_skip_narration(entity_states, changeset.skip_narration)
+        apply_cutscene_ops(entity_states, changeset.cutscene_ops)
         self.state.entity_states = entity_states
         flag_modified(self.state, "entity_states")
 

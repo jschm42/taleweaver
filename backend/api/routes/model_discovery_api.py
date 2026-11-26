@@ -93,3 +93,51 @@ async def list_provider_models(
         error=result.error,
         models=[ModelInfo(id=m.id, label=m.label) for m in result.models],
     )
+
+
+class LumigenOptionItem(BaseModel):
+    id: int | str
+    name: str
+    model: Optional[str] = None
+    aspect_ratio: Optional[str] = None
+
+
+class LumigenOptionsResponse(BaseModel):
+    profiles: list[LumigenOptionItem] = []
+    categories: list[LumigenOptionItem] = []
+    error: Optional[str] = None
+
+
+@router.get("/lumigen-options", response_model=LumigenOptionsResponse)
+async def list_lumigen_options(
+    base_url: Optional[str] = None,
+    current_user: User = Depends(get_current_admin),
+):
+    """Fetch Lumigen MCP profiles and categories for the Admin Images settings."""
+    from backend.engine.media.lumigen import DEFAULT_LUMIGEN_URL, discover_options
+
+    api_key = _resolve_api_key(current_user, "lumigen")
+    if not api_key:
+        return LumigenOptionsResponse(error="No API key configured for Lumigen MCP.")
+    target_url = _validated_base_url("lumigen", base_url) or DEFAULT_LUMIGEN_URL
+    try:
+        data = await discover_options(target_url, api_key)
+    except Exception as exc:
+        return LumigenOptionsResponse(error=str(exc))
+    return LumigenOptionsResponse(
+        profiles=[
+            LumigenOptionItem(
+                id=p["id"],
+                name=str(p["name"]),
+                model=p.get("model"),
+                aspect_ratio=p.get("aspect_ratio"),
+            )
+            for p in data["profiles"]
+            if isinstance(p, dict) and p.get("name")
+        ],
+        categories=[
+            LumigenOptionItem(id=c["id"], name=str(c["name"]))
+            for c in data["categories"]
+            if isinstance(c, dict) and c.get("name")
+        ],
+    )

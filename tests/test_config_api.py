@@ -371,6 +371,27 @@ async def test_save_tone_catalog(client: AsyncClient):
     assert payload["tone_catalog"][0]["id"] == "satire"
 
 
+@pytest.mark.parametrize("catalog_type", ["styles", "tones"])
+async def test_catalog_defaults_return_builtin_entries(client: AsyncClient, catalog_type: str):
+    """The admin restore action reads the built-in catalog, even after a custom save."""
+    # Arrange
+    await client.post("/api/settings/image-styles", json={"items": [{"id": "x", "name": "X"}]})
+
+    # Act
+    resp = await client.get(f"/api/settings/catalog-defaults/{catalog_type}")
+
+    # Assert
+    assert resp.status_code == 200
+    ids = [item["id"] for item in resp.json()["items"]]
+    assert "x" not in ids
+    assert ("survival-realism" if catalog_type == "styles" else "survival-grit") in ids
+
+
+async def test_catalog_defaults_reject_unknown_type(client: AsyncClient):
+    resp = await client.get("/api/settings/catalog-defaults/voices")
+    assert resp.status_code == 422
+
+
 async def test_settings_are_global_for_all_users(client: AsyncClient):
     """Updating settings as one admin user should apply to all users globally."""
     user_a = "settings_user_a"
@@ -467,3 +488,38 @@ async def test_test_llm_connection_handles_generic_errors_without_500(
     data = resp.json()
     assert data["status"] == "error"
     assert "Connection test failed" in data["message"]
+
+
+async def test_suggest_catalog_prompt_returns_the_llm_answer(client: AsyncClient, monkeypatch):
+    # Arrange
+    async def fake_task(self, **kwargs):
+        assert "Survival Realism" in kwargs["user_prompt"]
+        return '"a muddy camp at dawn, 35mm"'
+
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM.aexecute_simple_task", fake_task)
+
+    # Act
+    resp = await client.post(
+        "/api/settings/catalog/suggest-prompt",
+        json={"catalog_type": "styles", "name": "Survival Realism", "instruction": "35mm"},
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json() == {"prompt": "a muddy camp at dawn, 35mm", "source": "llm"}
+
+
+async def test_suggest_catalog_prompt_falls_back_to_the_template(client: AsyncClient, monkeypatch):
+    async def failing_task(self, **kwargs):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr("backend.core.llm_router.GameMasterLLM.aexecute_simple_task", failing_task)
+
+    resp = await client.post(
+        "/api/settings/catalog/suggest-prompt",
+        json={"catalog_type": "tones", "name": "Horror", "description": "Dread."},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["source"] == "template"
+    assert "Dread." in resp.json()["prompt"]

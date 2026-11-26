@@ -168,7 +168,8 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
 - Allowed `field_updates` keys MUST match the editor's patch payload exactly:
     - scene: label, description, decorative_objects, audio_track_id, on_enter_scene_script,
       on_enter_scene_text, on_leave_scene_script, on_leave_scene_text, helpers_script,
-      is_respawn_point
+      is_respawn_point, section_id (id of an existing world section, "" for none),
+      is_fast_travel_point, fast_travel_unlock ("visit" or "script")
     - object (every item type): name, description, is_portable, current_scene_id, is_hidden,
       reveal_rule, spatial_position, on_pickup_script, on_pickup_text, on_drop_script,
       on_drop_text, on_interact_script, on_interact_text
@@ -201,7 +202,8 @@ FIX_PATCH_FIELD_RULES = """- Allowed `target_type` values: scene, object, npc, e
     - exit: label, lock_description, exit_type, locked, code_to_unlock, item_to_unlock,
       rule_to_unlock, unlock_expression, on_open_exit_script, on_open_exit_text,
       on_exit_used_script, on_exit_used_text, on_unlock_success_script,
-      on_unlock_success_text, on_unlock_failure_script, on_unlock_failure_text
+      on_unlock_success_text, on_unlock_failure_script, on_unlock_failure_text,
+      travel_minutes (in-game minutes of a long journey, 0 = none), travel_label
     - protagonist: name, description, goal, character, hp, mana, stamina, strength, intelligence,
       wisdom, dexterity, charisma, armor_class, exp, on_hp_change_script, on_hp_change_text,
       on_status_change_script, on_status_change_text

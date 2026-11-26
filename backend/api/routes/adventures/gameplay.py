@@ -28,6 +28,7 @@ from backend.api.routes.adventures.chat_snapshot import (
     load_snapshot_history,
     resolve_prompt_suggestions,
 )
+from backend.api.routes.adventures.cutscene_routes import cutscene_snapshot
 from backend.api.routes.adventures.dialog_routes import ensure_no_pending_dialog
 from backend.api.routes.adventures.gameplay_logic import (
     GameTurnManager,
@@ -72,6 +73,7 @@ from backend.core.prompts import (
 from backend.core.turn_key_preflight import ensure_turn_providers_available
 from backend.engine.adventures.adventure_updates import is_legacy_session
 from backend.engine.interaction.trigger_service import TriggerService
+from backend.engine.rules.travel_time import advance_travel_time, travel_minutes_of, travel_note
 from backend.engine.rules.walkthrough_unlocks import walkthrough_payload, walkthrough_status
 from backend.engine.scripting.dialog import client_dialog, pending_dialog
 from backend.engine.scripting.llm_proxy import LlmAsker
@@ -226,6 +228,7 @@ async def get_chat_history(
         if session_status in {"completed", "game_over"}
         else client_dialog(pending_dialog(state.entity_states)),
         audio=await build_audio_snapshot(db, state, adventure, current_user),
+        cutscene=cutscene_snapshot(state, adventure),
     )
 
 
@@ -945,6 +948,11 @@ async def traverse_exit(
     state.current_scene_id = target_scene_id
     for msg in await enter_scene(db, state, current_scene_id, world_exit=world_exit):
         db.add(ChatMessage(session_id=state.session_id, role="system", content=msg))
+    # No turn runs here: the clock moves now, due time events fire with the next message.
+    journey_minutes = advance_travel_time(state, travel_minutes_of(world_exit))
+    if journey_minutes:
+        note = travel_note(world_exit, journey_minutes)
+        db.add(ChatMessage(session_id=state.session_id, role="system", content=note))
 
     db.add(
         ChatMessage(

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Plus, ScrollText, Sparkles } from 'lucide-vue-next'
 import { useEditor } from '@/composables/editor/editorContext'
 import { useEntityReferences } from '@/composables/editor/useEntityReferences'
 import { useSideQuests, type Quest } from '@/composables/editor/useSideQuests'
 import { useConfirm } from '@/composables/useDialogs'
+import { sectionsOf } from '@/services/sectionService'
 import QuestCard from '@/components/editor/quests/QuestCard.vue'
 import QuestEditModal from '@/components/editor/quests/QuestEditModal.vue'
 import PageHeader from '@/components/workbench/PageHeader.vue'
@@ -14,6 +15,9 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 
 /** Side quests: optional goals for extra XP. The dialog and deleting save the quest list at once. */
 const editor = useEditor()
+const regionOptions = computed(() =>
+  sectionsOf(editor.debugData?.adventure).map((s) => ({ value: s.id, label: s.label })),
+)
 const confirm = useConfirm()
 const list = useSideQuests(editor)
 const references = useEntityReferences(editor)
@@ -108,6 +112,7 @@ async function remove(quest: Quest): Promise<void> {
       :text-references="editor.referenceOptions || []"
       :generating-quest="list.isGeneratingQuest.value"
       :generating-description="list.isGeneratingDescription.value"
+      :region-options="regionOptions"
       @save="save"
       @draft-quest="redraft"
       @draft-description="list.draftDescription(draft)"

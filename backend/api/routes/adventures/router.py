@@ -5,6 +5,7 @@ from backend.api.routes.adventures.assets import router as assets_router
 from backend.api.routes.adventures.blueprint_routes import router as blueprint_router
 from backend.api.routes.adventures.chat_history import router as chat_history_router
 from backend.api.routes.adventures.cloning import router as cloning_router
+from backend.api.routes.adventures.cutscene_routes import router as cutscene_router
 from backend.api.routes.adventures.dialog_routes import router as dialog_router
 from backend.api.routes.adventures.dice_routes import router as dice_router
 from backend.api.routes.adventures.editor import router as editor_router
@@ -21,6 +22,7 @@ from backend.api.routes.adventures.editor_special_actions import (
     router as editor_special_actions_router,
 )
 from backend.api.routes.adventures.editor_talents import router as editor_talents_router
+from backend.api.routes.adventures.expansion_routes import router as expansion_router
 from backend.api.routes.adventures.gameplay import router as gameplay_router
 from backend.api.routes.adventures.imports import router as imports_router
 from backend.api.routes.adventures.library import router as library_router
@@ -29,6 +31,7 @@ from backend.api.routes.adventures.session_debug_exports import (
 )
 from backend.api.routes.adventures.sessions import router as sessions_router
 from backend.api.routes.adventures.templates import router as templates_router
+from backend.api.routes.adventures.travel_routes import router as travel_router
 
 router = APIRouter(prefix="/adventures")
 
@@ -68,4 +71,7 @@ router.include_router(session_debug_exports_router)
 router.include_router(chat_history_router)
 router.include_router(dice_router)
 router.include_router(dialog_router)
+router.include_router(cutscene_router)
+router.include_router(travel_router)
+router.include_router(expansion_router)
 router.include_router(agent_router)

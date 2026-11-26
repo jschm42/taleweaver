@@ -80,7 +80,14 @@ async def build_session_map(db: AsyncSession, state: SessionState) -> dict[str, 
             node["image_url"] = AdventureLogic.resolve_existing_data_asset_url(image_url)
 
     exits = await load_map_exits(db, state.template_id, state.session_id)
-    return MapEngine.augment_map_data(map_dict, exits, state.current_scene_id, state.exit_states)
+    map_dict = MapEngine.augment_map_data(
+        map_dict, exits, state.current_scene_id, state.exit_states
+    )
+    from backend.api.routes.map_api import attach_map_sections
+
+    return await attach_map_sections(
+        db, map_dict, state.template_id, session_id=state.session_id, state=state
+    )
 
 
 async def load_full_world_debug(db: AsyncSession, state: SessionState, requested: bool) -> Any:
@@ -142,9 +149,18 @@ async def apply_pending_sequence_progress(
     for seq_msg in seq_messages:
         db.add(ChatMessage(session_id=state.session_id, role="system", content=seq_msg))
     session_status = state.session.status if state.session else None
+    from backend.api.routes.adventures.campaign_continuation import (
+        campaign_continues,
+        take_to_be_continued_note,
+    )
     from backend.api.routes.adventures.out_of_turn_progress import last_sequence_ends_adventure
 
     all_completed = last_sequence_ends_adventure(adventure, state)
+    if all_completed and state.is_completed is not True and await campaign_continues(db, state):
+        note = take_to_be_continued_note(state)
+        if note:
+            db.add(ChatMessage(session_id=state.session_id, role="system", content=note))
+        all_completed = False
     if (state.is_completed is True or all_completed) and session_status not in TERMINAL_STATUSES:
         manager = GameTurnManager(
             db, state.session_id, user, state=state, adventure=adventure, avatar=avatar

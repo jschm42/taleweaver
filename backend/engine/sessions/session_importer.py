@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
+from backend.engine.rules.travel_time import normalize_travel_label, normalize_travel_minutes
 from backend.engine.world.scene_fields import scene_content_from_dict
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -119,6 +120,8 @@ def _add_world_scenes_and_exits(
             is_locked=ex.get("is_locked", False),
             is_revealed=bool(ex.get("is_revealed", False)),
             companions_allowed=ex.get("companions_allowed") is not False,
+            travel_minutes=normalize_travel_minutes(ex.get("travel_minutes")),
+            travel_label=normalize_travel_label(ex.get("travel_label")),
             lock_description=ex.get("lock_description"),
             code_to_unlock=ex.get("code_to_unlock"),
             item_to_unlock=ex.get("item_to_unlock"),

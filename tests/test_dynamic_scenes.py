@@ -786,7 +786,7 @@ async def test_generate_dynamic_scene_payload_enforces_max_npcs_and_peaceful(
     monkeypatch.setattr(dynamic_scene_generator, "_has_provider_credentials", lambda *_: True)
     monkeypatch.setattr(
         dynamic_scene_generator,
-        "_roll_scene_plan",
+        "roll_scene_plan",
         lambda zone, cap, **_: {
             "target_npcs": 1 if cap > 0 else 0,
             "target_objects": 0,
@@ -969,7 +969,7 @@ audio: empty
 
 @pytest.mark.asyncio
 async def test_roll_scene_plan_and_object_variety_enforcement(monkeypatch, db_session) -> None:
-    """_roll_scene_plan allows 0 NPCs, limits switches/containers, and _build_* initializes metadata."""
+    """roll_scene_plan allows 0 NPCs, limits switches/containers, and _build_* initializes metadata."""
     # Arrange
     zone = normalize_dynamic_zone(
         {
@@ -988,7 +988,7 @@ async def test_roll_scene_plan_and_object_variety_enforcement(monkeypatch, db_se
     )
     monkeypatch.setattr(dynamic_scene_generator.random, "random", lambda: 0.60)
 
-    plan = dynamic_scene_generator._roll_scene_plan(zone, max_npcs=2)
+    plan = dynamic_scene_generator.roll_scene_plan(zone, max_npcs=2)
     assert plan["target_npcs"] == 0
     assert plan["allow_container"] is False
     assert plan["allow_switch"] is False
@@ -1420,9 +1420,9 @@ async def test_npc_speech_rule_in_narration_context_and_interlude_quotes(
 def test_dynamic_spawn_chances_caps_and_item_stats() -> None:
     """Verify per-type NPC caps, spawn probabilities, and mixed item stat persistence."""
     from backend.api.routes.adventures.dynamic_scene_flow import _build_object_entity
-    from backend.engine.world.dynamic_scene_generator import (
-        _apply_scene_plan_to_payload,
-        _roll_scene_plan,
+    from backend.engine.world.dynamic_scene_plan import (
+        apply_scene_plan_to_payload,
+        roll_scene_plan,
     )
     from backend.engine.world.dynamic_scene_schemas import (
         DynamicGeneratedScenePayload,
@@ -1453,7 +1453,7 @@ def test_dynamic_spawn_chances_caps_and_item_stats() -> None:
     assert chances["enemy"] == 0
     assert chances["item"] == 100
 
-    silent_plan = _roll_scene_plan(zone, max_npcs=3, generation_config=gen_cfg)
+    silent_plan = roll_scene_plan(zone, max_npcs=3, generation_config=gen_cfg)
     assert silent_plan["target_npcs"] == 0
     assert silent_plan["npc_slots"] == []
     assert silent_plan["allow_container"] is False
@@ -1507,7 +1507,7 @@ def test_dynamic_spawn_chances_caps_and_item_stats() -> None:
             ],
         }
     )
-    _apply_scene_plan_to_payload(
+    apply_scene_plan_to_payload(
         payload,
         {
             "target_npcs": 2,

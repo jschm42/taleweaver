@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RefreshCw } from 'lucide-vue-next'
+import { api } from '@/composables/useApi'
 import { cloneValue, useDraft } from '@/composables/useDraft'
 import PageHeader from '@/components/workbench/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -37,6 +38,18 @@ function withDefaults(form: any): any {
     comfyui_timeout: form?.comfyui_timeout ?? 600,
     simple_comfyui_workflow: form?.simple_comfyui_workflow ?? 'sdxl',
     advanced_comfyui_workflow: form?.advanced_comfyui_workflow ?? 'sdxl',
+    lumigen_url: form?.lumigen_url ?? 'https://127.0.0.1:7003/mcp',
+    lumigen_timeout: form?.lumigen_timeout ?? 300,
+    lumigen_profile: form?.lumigen_profile ?? '',
+    lumigen_categories: Array.isArray(form?.lumigen_categories) ? [...form.lumigen_categories] : [],
+    simple_lumigen_profile: form?.simple_lumigen_profile ?? form?.lumigen_profile ?? '',
+    advanced_lumigen_profile: form?.advanced_lumigen_profile ?? form?.lumigen_profile ?? '',
+    simple_lumigen_categories: Array.isArray(form?.simple_lumigen_categories)
+      ? [...form.simple_lumigen_categories]
+      : (Array.isArray(form?.lumigen_categories) ? [...form.lumigen_categories] : []),
+    advanced_lumigen_categories: Array.isArray(form?.advanced_lumigen_categories)
+      ? [...form.advanced_lumigen_categories]
+      : (Array.isArray(form?.lumigen_categories) ? [...form.lumigen_categories] : []),
     scene_model_quality: form?.scene_model_quality ?? 'advanced',
     profile_model_quality: form?.profile_model_quality ?? 'advanced',
     protagonist_model_quality: form?.protagonist_model_quality ?? 'advanced',
@@ -77,6 +90,36 @@ const getProviderName = (id: string) => {
 
 const usesProvider = (id: string): boolean =>
   localForm.value.simple_model_provider === id || localForm.value.advanced_model_provider === id
+
+const lumigenProfiles = ref<Array<{ id: number | string; name: string }>>([])
+const lumigenCategories = ref<Array<{ id: number | string; name: string }>>([])
+const lumigenOptionsError = ref<string | null>(null)
+const isLoadingLumigenOptions = ref(false)
+
+async function fetchLumigenOptions(): Promise<void> {
+  isLoadingLumigenOptions.value = true
+  lumigenOptionsError.value = null
+  try {
+    const res = await api.getLumigenOptions(localForm.value.lumigen_url)
+    lumigenProfiles.value = res.profiles || []
+    lumigenCategories.value = res.categories || []
+    lumigenOptionsError.value = res.error || null
+  } catch (err: unknown) {
+    lumigenOptionsError.value = err instanceof Error ? err.message : 'Failed to load Lumigen options.'
+  } finally {
+    isLoadingLumigenOptions.value = false
+  }
+}
+
+watch(
+  () => usesProvider('lumigen'),
+  (active) => {
+    if (active && lumigenProfiles.value.length === 0 && lumigenCategories.value.length === 0) {
+      void fetchLumigenOptions()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -108,6 +151,8 @@ const usesProvider = (id: string): boolean =>
       :available-constants="availableConstants"
       :configured-keys="configuredKeys"
       :test-result="testResults.simple_v"
+      :lumigen-profiles="lumigenProfiles"
+      :lumigen-categories="lumigenCategories"
       @test="(payload) => emit('test', payload)"
     />
 
@@ -117,6 +162,8 @@ const usesProvider = (id: string): boolean =>
       :available-constants="availableConstants"
       :configured-keys="configuredKeys"
       :test-result="testResults.advanced_v"
+      :lumigen-profiles="lumigenProfiles"
+      :lumigen-categories="lumigenCategories"
       @test="(payload) => emit('test', payload)"
     />
 
@@ -129,6 +176,30 @@ const usesProvider = (id: string): boolean =>
       :simple="localForm.simple_model_provider === 'comfyui'"
       :advanced="localForm.advanced_model_provider === 'comfyui'"
     />
+
+    <UiCard v-if="usesProvider('lumigen')" title="Lumigen MCP" description="Bearer token is configured under API keys (Lumigen MCP).">
+      <template #actions>
+        <UiButton
+          size="sm"
+          :icon="RefreshCw"
+          :loading="isLoadingLumigenOptions"
+          @click="fetchLumigenOptions"
+        >
+          Refresh options
+        </UiButton>
+      </template>
+      <div class="space-y-4">
+        <UiNotice v-if="lumigenOptionsError" tone="warn">{{ lumigenOptionsError }}</UiNotice>
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <UiField label="MCP URL">
+            <UiInput v-model="localForm.lumigen_url" placeholder="https://127.0.0.1:7003/mcp" class="wb-mono" />
+          </UiField>
+          <UiField label="Timeout (seconds)">
+            <UiInput v-model.number="localForm.lumigen_timeout" type="number" min="5" max="3600" placeholder="300" />
+          </UiField>
+        </div>
+      </div>
+    </UiCard>
 
     <UiCard v-if="usesProvider('stable_diffusion')" title="Stable Diffusion WebUI">
       <template #actions>

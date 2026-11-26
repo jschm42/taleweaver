@@ -13,6 +13,7 @@ from backend.engine.blueprint.models import Blueprint, BlueprintBlock, Blueprint
 from backend.engine.blueprint.parser import has_blueprint_tags, parse_blueprint
 from backend.engine.blueprint.prompt import blueprint_sequences, render_blueprint_prompt
 from backend.engine.blueprint.validator import validate_blueprint
+from backend.engine.blueprint.zone_entities import move_zone_entities
 
 
 class BlueprintError(ValueError):
@@ -55,6 +56,9 @@ def prepare_blueprint(text: str) -> PreparedBlueprint | None:
     blueprint, missing_ids = analyze_blueprint(text)
     if blueprint.errors:
         raise BlueprintError(blueprint.errors)
+    # NPCs/items placed in a dynamic zone are created at runtime, not by the world generator.
+    moved = set(move_zone_entities(blueprint))
+    missing_ids = [ref for ref in missing_ids if ref not in moved]
     return PreparedBlueprint(
         blueprint=blueprint,
         premise=blueprint.premise,

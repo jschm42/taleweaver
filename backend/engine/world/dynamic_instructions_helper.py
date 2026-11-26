@@ -121,7 +121,7 @@ def _collect_cluster_entity_keys(
 def _block_target_depth(block: Any, max_depth: int) -> Optional[int]:
     prose_kv = _extract_prose_kv(getattr(block, "prose", []) or [])
     values = {**block.hints(), **block.fixed()}
-    raw_depth = prose_kv.get("depth") or values.get("depth")
+    raw_depth = prose_kv.get("depth") or values.get("dynamic_depth") or values.get("depth")
     if raw_depth is None:
         return None
     token = str(raw_depth).strip().lower()
@@ -409,7 +409,7 @@ def build_existing_scene_context_prompt_section(
     return "\n".join(lines)
 
 
-def _bp_item_to_dynamic_object(block: Any) -> tuple[DynamicGeneratedObject, str]:
+def bp_item_to_dynamic_object(block: Any) -> tuple[DynamicGeneratedObject, str]:
     values = {**block.hints(), **block.fixed()}
     prose_kv = _extract_prose_kv(block.prose)
     raw_type = str(values.get("item_type") or prose_kv.get("item_type") or "STANDARD").upper()
@@ -445,7 +445,7 @@ def _bp_item_to_dynamic_object(block: Any) -> tuple[DynamicGeneratedObject, str]
     return obj, _norm_key(location_ref)
 
 
-def _bp_npc_to_dynamic_npc(block: Any) -> DynamicGeneratedNpc:
+def bp_npc_to_dynamic_npc(block: Any) -> DynamicGeneratedNpc:
     values = {**block.hints(), **block.fixed()}
     raw_type = str(values.get("npc_type") or "HUMANOID").strip().upper()
     npc_type = raw_type if raw_type in {"HUMANOID", "ANIMAL", "MONSTER", "BEING"} else "HUMANOID"
@@ -464,7 +464,7 @@ def _bp_npc_to_dynamic_npc(block: Any) -> DynamicGeneratedNpc:
     )
 
 
-def _resolve_container_inventory_links(objects: list[DynamicGeneratedObject]) -> None:
+def resolve_container_inventory_links(objects: list[DynamicGeneratedObject]) -> None:
     by_token: dict[str, str] = {}
     for obj in objects:
         by_token[_norm_key(obj.id)] = obj.id
@@ -514,7 +514,7 @@ def _merge_blueprint_objects(
         existing_by_key[_norm_key(obj.name)] = obj
 
     for block in item_blocks:
-        bp_obj, loc_key = _bp_item_to_dynamic_object(block)
+        bp_obj, loc_key = bp_item_to_dynamic_object(block)
         if _norm_key(bp_obj.id) in entity_keys or _norm_key(bp_obj.name) in entity_keys:
             continue
         if loc_key and loc_key in scene_keys:
@@ -539,7 +539,7 @@ def _merge_blueprint_npcs(
     for block in npc_blocks:
         if len(payload.npcs) >= max_npcs:
             break
-        bp_npc = _bp_npc_to_dynamic_npc(block)
+        bp_npc = bp_npc_to_dynamic_npc(block)
         id_key, name_key = _norm_key(bp_npc.id), _norm_key(bp_npc.name)
         if id_key in entity_keys or name_key in entity_keys:
             continue
@@ -568,7 +568,7 @@ def apply_instructions_backfill(
         max_npcs = max(0, int(zone.get("max_npcs", 2)))
         _merge_blueprint_npcs(payload, active_bp.of_kind("npc"), entity_keys, max_npcs)
 
-    _resolve_container_inventory_links(payload.objects)
+    resolve_container_inventory_links(payload.objects)
 
 
 def select_planned_objects(

@@ -89,6 +89,8 @@ const TRIGGER_OPTIONS = [
   { value: 'on_time_reached', label: 'On Time Reached', desc: 'Runs once when the in-game clock passes the target time (e.g. 90, 2h 30m, 1d)' },
   { value: 'on_respawn', label: 'On Respawn', desc: 'Respawn mode: runs after the fallen protagonist woke up at the revival point (penalties, healing enemies)' },
   { value: 'on_conversation_heard', label: 'On Conversation Heard', desc: 'Runs once the protagonist overheard the target conversation topic (topic id; empty = any topic)' },
+  { value: 'on_enter_section', label: 'On Enter Region', desc: 'Runs when the protagonist enters the target region (region id; empty = any region), after the scene\'s on_enter_scene scripts' },
+  { value: 'on_leave_section', label: 'On Leave Region', desc: 'Runs when the protagonist leaves the target region for another one (region id; empty = any region)' },
 ] as const
 
 function getTriggerBadgeClass(trigger: string): string {
@@ -113,6 +115,9 @@ function getTriggerBadgeClass(trigger: string): string {
       return 'bg-red-500/15 text-red-300 border-red-500/30'
     case 'on_conversation_heard':
       return 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+    case 'on_enter_section':
+    case 'on_leave_section':
+      return 'bg-teal-500/15 text-teal-300 border-teal-500/30'
     default:
       return 'bg-slate-500/15 text-slate-300 border-slate-500/30'
   }

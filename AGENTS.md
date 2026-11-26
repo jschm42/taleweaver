@@ -56,6 +56,12 @@ Welcome to the TaleWeaver workspace! This file is the entry point for every codi
      7. **Editor autocomplete**: `frontend/src/utils/twScriptApiDefinitions.ts` for scripting API changes (see rule 4).
      8. **Tests**: add a test that the feature survives the whole path (generation schema → manifest applier, and blueprint key → parsed field), then run `tests/test_world_*.py`, `tests/test_world_builder_*.py` and the tests of the touched engine area.
 
+6. **Server-Side Image Generation Only**:
+   - Always generate adventure visuals (covers, scenes, NPCs, objects, protagonist portraits, cut-scene slides, and world map tiles) through TaleWeaver's server-side `MediaEngine` / editor endpoints (e.g. `POST /{template_id}/editor/cutscenes/image`, `scripts/adventure_api.py visuals`).
+   - **Never** use external or built-in agent image tools (such as the `image-generator` subagent) as a substitute.
+   - **Settings lookup**: `t2i_settings` and `encrypted_api_keys` are stored globally on `ServerSettings` (`backend/models/server_settings.py`), not on `User` rows. When calling `MediaEngine` from a script outside FastAPI `get_current_user`, call `await apply_global_settings(db, user)` (`backend/core/global_settings.py`) before reading `user.t2i_settings` or `user.encrypted_api_keys`.
+   - If `t2i_settings` or API keys are still not configured after applying global settings, stop and inform the user instead of falling back to an external generator.
+
 ---
 
 ## 1. Workspace Rules (`.claude/rules/`)
@@ -82,6 +88,7 @@ Each skill is a folder with a `SKILL.md` entry file. Read it before doing the ta
 * [taleweaver-adventure-editor](.claude/skills/taleweaver-adventure-editor/SKILL.md) — Modify an existing adventure in the DB (scenes, exits, entities, scripts, init script) via JSON change sets and `python scripts/edit_adventure.py` (dry run by default).
 * [taleweaver-adventure-builder](.claude/skills/taleweaver-adventure-builder/SKILL.md) — Build and import a complete adventure (manifest, scripts, validation, and visuals) from a blueprint directly against a running TaleWeaver server via `python scripts/adventure_api.py`.
 * [taleweaver-telemetry](.claude/skills/taleweaver-telemetry/SKILL.md) — LLM telemetry, latency percentiles (p50/p90/p95), and token analysis.
+* [taleweaver-music-prompts](.claude/skills/taleweaver-music-prompts/SKILL.md) — Generate Suno and Stable Audio music prompts for an adventure's main track, chapters, cutscenes, or scenes from the DB.
 * [taleweaver-commit-message](.claude/skills/taleweaver-commit-message/SKILL.md) — Write a Conventional Commits message (project scopes, why + behavior, migration and breaking-change notes) for the current changes, or split mixed changes into several commits.
 * [second-brain](.claude/skills/second-brain/SKILL.md) — Access and manage notes, concepts, and project documentation in the Obsidian Second-Brain vault on Google Drive.
 

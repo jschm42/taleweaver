@@ -50,6 +50,13 @@ const router = createRouter({
       props: true,
     },
     {
+      // Region Builder of a planned region (docs/specs/region_builder.md).
+      path: '/adventures/:adventureId/editor/regions/:sectionId/build',
+      name: 'adventure-editor-region-build',
+      component: () => import('@/views/AdventureEditorView.vue'),
+      props: true,
+    },
+    {
       path: '/adventures/:adventureId/editor/exits/:exitId',
       name: 'adventure-editor-exit',
       component: () => import('@/views/AdventureEditorView.vue'),

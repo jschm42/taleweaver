@@ -424,7 +424,7 @@ const isSaving = ref(false)
 const errorMsg = ref('')
 const promptError = ref('')
 const showDebug = ref(false)
-type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'dynamic' | 'advanced' | 'validation'
+type EditorTabKey = 'world' | 'time' | 'memory' | 'conversations' | 'sequences' | 'protagonist' | 'items' | 'visuals' | 'inhabitants' | 'scenes' | 'map' | 'regions' | 'quest' | 'awards' | 'scripts' | 'triggers' | 'tone' | 'audio' | 'cutscenes' | 'dynamic' | 'advanced' | 'validation'
 const activeTab = ref<EditorTabKey>('world')
 const sceneEditorReturnTab = ref<EditorTabKey>('scenes')
 const exitEditorReturnTab = ref<EditorTabKey>('map')
@@ -524,6 +524,7 @@ const editorTabs = [
   { key: 'sequences', label: 'Chapters' },
   { key: 'protagonist', label: 'Protagonist' },
   { key: 'map', label: 'Map' },
+  { key: 'regions', label: 'Regions' },
   { key: 'scenes', label: 'Scenes' },
   { key: 'inhabitants', label: 'Characters' },
   { key: 'items', label: 'Items' },
@@ -534,6 +535,7 @@ const editorTabs = [
   { key: 'visuals', label: 'Visual style' },
   { key: 'tone', label: 'Tone' },
   { key: 'audio', label: 'Audio' },
+  { key: 'cutscenes', label: 'Cut-scenes' },
   { key: 'dynamic', label: 'Dynamic generator' },
   { key: 'advanced', label: 'Advanced' },
   { key: 'validation', label: 'Validation' },
@@ -693,6 +695,7 @@ const form = ref({
   npc_conversations: null as Record<string, any> | null,
   max_memory_turns: 10,
   clock_enabled: false,
+  fast_travel_enabled: true,
   time_system: 'calendar' as string,
   time_config: { start_date: '2026-01-01', start_time: '08:00', day_label: 'Day', unit_name: 'Blobs', initial_value: 0 } as Record<string, any>,
   min_scenes: null as number | null,
@@ -885,6 +888,7 @@ async function fetchAdventure() {
     form.value.npc_conversations = data.npc_conversations ?? null
     form.value.max_memory_turns = typeof data.max_memory_turns === 'number' ? data.max_memory_turns : 10
     form.value.clock_enabled = data.clock_enabled ?? false
+    form.value.fast_travel_enabled = data.fast_travel_enabled !== false
     form.value.time_system = data.time_system === 'units' ? 'units' : 'relative'
     form.value.time_config = data.time_config && typeof data.time_config === 'object'
       ? { ...data.time_config }

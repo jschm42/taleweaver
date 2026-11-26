@@ -14,6 +14,7 @@ from typing import Any
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.engine.rules.game_clock import clock_view, default_minutes_per_tick, read_clock
 from backend.engine.sessions.memory_manager import MemoryManager
+from backend.engine.world.sections import player_sections
 
 _MAX_TEXT = 300
 
@@ -32,15 +33,21 @@ def _chapter_line(adventure: Any, state: Any) -> str:
     return f"CURRENT CHAPTER: {title}" + (f" - {description}" if description else "")
 
 
-def _quest_lines(state: Any) -> list[str]:
+def _quest_lines(state: Any, adventure: Any = None) -> list[str]:
+    regions = {
+        s["id"]: s["label"] for s in player_sections(getattr(adventure, "world_sections", None))
+    }
     lines = []
     for quest in state.quests or []:
         if not isinstance(quest, dict):
             continue
         status = "DONE" if quest.get("status") == "completed" else "OPEN"
         text = _short(quest.get("description") or quest.get("goal"))
+        region = regions.get(str(quest.get("section_id") or ""))
+        where = f" (continues in {region})" if region and status == "OPEN" else ""
         lines.append(
-            f"- [{status}] {quest.get('title') or quest.get('id')}" + (f": {text}" if text else "")
+            f"- [{status}] {quest.get('title') or quest.get('id')}{where}"
+            + (f": {text}" if text else "")
         )
     return lines
 
@@ -65,7 +72,7 @@ def _clock_lines(adventure: Any, state: Any) -> list[str]:
 def format_objectives(adventure: Any, state: Any) -> str:
     """The OBJECTIVES block of the agent prompt."""
     lines = [line for line in (_chapter_line(adventure, state),) if line]
-    quests = _quest_lines(state)
+    quests = _quest_lines(state, adventure)
     if quests:
         lines.append("QUESTS (from your quest log):")
         lines.extend(quests)

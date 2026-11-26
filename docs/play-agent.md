@@ -66,7 +66,10 @@ sheet). It speaks with `/say` in the hero's voice and has the same actions as yo
 * using the **known map**: it sees the places you visited, their exits (open or locked) and
   which exits lead somewhere unexplored, exactly like your map. With `/travel <place>` it walks
   back to a visited place over open exits, one exit per step (each step is a normal move, so
-  your companion follows and scene events run; it needs no extra AI decisions on the way),
+  your companion follows and scene events run; it needs no extra AI decisions on the way).
+  The map shows each exit's travel time, and unlocked fast travel points are listed under
+  FAST TRAVEL: `/fast_travel <place>` walks the whole route in one step, like the map's
+  travel strip,
 * inspecting, searching, reading, taking, dropping, using, combining, crafting and consuming items,
 * opening containers, taking items out, putting items in, giving items to characters,
 * setting switches and levers,

@@ -22,6 +22,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.scene_scripts import run_global_scene_scripts
+from backend.api.routes.adventures.section_triggers import run_section_change_scripts
 from backend.engine.interaction.trigger_service import TriggerService
 from backend.engine.rules.respawn import (
     read_respawn,
@@ -136,6 +137,7 @@ async def _revive(manager: Any) -> Optional[str]:
         await manager._save_chat_message("system", msg)
     if scene is not None and target_id != fallen_in:
         await _enter(manager, scene)
+        await run_section_change_scripts(manager, fallen_in, target_id)
     if not await _run_on_respawn(manager):
         return None
     return note

@@ -61,6 +61,9 @@ _FIX_SCENE_FIELDS = frozenset(
         "decorative_objects",
         "audio_track_id",
         "is_respawn_point",
+        "section_id",
+        "is_fast_travel_point",
+        "fast_travel_unlock",
         *SCENE_SCRIPT_FIELDS,
     }
 )
@@ -74,6 +77,8 @@ _FIX_EXIT_FIELDS = frozenset(
         "code_to_unlock",
         "item_to_unlock",
         "rule_to_unlock",
+        "travel_minutes",
+        "travel_label",
         *EXIT_SCRIPT_FIELDS,
     }
 )

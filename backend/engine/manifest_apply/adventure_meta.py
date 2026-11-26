@@ -11,11 +11,14 @@ from sqlalchemy import select
 from backend.core.ui_theme import normalize_ui_theme
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.library import cutscene_ref_or_none
+from backend.engine.cutscenes.transfer import merged_cutscenes
 from backend.engine.manifest_apply.assets import is_usable_image_url, resolve_source_asset_image
 from backend.engine.manifest_apply.context import ApplyContext, generator_module
 from backend.engine.manifest_apply.visuals import publish_status, t2i_config
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.world.sections import ensure_sections, manifest_sections
 from backend.models.adventure_template import AdventureTemplate
 
 logger = logging.getLogger(__name__)
@@ -58,6 +61,7 @@ _RUNTIME_SETTINGS: tuple[tuple[str, Optional[Callable[[Any], Any]], bool], ...] 
     ("game_over_rules", None, False),
     ("npc_conversations", normalize_conversation_settings, False),
     ("audio_enabled", bool, False),
+    ("fast_travel_enabled", bool, False),
     ("selected_image_styles", None, True),
     ("selected_tone", None, True),
     ("sequence_progression_mode", None, True),
@@ -160,10 +164,27 @@ def _apply_audio_tracks(ctx: ApplyContext, adventure: AdventureTemplate) -> None
         adventure.title_track_id = title  # type: ignore[assignment]
 
 
+def _apply_sections(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
+    """World sections (regions); a manifest without them keeps the stored list. There is always
+    at least one built region: the default region named after the adventure is added."""
+    raw = manifest_sections(ctx.manifest)
+    sections = ensure_sections(adventure.world_sections if raw is None else raw, adventure.title)
+    adventure.world_sections = sections  # type: ignore[assignment]
+    ctx.manifest["sections"] = sections
+
+
 def _apply_narrative(ctx: ApplyContext, adventure: AdventureTemplate) -> None:
     for key in _NARRATIVE_FIELDS:
         setattr(adventure, key, adventure_field(ctx.manifest, key) or getattr(adventure, key))
     _apply_audio_tracks(ctx, adventure)
+    adventure.cutscenes = merged_cutscenes(  # type: ignore[assignment]
+        adventure.cutscenes, adventure_field(ctx.manifest, "cutscenes")
+    )
+    for field in ("intro_cutscene_id", "win_cutscene_id", "game_over_cutscene_id"):
+        ref = cutscene_ref_or_none(adventure_field(ctx.manifest, field), adventure.cutscenes)
+        if ref:
+            setattr(adventure, field, ref)
+    _apply_sections(ctx, adventure)
     adventure.cover_appearance = clean_appearance(adventure.cover_appearance)  # type: ignore[assignment]
 
     # Legacy manifests with a walkthrough but no sequences get a single main sequence.

@@ -219,6 +219,14 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'tree', kind: 'method', signature: '(tree: dict, on_end: str = None, on_action: str = None, speaker: str = None) -> bool', snippet: 'tree(${1:TREE_DICT}, on_end="${2:on_end}")', doc: 'Initiates a branching NPC dialogue tree.' },
     ],
   },
+  cutscene: {
+    name: 'cutscene',
+    doc: 'Cut-scenes: narrated slide shows of the cut-scene library',
+    items: [
+      { name: 'play', kind: 'method', signature: '(cutscene_id: str) -> bool', snippet: 'play("${1:CUTSCENE_ID}")', doc: 'Shows a cut-scene of the library over the play view after this script; does not wait for it. Combine with tw.story.skip_narration() to replace the narration.' },
+      { name: 'show', kind: 'method', signature: '(cutscene_id: str) -> bool', snippet: 'show("${1:CUTSCENE_ID}")', doc: 'Alias for tw.cutscene.play().' },
+    ],
+  },
   time: {
     name: 'time',
     doc: 'In-game clock, round pacing, and scheduled timers',
@@ -300,6 +308,11 @@ export const TW_NAMESPACES: Record<string, TwApiNamespace> = {
       { name: 'respawn_point', kind: 'property', signature: 'str | None', doc: 'Respawn mode: scene the protagonist wakes up in after falling to 0 HP (None = start scene).' },
       { name: 'respawns', kind: 'property', signature: 'int', doc: 'How often the protagonist has been revived in this session.' },
       { name: 'set_respawn_point', kind: 'method', signature: '(scene_id: str = None)', snippet: 'set_respawn_point("${1:SCENE_ID}")', doc: 'Sets the revival point; None or "" falls back to the start scene.' },
+      { name: 'fast_travel_points', kind: 'property', signature: 'list[str]', doc: 'Scene ids of the unlocked fast travel points.' },
+      { name: 'fast_travel_enabled', kind: 'property', signature: 'bool', doc: 'False while a script switched fast travel off (the adventure setting is separate).' },
+      { name: 'unlock_fast_travel', kind: 'method', signature: '(scene_id: str)', snippet: 'unlock_fast_travel("${1:SCENE_ID}")', doc: 'Unlocks a fast travel point (the scene must be marked as one).' },
+      { name: 'lock_fast_travel', kind: 'method', signature: '(scene_id: str)', snippet: 'lock_fast_travel("${1:SCENE_ID}")', doc: 'Removes a fast travel point from the destinations again.' },
+      { name: 'set_fast_travel', kind: 'method', signature: '(enabled: bool, reason: str = None)', snippet: 'set_fast_travel(${1:False}, "${2:The roads are flooded.}")', doc: 'Switches fast travel off (with the reason players see) or on again.' },
     ],
   },
   quests: {
@@ -451,6 +464,8 @@ export const TW_ROOT_ITEMS: TwApiItem[] = [
   { name: 'flags', kind: 'namespace', doc: 'Story flags boolean key-value store.' },
   { name: 'story', kind: 'namespace', doc: 'Narration, directives, and system alerts.' },
   { name: 'dialog', kind: 'namespace', doc: 'Choice dialogs and branching RPG dialogue trees.' },
+  { name: 'cutscene', kind: 'namespace', doc: 'Cut-scenes: narrated slide shows of the cut-scene library.' },
+  { name: 'cutscenes', kind: 'namespace', doc: 'Alias for tw.cutscene.' },
   { name: 'time', kind: 'namespace', doc: 'In-game clock, round pacing, and scheduled timers.' },
   { name: 'audio', kind: 'namespace', doc: 'Background audio composed on the fly (experimental).' },
   { name: 'party', kind: 'namespace', doc: 'Companions (sidekicks): recruit, dismiss, wait and follow.' },

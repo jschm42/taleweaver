@@ -30,10 +30,14 @@ from backend.engine.adventures.adventure_import_support import (
 from backend.engine.audio.audio_assets import map_imported_audio
 from backend.engine.audio.audio_library import normalize_tracks, title_track_or_none
 from backend.engine.conversations.settings import normalize_conversation_settings
+from backend.engine.cutscenes.library import cutscene_ref_or_none
+from backend.engine.cutscenes.transfer import imported_cutscenes
 from backend.engine.media.image_prompt_context import clean_appearance
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.sequence_walkthrough import apply_legacy_walkthrough
+from backend.engine.world.sections import manifest_sections
 from backend.engine.world.world_generator import WorldGenerator
+from backend.engine.world.world_map_layout import imported_map_layout
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
 from backend.models.game_session import GameSession
@@ -86,6 +90,33 @@ def _gm_time_control(*sources: Optional[dict[str, Any]]) -> bool:
         if value is not None:
             return bool(value)
     return True
+
+
+def _apply_imported_media(
+    template: Any, manifest_data: dict, adv_data: dict, asset_mapping: dict
+) -> None:
+    """Audio library, title track, world map image and cut-scenes of an imported ``.adz``."""
+    map_imported_audio(manifest_data, asset_mapping)
+    template.audio_tracks = normalize_tracks(
+        adv_data.get("audio_tracks") or adv_data.get("music_tracks"), template.id
+    )
+    template.audio_enabled = bool(
+        adv_data.get("audio_enabled", adv_data.get("music_enabled", True))
+    )
+    template.title_track_id = title_track_or_none(
+        adv_data.get("title_track_id"), template.audio_tracks
+    )
+    template.world_map_layout = imported_map_layout(adv_data.get("world_map_layout"), asset_mapping)
+    template.cutscenes = imported_cutscenes(adv_data.get("cutscenes"), asset_mapping)
+    template.intro_cutscene_id = cutscene_ref_or_none(
+        adv_data.get("intro_cutscene_id"), template.cutscenes
+    )
+    template.win_cutscene_id = cutscene_ref_or_none(
+        adv_data.get("win_cutscene_id"), template.cutscenes
+    )
+    template.game_over_cutscene_id = cutscene_ref_or_none(
+        adv_data.get("game_over_cutscene_id"), template.cutscenes
+    )
 
 
 class AdventureConflictError(Exception):
@@ -472,15 +503,8 @@ class AdventureTemplateImporter:
                 os.makedirs(target_base_dir, exist_ok=True)
 
                 existing_images_mapping = extract_adz_assets(zip_file, target_base_dir)
-                map_imported_audio(manifest_data, existing_images_mapping)
-                new_template.audio_tracks = normalize_tracks(
-                    adv_data.get("audio_tracks") or adv_data.get("music_tracks"), new_template_id
-                )
-                new_template.audio_enabled = bool(
-                    adv_data.get("audio_enabled", adv_data.get("music_enabled", True))
-                )
-                new_template.title_track_id = title_track_or_none(
-                    adv_data.get("title_track_id"), new_template.audio_tracks
+                _apply_imported_media(
+                    new_template, manifest_data, adv_data, existing_images_mapping
                 )
 
                 # Reconstruct world
@@ -522,6 +546,8 @@ class AdventureTemplateImporter:
                         if prot
                         else {},
                     },
+                    "sections": manifest_sections(manifest_data),
+                    "fast_travel_enabled": adv_data.get("fast_travel_enabled"),
                     "scenes": manifest_data.get("scenes", []),
                     "exits": manifest_data.get("exits", []),
                     "npcs": manifest_data.get("npcs", []),

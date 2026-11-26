@@ -7,6 +7,7 @@ import { useEditorFormDraft } from '@/composables/editor/useEditorFormDraft'
 import { EDITOR_PAGES, useEditorNavigation } from '@/components/editor/editorNavigation'
 import EditorModals from '@/components/editor/EditorModals.vue'
 import EntityDetailPage from '@/components/editor/pages/EntityDetailPage.vue'
+import RegionBuilderPage from '@/components/editor/pages/RegionBuilderPage.vue'
 import WorldBuilderDrawer from '@/components/editor/WorldBuilderDrawer.vue'
 import WorkbenchNav from '@/components/workbench/WorkbenchNav.vue'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell.vue'
@@ -33,8 +34,20 @@ const formDraft = useEditorFormDraft(editor)
 
 const WIDE_PAGES = new Set(['map', 'scenes', 'scripts', 'triggers', 'validation'])
 const isEntityPage = computed(() => route.name === 'adventure-editor-entity')
-const page = computed(() => (isEntityPage.value ? EntityDetailPage : (EDITOR_PAGES[editor.activeTab] ?? EDITOR_PAGES.world)))
-const pageKey = computed(() => (isEntityPage.value ? `entity-${String(route.params.entityId)}` : editor.activeTab))
+const isRegionBuilder = computed(() => route.name === 'adventure-editor-region-build')
+// Sub-pages with their own route and save model: no shell save bar, the nav marks their parent.
+const isSubPage = computed(() => isEntityPage.value || isRegionBuilder.value)
+const page = computed(() => {
+  if (isEntityPage.value) return EntityDetailPage
+  if (isRegionBuilder.value) return RegionBuilderPage
+  return EDITOR_PAGES[editor.activeTab] ?? EDITOR_PAGES.world
+})
+const pageKey = computed(() => {
+  if (isEntityPage.value) return `entity-${String(route.params.entityId)}`
+  if (isRegionBuilder.value) return `region-build-${String(route.params.sectionId)}`
+  return editor.activeTab
+})
+const activeNav = computed(() => (isRegionBuilder.value ? 'regions' : editor.activeTab))
 
 function selectPage(key: string): void {
   if (!(key in EDITOR_PAGES)) return
@@ -82,11 +95,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
     subtitle="Adventure editor"
     back-label="Back to the portal"
     :page-key="pageKey"
-    :wide="!isEntityPage && WIDE_PAGES.has(editor.activeTab)"
+    :wide="!isSubPage && WIDE_PAGES.has(editor.activeTab)"
     @back="editor.goBack"
   >
     <template #nav>
-      <WorkbenchNav :groups="groups" :active="editor.activeTab" @select="selectPage" />
+      <WorkbenchNav :groups="groups" :active="activeNav" @select="selectPage" />
     </template>
 
     <template #footer>
@@ -111,7 +124,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
     <component :is="page" v-else :key="pageKey" />
 
     <UiSaveBar
-      v-if="!isEntityPage"
+      v-if="!isSubPage"
       :dirty="formDraft.isDirty.value"
       :count="formDraft.changedFields.value.length"
       :saving="editor.isSaving"

@@ -31,6 +31,7 @@ export const KEY_PROVIDERS: KeyProvider[] = [
   { id: 'kimi', name: 'Kimi (Moonshot)', uses: 'Text' },
   { id: 'minimax', name: 'MiniMax', uses: 'Text' },
   { id: 'black_forest_labs', name: 'Black Forest Labs', uses: 'Images' },
+  { id: 'lumigen', name: 'Lumigen MCP', uses: 'Images' },
   { id: 'elevenlabs', name: 'ElevenLabs', uses: 'Voice' },
 ]
 

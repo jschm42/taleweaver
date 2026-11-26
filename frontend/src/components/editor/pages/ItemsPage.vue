@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useEditor } from '@/composables/editor/editorContext'
 import ItemsTab from '@/components/editor/ItemsTab.vue'
+import { sectionsOf } from '@/services/sectionService'
 
 const editor = useEditor()
 </script>
@@ -18,7 +19,8 @@ const editor = useEditor()
     :rule-enforcement-mode="editor.form.rule_enforcement_mode"
     :visuals-cache-version="editor.visualsCacheVersion"
     :editor-scenes="editor.editorScenes"
-    :active-map-scene-id="editor.activeMapSceneId"
+    :adventure-id="editor.adventureId"
+    :world-sections="sectionsOf(editor.debugData?.adventure)"
     :adventure-scripts="editor.adventure?.scripts || editor.debugData?.adventure?.scripts || []"
     @quick-regen="editor.quickRegenerateVisual"
     @regen-all="editor.requestRegenerateAll"

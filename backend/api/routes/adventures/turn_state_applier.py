@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.api.routes.adventures.travel_flow import apply_exit_travel
 from backend.api.routes.adventures.award_granting import grant_awards
 from backend.api.routes.adventures.container_detach import (
     detach_from_containers,
@@ -154,8 +155,15 @@ class TurnStateApplier:
         map_dict = MapEngine.augment_map_data(
             map_dict, exits, self.state.current_scene_id, self.state.exit_states
         )
+        from backend.api.routes.map_api import attach_map_sections
 
-        return map_dict
+        return await attach_map_sections(
+            self.db,
+            map_dict,
+            self.state.template_id,
+            session_id=self.state.session_id,
+            state=self.state,
+        )
 
     async def _build_awards_payload(self, adventure: AdventureTemplate | None) -> list[dict]:
         """Helper to build the awards payload with earned status."""
@@ -572,6 +580,9 @@ class TurnStateApplier:
                     world_exit=valid_exit,
                     adventure=self.adventure,
                 ):
+                    await self._save_chat_message("system", msg)
+                    system_messages.append(msg)
+                for msg in apply_exit_travel(self.manager, valid_exit):
                     await self._save_chat_message("system", msg)
                     system_messages.append(msg)
 

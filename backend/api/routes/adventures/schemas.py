@@ -334,7 +334,11 @@ class AdventureTemplateResponse(BaseModel):
     narrator_voice: Optional[dict[str, Any]] = None
     audio_tracks: Optional[list[dict[str, Any]]] = None
     title_track_id: Optional[str] = None
+    intro_cutscene_id: Optional[str] = None
+    win_cutscene_id: Optional[str] = None
+    game_over_cutscene_id: Optional[str] = None
     audio_enabled: bool = True
+    fast_travel_enabled: bool = True
     ui_theme: Optional[dict[str, Any]] = None
     original_prompt: Optional[str] = None
     sequences: Optional[list[dict[str, Any]]] = None
@@ -612,6 +616,8 @@ class ChatResponse(BaseModel):
     pending_dialog: Optional[dict[str, Any]] = None
     # Script audio (tw.audio): what to play now and whether its track is rendered yet.
     audio: Optional[dict[str, Any]] = None
+    # Next cut-scene to show (chapter intro or tw.cutscene.play), see engine/cutscenes/queue.py.
+    cutscene: Optional[dict[str, Any]] = None
 
 
 class AdventureTemplateImportPayload(BaseModel):
@@ -691,6 +697,7 @@ class AdventureTemplateUpdate(BaseModel):
     selected_tone: Optional[dict[str, Any]] = None
     narrator_voice: Optional[dict[str, Any]] = None
     audio_enabled: Optional[bool] = None
+    fast_travel_enabled: Optional[bool] = None
     ui_theme: Optional[dict[str, Any]] = None
     min_scenes: Optional[int] = None
     max_scenes: Optional[int] = None

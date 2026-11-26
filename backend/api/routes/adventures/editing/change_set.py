@@ -30,6 +30,12 @@ from backend.api.routes.adventures.editing.schemas import (
     ScriptCreateRequest,
     StartSceneUpdateRequest,
 )
+from backend.api.routes.adventures.editing.section_crud import (
+    SectionAssignRequest,
+    SectionListUpdateRequest,
+    assign_scenes_to_section,
+    update_editor_sections,
+)
 from backend.api.routes.adventures.editing.story_crud import (
     create_editor_award,
     create_editor_quest,
@@ -257,6 +263,8 @@ OPERATIONS: dict[str, _Handler] = {
     "create_award": _payload_op(AwardCreateRequest, create_editor_award),
     "set_start_scene": _payload_op(StartSceneUpdateRequest, update_editor_start_scene),
     "update_adventure": _update_adventure,
+    "set_sections": _payload_op(SectionListUpdateRequest, update_editor_sections),
+    "assign_section": _payload_op(SectionAssignRequest, assign_scenes_to_section),
     "delete_scene": _delete_op(delete_editor_scene, "scene_id"),
     "delete_exit": _delete_op(delete_editor_exit, "exit_id"),
     "delete_entity": _delete_op(delete_editor_entity, "entity_id"),
@@ -278,6 +286,8 @@ OPERATION_MODELS: dict[str, Optional[type[BaseModel]]] = {
     "create_award": AwardCreateRequest,
     "set_start_scene": StartSceneUpdateRequest,
     "update_adventure": AdventureTemplateUpdate,
+    "set_sections": SectionListUpdateRequest,
+    "assign_section": SectionAssignRequest,
 }
 
 

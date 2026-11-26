@@ -58,6 +58,8 @@ const TRIGGERS: { value: string; label: string; target: TargetKind }[] = [
   { value: 'on_time_reached', label: 'On time reached (elapsed in-game time)', target: 'time' },
   { value: 'on_respawn', label: 'On respawn (protagonist revived)', target: null },
   { value: 'on_conversation_heard', label: 'On conversation heard (NPC topic overheard)', target: 'topic' },
+  { value: 'on_enter_section', label: 'On enter region', target: null },
+  { value: 'on_leave_section', label: 'On leave region', target: null },
 ]
 const TRIGGER_OPTIONS: SelectOption[] = TRIGGERS.map((t) => ({ value: t.value, label: t.label }))
 

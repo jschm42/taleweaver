@@ -225,6 +225,7 @@ class MemoryManager:
         other_npcs: Optional[list] = None,
         scene_map: Optional[dict[str, str]] = None,
         hidden_entities: Optional[list] = None,
+        region: str = "",
     ) -> str:
         """
         Builds the volatile CURRENT STATE block (time, location, NPCs, character sheet).
@@ -235,7 +236,7 @@ class MemoryManager:
                 in_game_time, time_system=time_system, time_config=time_config
             ),
             location_context=location_context.build_location_context(
-                current_scene, entities, exits, location_detail_level
+                current_scene, entities, exits, location_detail_level, region=region
             ),
             world_npcs_context=location_context.build_world_npcs_context(other_npcs, scene_map),
             hidden_entities_context=location_context.build_hidden_entities_context(

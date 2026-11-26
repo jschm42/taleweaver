@@ -27,6 +27,9 @@ import type {
   SpeechVoiceList,
   LeaderboardResponse,
   EarnedAward,
+  TravelOptions,
+  RegionSummary,
+  Cutscene,
 } from '@/types'
 import { authState } from '@/store/auth'
 import { configState } from '@/store/config'
@@ -586,6 +589,21 @@ export const api = {
     })
   },
 
+  /** Regions the author built after this session started. */
+  getSessionExpansion(gameId: string): Promise<{ pending: RegionSummary[] }> {
+    return request(`/adventures/${gameId}/expansion`)
+  },
+
+  /** Adds every pending region to the session; progress stays as it is. */
+  applySessionExpansion(gameId: string): Promise<{ added: RegionSummary[] }> {
+    return request(`/adventures/${gameId}/expansion`, { method: 'POST', body: JSON.stringify({}) })
+  },
+
+  /** Unlocked fast travel points with route time, or why travel is blocked. */
+  getTravelOptions(gameId: string): Promise<TravelOptions> {
+    return request(`/adventures/${gameId}/travel/options`)
+  },
+
   /** Moves the player through an unlocked exit to the target scene. */
   traverseExit(gameId: string, exitId: string): Promise<{ status: string; exit_id: string; scene_id: string }> {
     return request(`/adventures/${gameId}/exits/${encodeURIComponent(exitId)}/traverse`, {
@@ -616,6 +634,14 @@ export const api = {
     return request(`/adventures/${gameId}/dialog/choice`, {
       method: 'POST',
       body: JSON.stringify({ dialog_id: dialogId, index, language: language || undefined }),
+    })
+  },
+
+  /** Confirms a shown cut-scene; returns the next queued one (or null). */
+  markCutsceneSeen(gameId: string, token: string): Promise<{ cutscene: Cutscene | null }> {
+    return request(`/adventures/${gameId}/cutscene/seen`, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
     })
   },
 
@@ -699,6 +725,17 @@ export const api = {
     if (options.baseUrl) params.set('base_url', options.baseUrl)
     if (options.refresh) params.set('refresh', 'true')
     return request(`/settings/models?${params.toString()}`, { timeoutMs: 30000 })
+  },
+
+  getLumigenOptions(baseUrl?: string): Promise<{
+    profiles: Array<{ id: number | string; name: string; model?: string | null; aspect_ratio?: string | null }>
+    categories: Array<{ id: number | string; name: string }>
+    error?: string | null
+  }> {
+    const params = new URLSearchParams()
+    if (baseUrl) params.set('base_url', baseUrl)
+    const qs = params.toString()
+    return request(`/settings/models/lumigen-options${qs ? `?${qs}` : ''}`, { timeoutMs: 15000 })
   },
 
   /** Reads the setup wizard state of the current admin. */
@@ -919,11 +956,28 @@ export const api = {
   testVision(payload: any): Promise<any> {
     const timeoutMs = payload.provider === 'comfyui'
       ? (Math.min(3600, Math.max(1, Number(payload.comfyui_timeout) || 600)) + 30) * 1000
-      : 180000
+      : payload.provider === 'lumigen'
+        ? (Math.min(3600, Math.max(5, Number(payload.lumigen_timeout) || 300)) + 30) * 1000
+        : 180000
     return request('/settings/test-vision', { method: 'POST', body: JSON.stringify(payload), timeoutMs })
   },
 
   /** Catalog */
+  /** Built-in defaults of the styles or tones catalog (admin only). */
+  getCatalogDefaults(type: 'styles' | 'tones'): Promise<{ items: CatalogTile[] }> {
+    return request(`/settings/catalog-defaults/${type}`)
+  },
+
+  /** Suggested image prompt for a catalog tile (small LLM, built-in template as fallback). */
+  suggestCatalogPrompt(payload: {
+    catalog_type: 'styles' | 'tones'
+    name: string
+    description?: string
+    instruction?: string
+  }): Promise<{ prompt: string; source: 'llm' | 'template' }> {
+    return request('/settings/catalog/suggest-prompt', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 60000 })
+  },
+
   generateCatalogImage(payload: any): Promise<any> {
     return request('/settings/catalog/generate', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 180000 })
   },

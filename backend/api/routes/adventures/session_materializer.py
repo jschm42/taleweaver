@@ -59,6 +59,8 @@ _EXIT_COPY_FIELDS = (
     "is_locked",
     "is_revealed",
     "companions_allowed",
+    "travel_minutes",
+    "travel_label",
     "lock_description",
     "code_to_unlock",
     "item_to_unlock",

@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { hasAnyScript } from '@/utils/editor_utils'
+import type { WorldSection } from '@/services/sectionService'
+import UiEmptyState from '@/components/ui/UiEmptyState.vue'
+import PlaceFilterBar from '@/components/editor/filters/PlaceFilterBar.vue'
+import { groupsByScene, placeKey, sectionMapOf, usePlaceFilter } from '@/components/editor/filters/placeFilter'
 import ItemTile from './ItemTile.vue'
 
 interface SceneOption {
   id: string
   name: string
+  label?: string
+  section_id?: string | null
   imageUrl?: string | null
   type?: string
 }
@@ -23,7 +29,8 @@ const props = defineProps<{
   ruleEnforcementMode: string
   visualsCacheVersion: number
   editorScenes?: SceneOption[]
-  activeMapSceneId?: string | null
+  adventureId?: string
+  worldSections?: WorldSection[]
   adventureScripts?: any[]
 }>()
 
@@ -125,18 +132,13 @@ const textLogHover = (obj: any) => ({
   stats: {},
 })
 
-// ---------------------------------------------------------------------------
-// Scene filter state
-// ---------------------------------------------------------------------------
-// '' (empty) means "All scenes". Any other value filters items to that scene.
-const sceneFilter = ref<string>('')
-
-const sceneOptions = computed<SceneOption[]>(() => {
-  if (!props.activeMapSceneId) return props.editorScenes || []
-  // If the user is currently viewing a scene, default the filter to that
-  // scene so newly created items inside that scene show up immediately.
-  const filtered = (props.editorScenes || []).filter((s) => String(s.id) === String(props.activeMapSceneId))
-  return filtered.length ? filtered : props.editorScenes || []
+// Region and scene filter of the four item sections (constructables are never in a scene).
+const worldItems = computed(() => [...props.editorTextLogs, ...props.editorContainers, ...props.editorSwitches, ...props.editorObjects])
+const placeFilter = usePlaceFilter({
+  memoryKey: () => `items:${props.adventureId || ''}`,
+  sections: () => props.worldSections || [],
+  sectionOfScene: () => sectionMapOf(props.editorScenes),
+  groups: () => groupsByScene(worldItems.value, props.editorScenes),
 })
 
 const filteredTextLogs = computed(() => filterByScene(props.editorTextLogs))
@@ -161,31 +163,16 @@ const unfilteredTotal = computed(
     props.editorObjects.length +
     constructables.value.length,
 )
-const isFilterActive = computed(() => sceneFilter.value.trim().length > 0)
+const isFilterActive = computed(() => placeFilter.isActive.value)
+const knownSceneKeys = computed(() => new Set((props.editorScenes || []).map((s) => placeKey(s.id))))
 
-function filterByScene(items: any[]) {
-  const activeFilter = sceneFilter.value.trim()
-  if (!activeFilter) return items
-  return items.filter((it) => String(it?.current_scene_id || '').toUpperCase() === activeFilter.toUpperCase())
+function filterByScene(items: any[]): any[] {
+  if (!isFilterActive.value) return items
+  return items.filter((it) => {
+    const sceneId = knownSceneKeys.value.has(placeKey(it?.current_scene_id)) ? it.current_scene_id : null
+    return placeFilter.matches(sceneId)
+  })
 }
-
-function selectSceneFilter(value: string) {
-  sceneFilter.value = value
-}
-
-function clearSceneFilter() {
-  sceneFilter.value = ''
-}
-
-// Display helpers for the filter bar
-const activeFilterLabel = computed(() => {
-  if (!isFilterActive.value) return ''
-  const match = sceneOptions.value.find((s) => String(s.id).toUpperCase() === sceneFilter.value.toUpperCase())
-  if (match) return match.name
-  const allScenes = props.editorScenes || []
-  const fallback = allScenes.find((s) => String(s.id).toUpperCase() === sceneFilter.value.toUpperCase())
-  return fallback?.name || sceneFilter.value
-})
 </script>
 
 <template>
@@ -196,47 +183,7 @@ const activeFilterLabel = computed(() => {
     </button>
   </div>
   <section v-if="unfilteredTotal > 0" class="space-y-8 animate-page-in">
-    <!-- ==================================================================
-         Filter bar — filter the four item sections by scene.
-         Two-column layout: scene <select> on the left, clear/visibility on the right.
-         ================================================================== -->
-    <div class="bg-slate-950/60 border border-white/5 rounded-xl p-4 grid md:grid-cols-3 gap-4 items-end">
-      <label class="text-xs text-slate-300 space-y-1 md:col-span-2">
-        <span class="block font-black uppercase tracking-[0.2em] text-slate-500">Filter by Scene</span>
-        <div class="relative">
-          <i class="ra ra-tower absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-          <select
-            :value="sceneFilter"
-            @change="selectSceneFilter(($event.target as HTMLSelectElement).value)"
-            class="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-emerald-500/50 outline-none transition-all appearance-none cursor-pointer"
-          >
-            <option value="">All scenes ({{ unfilteredTotal }})</option>
-            <option
-              v-for="scene in sceneOptions"
-              :key="scene.id"
-              :value="scene.id"
-            >
-              {{ scene.name || scene.id }} — {{ scene.id }}
-            </option>
-          </select>
-        </div>
-      </label>
-      <div class="flex items-center justify-end gap-3">
-        <div v-if="isFilterActive" class="text-[10px] text-slate-400 uppercase tracking-widest font-black">
-          <span class="text-emerald-400">{{ filteredTotal }}</span>
-          <span class="text-slate-500">/</span>
-          <span>{{ unfilteredTotal }}</span>
-          <span class="text-slate-500 ml-1">in <span class="text-slate-200">{{ activeFilterLabel }}</span></span>
-        </div>
-        <button
-          v-if="isFilterActive"
-          @click="clearSceneFilter"
-          class="px-3 py-2 text-xs font-bold rounded border border-white/15 text-slate-300 hover:text-white hover:bg-white/5 uppercase tracking-widest transition-all"
-        >
-          Clear Filter
-        </button>
-      </div>
-    </div>
+    <PlaceFilterBar :filter="placeFilter" :shown="filteredTotal" :total="unfilteredTotal" noun="items" />
 
     <!-- ==================================================================
          Text Logs Section
@@ -378,19 +325,11 @@ const activeFilterLabel = computed(() => {
     </div>
 
     <!-- Empty-state messaging for filter hits that hide everything -->
-    <div
+    <UiEmptyState
       v-if="isFilterActive && filteredTotal === 0"
-      class="text-center py-10 px-6 border border-dashed border-slate-700 rounded-xl"
-    >
-      <i class="ra ra-tower text-2xl text-slate-600"></i>
-      <p class="text-sm text-slate-400 mt-3">No items in <span class="text-slate-200 font-bold">{{ activeFilterLabel }}</span>.</p>
-      <button
-        @click="clearSceneFilter"
-        class="mt-3 px-3 py-2 text-xs font-bold rounded border border-white/15 text-slate-300 hover:text-white hover:bg-white/5 uppercase tracking-widest transition-all"
-      >
-        Show All Items
-      </button>
-    </div>
+      title="No items here"
+      description="No item lies in a scene of this region. Pick another region or scene."
+    />
   </section>
   </div>
 </template>

@@ -11,6 +11,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from backend.api.routes.adventures.campaign_continuation import (
+    campaign_continues,
+    take_to_be_continued_note,
+)
 from backend.api.routes.adventures.logic import AdventureLogic
 from backend.api.routes.adventures.quest_completion import (
     announce_completed_quests,
@@ -21,6 +25,7 @@ from backend.api.routes.adventures.sequence_hooks import run_sequence_transition
 from backend.api.routes.adventures.turn_state_applier import TurnStateApplier
 from backend.engine.rules.hard_rule_evaluator import HardRuleEvaluator
 from backend.engine.rules.rule_engine import GameEvent
+from backend.engine.scripting.context import ScriptMessage
 
 if TYPE_CHECKING:
     from backend.api.routes.adventures.gameplay_logic import GameTurnManager
@@ -134,10 +139,24 @@ async def apply_out_of_turn_progress(manager: GameTurnManager) -> tuple[list[Any
         status, note = ending
         await manager._finalize_session(status, note)
         return messages, status
-    if getattr(manager.state, "is_completed", False) is True or last_sequence_ends_adventure(
-        manager.adventure, manager.state
+    if getattr(manager.state, "is_completed", False) is not True and not (
+        last_sequence_ends_adventure(manager.adventure, manager.state)
     ):
-        status, note = "completed", "Victory achieved!"
-        await manager._finalize_session(status, note)
-        return messages, status
-    return messages, None
+        return messages, None
+    if getattr(manager.state, "is_completed", False) is not True and await campaign_continues(
+        manager.db, manager.state
+    ):
+        messages.extend(await _to_be_continued(manager))
+        return messages, None
+    status, note = "completed", "Victory achieved!"
+    await manager._finalize_session(status, note)
+    return messages, status
+
+
+async def _to_be_continued(manager: GameTurnManager) -> list[Any]:
+    """The one-time notice of a campaign whose next regions are not playable yet."""
+    note = take_to_be_continued_note(manager.state)
+    if note is None:
+        return []
+    await manager._save_chat_message("system", note)
+    return [ScriptMessage(note, role="system")]

@@ -16,6 +16,7 @@ from backend.engine.manifest_apply.adventure_meta import (
 )
 from backend.engine.manifest_apply.avatar import StartingItems, persist_avatar
 from backend.engine.manifest_apply.context import ApplyContext, StatusCallback, generator_module
+from backend.engine.manifest_apply.cutscene_media import draw_cutscene_images
 from backend.engine.manifest_apply.npcs import persist_npcs
 from backend.engine.manifest_apply.objects import ObjectPlacement, persist_objects
 from backend.engine.manifest_apply.scenes import persist_exits, persist_scenes
@@ -112,7 +113,8 @@ async def _prepare_context(
     wg = generator_module()
     wg.preprocess_manifest_object_ids(manifest_dict)
     adventure = await db.get(AdventureTemplate, template_id)
-    styles = manifest_dict.get("selected_image_styles") or options.pop("selected_image_styles")
+    requested_styles = options.pop("selected_image_styles", None)
+    styles = manifest_dict.get("selected_image_styles") or requested_styles
     if styles is None and adventure:
         styles = adventure.selected_image_styles
     ctx = ApplyContext(
@@ -167,6 +169,7 @@ async def _persist_world(ctx: ApplyContext) -> None:
     resolved = await persist_objects(ctx, objects, default_scene_id, placement)
     await _assign_npc_inventories(ctx, npc_inventories, resolved)
     await ctx.db.commit()
+    await draw_cutscene_images(ctx)
 
 
 async def apply_manifest(

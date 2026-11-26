@@ -25,6 +25,7 @@ from backend.core.generation_error_log import (
 )
 from backend.core.global_settings import apply_global_settings
 from backend.engine.adventures.license_defaults import default_license_fields
+from backend.engine.world.sections import default_section
 from backend.engine.world.world_generator import WorldGenerator, is_image_moderation_error
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.avatar import Avatar
@@ -131,6 +132,7 @@ def build_template(
         origin_id=new_origin_id(),
         title=payload.title,
         original_prompt=payload.original_prompt,
+        world_sections=[default_section(payload.title)],
         strict_rules=payload.rule_enforcement_mode != "chat",
         rule_enforcement_mode=payload.rule_enforcement_mode or "rpg",
         generation_strictness=payload.generation_strictness or "creative",

@@ -241,39 +241,50 @@ def _describe_exits(exits: list, detail: str) -> str:
     return "AVAILABLE EXITS:\n" + "\n".join(exit_list) + "\n"
 
 
-def build_location_context(
-    current_scene=None, entities=None, exits=None, detail_level: str = "full"
-) -> str:
-    if not current_scene:
-        return ""
-
-    detail = detail_level if detail_level in {"full", "concise"} else "full"
-    description = current_scene.description or ""
+def _decorative_line(current_scene) -> str:
     decorative_list = current_scene.decorative_objects or []
-    decor_items = ""
-    if isinstance(decorative_list, list):
-        decor_items = ", ".join(str(d).strip() for d in decorative_list if str(d).strip())
-    decorative_suffix = (
-        f"DECORATIVE BACKGROUND DETAILS (STATIC, NON-INTERACTABLE): {decor_items}\n"
-        if decor_items
-        else ""
-    )
+    if not isinstance(decorative_list, list):
+        return ""
+    decor_items = ", ".join(str(d).strip() for d in decorative_list if str(d).strip())
+    if not decor_items:
+        return ""
+    return f"DECORATIVE BACKGROUND DETAILS (STATIC, NON-INTERACTABLE): {decor_items}\n"
 
+
+def _location_header(current_scene, detail: str, region: str) -> str:
+    """Name, description, region and decoration lines of the CURRENT LOCATION block."""
+    description = current_scene.description or ""
     if detail == "concise":
         short_desc = description.strip().replace("\n", " ")
         if len(short_desc) > 240:
             short_desc = short_desc[:240].rstrip() + "..."
-        location_context = (
+        header = (
             f"\nCURRENT LOCATION: {current_scene.label} (ID: {current_scene.id})\n"
             f"SCENE SUMMARY: {short_desc}\n"
         )
     else:
-        location_context = (
+        header = (
             f"\nCURRENT LOCATION:\n"
             f"NAME: {current_scene.label} (ID: {current_scene.id})\n"
             f"DESCRIPTION: {description}\n"
         )
-    location_context += decorative_suffix
+    region_line = f"{region}\n" if region else ""
+    return header + region_line + _decorative_line(current_scene)
+
+
+def build_location_context(
+    current_scene=None,
+    entities=None,
+    exits=None,
+    detail_level: str = "full",
+    region: str = "",
+) -> str:
+    """The CURRENT LOCATION block; ``region`` is the scene's ``Region: ...`` line, if any."""
+    if not current_scene:
+        return ""
+
+    detail = detail_level if detail_level in {"full", "concise"} else "full"
+    location_context = _location_header(current_scene, detail, region)
 
     npcs = [_describe_npc(e, detail) for e in entities or [] if e.entity_type == "NPC"]
     objects = [_describe_object(e, detail) for e in entities or [] if e.entity_type == "OBJECT"]

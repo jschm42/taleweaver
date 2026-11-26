@@ -23,6 +23,9 @@ import SceneScriptsSection from '@/components/editor/SceneScriptsSection.vue'
 import SceneAudioSelect from '@/components/editor/SceneAudioSelect.vue'
 import DynamicZoneFields, { type DynamicZoneForm } from '@/components/editor/DynamicZoneFields.vue'
 import SceneRespawnToggle from '@/components/editor/SceneRespawnToggle.vue'
+import SceneSectionSelect from '@/components/editor/SceneSectionSelect.vue'
+import SceneFastTravelToggle from '@/components/editor/SceneFastTravelToggle.vue'
+import { sectionsOf } from '@/services/sectionService'
 import { exitRoute } from '@/components/editor/exitRoute'
 
 const props = defineProps<{
@@ -845,6 +848,22 @@ function editRouteEntity(type: 'npc' | 'object', entity: any) {
           :adventure-id="adventureId"
           :scene-id="String(routeSceneDetails.id)"
           :value="routeSceneDetails.is_respawn_point"
+          @refresh="emit('refresh')"
+        />
+        <SceneSectionSelect
+          v-if="routeSceneDetails"
+          :adventure-id="adventureId"
+          :scene-id="String(routeSceneDetails.id)"
+          :value="routeSceneDetails.section_id"
+          :sections="sectionsOf(debugData?.adventure)"
+          @refresh="emit('refresh')"
+        />
+        <SceneFastTravelToggle
+          v-if="routeSceneDetails"
+          :adventure-id="adventureId"
+          :scene-id="String(routeSceneDetails.id)"
+          :value="routeSceneDetails.is_fast_travel_point"
+          :unlock="routeSceneDetails.fast_travel_unlock"
           @refresh="emit('refresh')"
         />
       </div>

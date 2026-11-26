@@ -47,6 +47,10 @@ from backend.utils.path_security import (
 # Mirror frontend visual limits here so server-side validation matches client hints
 _VISUAL_UPLOAD_LIMITS = {
     "cover": {"maxWidth": 2048, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
+    # World map tiles (AdventureTemplate.world_map_layout, editing/section_map_routes.py).
+    "world_map": {"maxWidth": 4096, "maxHeight": 4096, "maxBytes": 12 * 1024 * 1024},
+    # Cut-scene slides (AdventureTemplate.cutscenes, editing/cutscene_routes.py).
+    "cutscene": {"maxWidth": 3072, "maxHeight": 2048, "maxBytes": 10 * 1024 * 1024},
     "protagonist": {"maxWidth": 1536, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
     "scene": {"maxWidth": 2048, "maxHeight": 1536, "maxBytes": 8 * 1024 * 1024},
     "npc": {"maxWidth": 1536, "maxHeight": 2048, "maxBytes": 8 * 1024 * 1024},
@@ -98,10 +102,11 @@ def _build_default_visual_body(target_type: str, target_obj: Any) -> str:
 
 def _target_type_style_tag(target_type: str) -> str:
     tags = {
-        "protagonist": " Game character art style.",
-        "scene": " RPG visual novel style, high detail.",
+        # Genre-neutral on purpose: the chosen image style sets the look.
+        "protagonist": " Character art, full figure, high detail.",
+        "scene": " Detailed environment, high detail.",
         "npc": " Character portrait, high detail.",
-        "object": " Fantasy item concept art, isolated and clearly readable.",
+        "object": " Item concept art, isolated and clearly readable.",
     }
     return tags.get(target_type, "")
 
@@ -157,7 +162,7 @@ def _sanitize_filename_token(value: Optional[str]) -> Optional[str]:
 
 def _canonical_target_type(target_type: Optional[str]) -> str:
     cleaned = sanitize_path_component(target_type or "").lower()
-    for allowed in ("cover", "scene", "npc", "object", "protagonist"):
+    for allowed in ("cover", "scene", "npc", "object", "protagonist", "world_map", "cutscene"):
         if cleaned == allowed:
             return allowed
     raise ValueError("Invalid visual target type.")
@@ -408,7 +413,10 @@ async def regenerate_visual(
         adv=adv,
         template_id=template_id,
         payload=payload,
-        user_config={"t2i_settings": current_user.t2i_settings},
+        user_config={
+            "t2i_settings": current_user.t2i_settings,
+            "adventure_title": adv.title,
+        },
         api_keys=current_user.encrypted_api_keys,
         t2i=current_user.t2i_settings or {},
         style_instruction=style_instruction,

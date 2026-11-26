@@ -30,7 +30,14 @@ from backend.engine.world.world_conversation_schema import (
     NpcConversationsSchema,
     NpcRelationSchema,
 )
+from backend.engine.world.world_cutscene_schema import CutsceneSchema
 from backend.engine.world.world_object_schema import WorldObjectSchema
+from backend.engine.world.world_section_schema import WorldSectionSchema
+
+VOICE_DESCRIPTION = (
+    "Optional TTS voice id from the voice list in the requirements; omit or null when no list "
+    "is given. Voices are cast automatically when missing."
+)
 
 
 class AudioTrackSchema(WorldBaseSchema):
@@ -92,6 +99,27 @@ class WorldSceneSchema(WorldBaseSchema):
             "up at the last revival point reached. Usually False."
         ),
     )
+    section_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the entry in `sections` (the region) this scene belongs to. "
+            "Use empty string when the adventure has no sections."
+        ),
+    )
+    is_fast_travel_point: bool = Field(
+        default=False,
+        description=(
+            "True for a fast travel point (a town square, an inn, a waystone): once unlocked "
+            "the player can travel here from anywhere. Usually False; one or two per region."
+        ),
+    )
+    fast_travel_unlock: Literal["visit", "script"] = Field(
+        default="visit",
+        description=(
+            "How the fast travel point is unlocked: 'visit' (on first entry) or 'script' "
+            "(only tw.game.unlock_fast_travel)."
+        ),
+    )
     helpers_script: Optional[str] = Field(
         default="",
         description=(
@@ -145,6 +173,17 @@ class WorldExitSchema(WorldBaseSchema):
             "False for a solo passage (a narrow vent, a guarded door only the protagonist may pass): "
             "the protagonist's companion stays behind. Usually True."
         ),
+    )
+    travel_minutes: Optional[int] = Field(
+        None,
+        description=(
+            "In-game minutes the way takes, only for long journeys between distant places "
+            "(e.g. 480 for a day's march to another region). Leave null for doors and paths."
+        ),
+    )
+    travel_label: Optional[str] = Field(
+        default="",
+        description="Optional short description of the journey, e.g. 'two days by ship'.",
     )
     lock_description: Optional[str] = Field(
         default="",
@@ -347,6 +386,7 @@ class SpecialActionSchema(WorldBaseSchema):
 class WorldNPCSchema(WorldBaseSchema):
     id: str = Field(..., description="Unique slug for the NPC, e.g., MAD_ALCHEMIST")
     name: str = Field(..., description="Human-readable name")
+    voice: Optional[str] = Field(None, description=VOICE_DESCRIPTION)
     description: str = Field(
         ..., description="Appearance and demeanor or physical characteristics, max 400 characters."
     )
@@ -591,6 +631,8 @@ class SequenceScriptSchema(WorldBaseSchema):
         "on_time_reached",
         "on_respawn",
         "on_conversation_heard",
+        "on_enter_section",
+        "on_leave_section",
     ] = Field(..., description="The game event trigger (on_init is not available here).")
     target_id: Optional[str] = Field(
         None,
@@ -653,6 +695,10 @@ class SequenceSchema(WorldBaseSchema):
         default="",
         description="Optional script executed when this sequence begins. Use empty string for none.",
     )
+    start_cutscene_id: Optional[str] = Field(
+        default="",
+        description="Optional id of a cut-scene in `cutscenes` shown when this sequence starts.",
+    )
     on_start_sequence_text: Optional[str] = Field(
         default="",
         description="Optional text output when this sequence begins. Use empty string for none.",
@@ -680,6 +726,10 @@ class SequenceSchema(WorldBaseSchema):
             "False for a solo chapter: the protagonist's companion does not follow into new "
             "scenes while this sequence is active."
         ),
+    )
+    fast_travel_allowed: bool = Field(
+        default=True,
+        description="False when fast travel must not be used while this sequence is active.",
     )
     respawn_allowed: bool = Field(
         default=True,
@@ -726,6 +776,13 @@ class QuestSchema(WorldBaseSchema):
     guard_expression: Optional[str] = Field(
         default="",
         description="Deterministic Python boolean expression evaluated against tw context. Quest only completes when True.",
+    )
+    section_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of the world section (region) where the quest continues. Use empty "
+            "string when the adventure has no sections."
+        ),
     )
 
     model_config = {"extra": "ignore"}
@@ -812,6 +869,7 @@ class ProtagonistSchema(WorldBaseSchema):
     source_asset_id: Optional[str] = Field(
         None, description="Optional source protagonist ID to reuse an old portrait image."
     )
+    voice: Optional[str] = Field(None, description=VOICE_DESCRIPTION)
     special_actions: list[SpecialActionSchema] = Field(
         default=[],
         description="List of up to 5 special actions the protagonist has at the start. Max 5.",
@@ -857,9 +915,11 @@ class WorldScriptSchema(WorldBaseSchema):
         "on_time_reached",
         "on_respawn",
         "on_conversation_heard",
+        "on_enter_section",
+        "on_leave_section",
     ] = Field(
         ...,
-        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None), on_conversation_heard (the protagonist overheard an NPC conversation topic; target = topic id)",
+        description="The game event trigger: on_init, on_enter_scene, on_interact, on_turn_start, on_turn_end, on_logic_pass_done, on_narration_done, on_time_reached (target = elapsed time, e.g. '90' or '2h 30m'), on_respawn (respawn mode: after the protagonist woke up at the revival point; target = None), on_conversation_heard (the protagonist overheard an NPC conversation topic; target = topic id), on_enter_section / on_leave_section (the protagonist entered / left a world section; target = section id or None)",
     )
     target_id: Optional[str] = Field(
         None,
@@ -941,6 +1001,9 @@ class WorldManifesto(WorldBaseSchema):
         default=None,
         description="Optional: NPCs talk with each other on their own (chatter) and gossip.",
     )
+    fast_travel_enabled: bool = Field(
+        True, description="Whether the player may fast travel to unlocked fast travel points."
+    )
     can_damage_npcs: bool = Field(
         True, description="Global flag: whether the protagonist can damage NPCs."
     )
@@ -955,6 +1018,41 @@ class WorldManifesto(WorldBaseSchema):
     dynamic_generation: Optional[dict[str, Any]] = Field(
         default=None,
         description="Optional configuration for procedural dynamic scene image tiers, music mode, and NPC interlude quotes.",
+    )
+    intro_cutscene_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of a cut-scene in `cutscenes` shown right after the session starts "
+            "(the adventure's opening). Use empty string for none."
+        ),
+    )
+    win_cutscene_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of a cut-scene in `cutscenes` shown when the adventure is won "
+            "(before the victory card). Use empty string for none."
+        ),
+    )
+    game_over_cutscene_id: Optional[str] = Field(
+        default="",
+        description=(
+            "Optional `id` of a cut-scene in `cutscenes` shown on game over "
+            "(before the game-over card). Use empty string for none."
+        ),
+    )
+    cutscenes: list[CutsceneSchema] = Field(
+        default=[],
+        description=(
+            "Optional cut-scenes (narrated slide shows) for chapter starts; at most 3. "
+            "Use [] for none."
+        ),
+    )
+    sections: list[WorldSectionSchema] = Field(
+        default=[],
+        description=(
+            "Optional world sections (regions) that group the scenes of a large world. "
+            "Use [] for a normal adventure."
+        ),
     )
     scenes: list[WorldSceneSchema]
     exits: list[WorldExitSchema]

@@ -149,6 +149,24 @@ async def test_openrouter_splits_by_output_modality_without_key():
     assert _ids(image) == ["google/gemini-3.1-flash-image-preview"]
 
 
+async def test_openrouter_asks_for_all_output_modalities():
+    """Without the filter OpenRouter leaves out image-only models such as gpt-image."""
+
+    # Arrange
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("output_modalities") != "all":
+            return httpx.Response(200, json={"data": []})
+        data = [{"id": "openai/gpt-image-2", "architecture": {"output_modalities": ["image"]}}]
+        return httpx.Response(200, json={"data": data})
+
+    # Act
+    async with _client(handler) as client:
+        image = await model_discovery.discover_models("openrouter", "image", None, client=client)
+
+    # Assert
+    assert _ids(image) == ["openai/gpt-image-2"]
+
+
 async def test_ollama_uses_custom_base_url():
     # Arrange
     seen: list[str] = []

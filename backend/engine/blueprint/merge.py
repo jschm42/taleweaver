@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from backend.engine.blueprint.cutscene_blocks import apply_cutscene_blocks, cutscene_from_block
 from backend.engine.blueprint.models import Blueprint, BlueprintBlock
 from backend.engine.blueprint.prompt import COLLECTIONS
 from backend.engine.world.dynamic_scene_schemas import (
@@ -86,6 +87,15 @@ def _default_audio(block: BlueprintBlock) -> dict[str, Any]:
     }
 
 
+def _default_section(block: BlueprintBlock) -> dict[str, Any]:
+    return {
+        "id": block.ref,
+        "label": block.name or block.ref.replace("_", " ").title(),
+        "description": block.description or "",
+        "status": "built",
+    }
+
+
 # kind -> (factory for a missing entry, fields that must be present before inserting)
 _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[str, ...]]] = {
     "script": (_default_script, ("trigger", "code")),
@@ -96,6 +106,8 @@ _INSERTABLE: dict[str, tuple[Callable[[BlueprintBlock], dict[str, Any]], tuple[s
     "sidequest": (_default_quest, ()),
     "award": (_default_award, ()),
     "audio": (_default_audio, ()),
+    "section": (_default_section, ()),
+    "cutscene": (cutscene_from_block, ()),
 }
 _CHILD_COLLECTIONS = {
     "rule": "soft_rules",
@@ -105,8 +117,13 @@ _CHILD_COLLECTIONS = {
 }
 
 
-def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]:
-    """Write fixed blueprint values into ``manifest``. Returns human-readable violations."""
+def apply_blueprint(
+    manifest: dict[str, Any], blueprint: Blueprint, known_scene_ids: set[str] | None = None
+) -> list[str]:
+    """Write fixed blueprint values into ``manifest``. Returns human-readable violations.
+
+    ``known_scene_ids``: scenes outside ``manifest`` that exits may join (a region's gateway
+    scenes of the existing adventure)."""
     violations: list[str] = []
     world = blueprint.first("world")
     if world:
@@ -119,12 +136,15 @@ def apply_blueprint(manifest: dict[str, Any], blueprint: Blueprint) -> list[str]
     for kind, collection in COLLECTIONS.items():
         entries = manifest.setdefault(collection, [])
         for block in blueprint.of_kind(kind):
-            if kind == "exit" and not _exit_scenes_exist(manifest, block, violations):
+            if kind == "exit" and not _exit_scenes_exist(
+                manifest, block, violations, known_scene_ids or set()
+            ):
                 continue
             entry = _find_or_insert(entries, block, violations)
             if entry is not None:
                 _apply_children(entry, block, violations)
     _strip_virtual_dynamic_scenes(manifest, blueprint)
+    apply_cutscene_blocks(manifest, blueprint)
     return violations
 
 
@@ -166,9 +186,10 @@ def _is_dynamic_exit_block(block: BlueprintBlock) -> bool:
 
 
 def _exit_scenes_exist(
-    manifest: dict[str, Any], block: BlueprintBlock, violations: list[str]
+    manifest: dict[str, Any], block: BlueprintBlock, violations: list[str], known: set[str]
 ) -> bool:
     scene_ids = {str(scene.get("id") or "").upper() for scene in manifest.get("scenes") or []}
+    scene_ids |= {scene_id.upper() for scene_id in known}
     ends = (block.fixed().get("from_scene_id"), block.fixed().get("to_scene_id"))
     if _is_dynamic_exit_block(block):
         if ends[0] in scene_ids:
@@ -296,6 +317,8 @@ def _apply_fixed(entry: dict[str, Any], block: BlueprintBlock) -> None:
         _apply_dynamic_exit_fixed(entry, block)
     if block.kind == "scene" and isinstance(entry.get("dynamic_zone"), dict):
         _apply_dynamic_scene_fixed(entry, block)
+    if block.kind == "section" and block.description and not entry.get("description"):
+        entry["description"] = block.description
     if block.kind == "world" and isinstance(entry.get("dynamic_generation"), dict):
         entry["dynamic_generation"] = normalize_dynamic_generation(entry["dynamic_generation"])
 

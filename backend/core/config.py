@@ -38,6 +38,7 @@ _ENV_API_KEY_ATTRS: dict[str, tuple[str, ...]] = {
     "mistral": ("MISTRAL_API_KEY",),
     "groq": ("GROQ_API_KEY",),
     "black_forest_labs": ("BLACK_FOREST_LABS_API_KEY",),
+    "lumigen": ("LUMIGEN_API_KEY",),
     "minimax": ("MINIMAX_API_KEY",),
     "elevenlabs": ("ELEVENLABS_API_KEY",),
 }
@@ -243,6 +244,7 @@ class Settings(BaseSettings):
     MISTRAL_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     BLACK_FOREST_LABS_API_KEY: Optional[str] = None
+    LUMIGEN_API_KEY: Optional[str] = None
     MINIMAX_API_KEY: Optional[str] = None
     MINIMAX_API_BASE: str = "https://api.minimax.io/v1"
     ELEVENLABS_API_KEY: Optional[str] = None

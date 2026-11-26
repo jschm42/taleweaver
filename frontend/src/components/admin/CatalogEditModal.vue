@@ -90,7 +90,7 @@ function handleOpenChange(open: boolean): void {
   >
     <div class="space-y-5">
       <section class="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div class="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-wb-line bg-wb-raised">
+        <div class="relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl border border-wb-line bg-wb-raised">
           <img v-if="editingItem.image_url" :src="editingItem.image_url" :alt="editingItem.name" class="h-full w-full object-cover" />
           <div v-else class="flex h-full w-full flex-col items-center justify-center gap-1 text-wb-faint">
             <component :is="copy.icon" class="h-6 w-6" aria-hidden="true" />

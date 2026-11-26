@@ -63,6 +63,12 @@ from backend.engine.audio.browser_tts import is_browser_provider
 from backend.engine.audio.openai_compatible_tts import OPENAI_COMPATIBLE_PROVIDER
 from backend.engine.audio.tts_engine import TTSEngine, TTSModelSwitchSuggestionError
 from backend.engine.media.asset_naming import asset_filename
+from backend.engine.media.catalog_tile_image import (
+    TileQuality,
+    catalog_tile_model,
+    catalog_tile_options,
+    catalog_tile_prompt,
+)
 from backend.engine.media.media_engine import MediaEngine
 from backend.models.user import User
 from backend.services.model_discovery import clear_cache as clear_model_discovery_cache
@@ -534,6 +540,14 @@ class T2ISettingsPayload(ComfySettings):
     provider: str  # Legacy
     ollama_url: Optional[str] = None
     stable_diffusion_url: Optional[str] = None
+    lumigen_url: Optional[str] = None
+    lumigen_timeout: Optional[int] = Field(default=None, ge=5, le=3600)
+    lumigen_profile: Optional[str] = None
+    lumigen_categories: Optional[list[str]] = None
+    simple_lumigen_profile: Optional[str] = None
+    advanced_lumigen_profile: Optional[str] = None
+    simple_lumigen_categories: Optional[list[str]] = None
+    advanced_lumigen_categories: Optional[list[str]] = None
     width: Optional[int] = None
     height: Optional[int] = None
     steps: Optional[int] = None
@@ -600,6 +614,8 @@ class CatalogGeneratePayload(BaseModel):
     prompt: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
+    instruction: Optional[str] = None
+    quality: TileQuality = "simple"
 
 
 @router.get("")
@@ -1023,6 +1039,14 @@ class TestVisionPayload(ComfyTestOptions):
     provider: str
     ollama_url: Optional[str] = None
     stable_diffusion_url: Optional[str] = None
+    lumigen_url: Optional[str] = None
+    lumigen_timeout: Optional[int] = Field(default=None, ge=5, le=3600)
+    lumigen_profile: Optional[str] = None
+    lumigen_categories: Optional[list[str]] = None
+    simple_lumigen_profile: Optional[str] = None
+    advanced_lumigen_profile: Optional[str] = None
+    simple_lumigen_categories: Optional[list[str]] = None
+    advanced_lumigen_categories: Optional[list[str]] = None
     steps: Optional[int] = None
     cfg_scale: Optional[float] = None
     sampler_name: Optional[str] = None
@@ -1057,12 +1081,21 @@ def _build_vision_provider_options(payload: "TestVisionPayload", provider_key: s
     options: dict[str, Any] = {}
     if provider_key == "comfyui":
         options.update(ComfyTestOptions.model_validate(payload.model_dump()).model_dump())
-    for key in ("ollama_url", "stable_diffusion_url", "sampler_name", "scheduler"):
+    for key in (
+        "ollama_url",
+        "stable_diffusion_url",
+        "lumigen_url",
+        "lumigen_profile",
+        "sampler_name",
+        "scheduler",
+    ):
         if getattr(payload, key):
             options[key] = getattr(payload, key)
-    for key in ("steps", "cfg_scale"):
+    for key in ("steps", "cfg_scale", "lumigen_timeout", "lumigen_categories"):
         if getattr(payload, key) is not None:
             options[key] = getattr(payload, key)
+    if provider_key == "lumigen":
+        options.setdefault("aspect_ratio", "4:5")
 
     # Test vision generates a wizard portrait (CHARACTER/4:5 aspect ratio)
     if provider_key in _LOCAL_IMAGE_PROVIDERS and not payload.width and not payload.height:
@@ -1224,13 +1257,13 @@ async def generate_catalog_image(
     user = current_user
 
     t2i = user.t2i_settings or {}
-    provider = (t2i.get("simple_model_provider") or t2i.get("provider", "openai")).lower()
-    model = t2i.get("simple_model")
+    provider, model = catalog_tile_model(t2i, payload.quality)
 
     if not model:
+        label = "High-Fidelity Model" if payload.quality == "advanced" else "Simple Model"
         return {
             "status": "error",
-            "message": "The 'Simple Model' for image generation is not configured. Please set it in Visual Preferences.",
+            "message": f"The '{label}' for image generation is not configured. Please set it in Visual Preferences.",
         }
 
     api_key = _resolve_provider_api_key(provider, user.encrypted_api_keys)
@@ -1246,13 +1279,12 @@ async def generate_catalog_image(
         catalog_dir = _safe_data_path("catalog", catalog_type)
         os.makedirs(catalog_dir, exist_ok=True)
 
-        base_prompt = payload.prompt
-        if not base_prompt:
-            item_name = payload.name or safe_target_id.replace("-", " ")
-            base_prompt = f"A visual representation of the visual style '{item_name}'."
-            if payload.description:
-                base_prompt += f" Context: {payload.description}"
-            base_prompt += " High quality, professional digital art, no text."
+        base_prompt = payload.prompt or catalog_tile_prompt(
+            catalog_type,
+            payload.name or safe_target_id.replace("-", " "),
+            payload.description,
+            payload.instruction,
+        )
 
         img_url = await MediaEngine.generate_image(
             prompt=base_prompt,
@@ -1261,7 +1293,7 @@ async def generate_catalog_image(
             provider=provider,
             target_dir=catalog_dir,
             filename=asset_filename(safe_target_id, t2i.get("image_format")),
-            provider_options=t2i,
+            provider_options=catalog_tile_options(t2i, provider, payload.quality),
         )
 
         logger.info("Catalog generate result for '%s': img_url=%r", payload.target_id, img_url)

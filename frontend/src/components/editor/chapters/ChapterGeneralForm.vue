@@ -118,6 +118,11 @@ function toReward(value: string | number | null): number {
         label="Respawn allowed in this chapter"
         description="Only matters when the adventure respawns at 0 HP (Overview → Outcome). Off: 0 HP ends the adventure here."
       />
+      <UiCheckbox
+        v-model="chapter.fast_travel_allowed"
+        label="Fast travel allowed in this chapter"
+        description="Off: the player cannot fast travel while this chapter is active (e.g. during a siege)."
+      />
     </div>
   </div>
 </template>

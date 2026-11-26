@@ -24,6 +24,10 @@ export const MIGRATED = [
   'src/views/dev',
   'src/components/admin',
   'src/views/AdminView.vue',
+  // Creation (phase 5)
+  'src/views/CreateAdventureView.vue',
+  'src/components/create-adventure',
+  'src/composables/createAdventure',
   // Shared fields of admin and setup wizard
   'src/components/common/ModelCombobox.vue',
   'src/components/common/OpenAICompatibleTtsFields.vue',
@@ -32,6 +36,9 @@ export const MIGRATED = [
   // Editor shell (phase 2); the tab components inside the pages follow in phases 3 and 4
   'src/views/AdventureEditorView.vue',
   'src/components/editor/pages',
+  'src/components/editor/region-builder',
+  'src/components/editor/regions',
+  'src/composables/regionBuilder',
   'src/components/editor/EditorModals.vue',
   'src/components/editor/WorldBuilderDrawer.vue',
   'src/components/editor/editorNavigation.ts',

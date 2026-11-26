@@ -33,9 +33,15 @@ from backend.core.tts_preferences import TTS_AUTO_SPEAK_KEY, resolve_tts_prefere
 from backend.engine.audio.audio_state import apply_audio_ops
 from backend.engine.conversations.ops import apply_conversation_ops
 from backend.engine.conversations.state import CONVERSATIONS_STATE_KEY
+from backend.engine.cutscenes.queue import (
+    apply_cutscene_ops,
+    queue_chapter_cutscene,
+    queue_cutscene,
+)
 from backend.engine.party.party_ops import apply_party_ops
 from backend.engine.party.party_start import seed_starting_party, sync_starting_party_rows
 from backend.engine.party.party_state import PARTY_KEY
+from backend.engine.rules.fast_travel import TRAVEL_KEY, apply_travel_ops, unlock_on_visit
 from backend.engine.rules.game_clock import apply_changeset_clock, clock_view
 from backend.engine.rules.item_logic import normalize_equipment_keys
 from backend.engine.rules.npc_memory import NPC_MEMORY_STATE_KEY, apply_npc_memory_ops
@@ -257,6 +263,7 @@ def _run_init_scripts(
         audio_library=getattr(adventure, "audio_tracks", None),
         party=entity_states.get(PARTY_KEY),
         respawn=entity_states.get(RESPAWN_KEY),
+        travel=entity_states.get(TRAVEL_KEY),
         npc_memory=entity_states.get(NPC_MEMORY_STATE_KEY),
         conversations=entity_states.get(CONVERSATIONS_STATE_KEY),
         story_flags={},
@@ -293,7 +300,9 @@ def _run_init_scripts(
     apply_respawn_point(entity_states, changes.respawn_point)
     apply_npc_memory_ops(entity_states, changes.npc_memory_ops)
     apply_conversation_ops(entity_states, changes.conversation_ops)
+    apply_travel_ops(entity_states, changes.travel_ops)
     store_skip_narration(entity_states, changes.skip_narration)
+    apply_cutscene_ops(entity_states, changes.cutscene_ops)
     # tw.time calls of the init script (start time, pace, pause, timers); see _build_session_state.
     clock_start = SimpleNamespace(in_game_time=0)
     if apply_changeset_clock(clock_start, entity_states, changes.clock_ops):
@@ -332,6 +341,10 @@ def _build_session_state(
     active_seq_order = int(first_seq.get("order") or 1) if first_seq else 1
     # The player's profile defaults decide which voices this session reads aloud.
     entity_states[TTS_AUTO_SPEAK_KEY] = resolve_tts_preferences(user.game_settings)
+    # The adventure's intro, then the first chapter's cut-scene, then those the init scripts
+    # queued (each `front` insert goes before the previous ones).
+    queue_chapter_cutscene(entity_states, first_seq, front=True)
+    queue_cutscene(entity_states, getattr(adventure, "intro_cutscene_id", None), front=True)
 
     return SessionState(
         session_id=session_id,
@@ -489,6 +502,9 @@ async def start_session(db: AsyncSession, adventure: AdventureTemplate, user: Us
         template_entities,
     )
     seed_starting_party(entity_states, template_entities, first_scene_id)
+    # A session that starts at a fast travel point has it unlocked from the start.
+    start_scenes = await _template_rows(db, WorldScene, template_id)
+    unlock_on_visit(entity_states, next((s for s in start_scenes if s.id == first_scene_id), None))
     script_messages = _run_init_scripts(
         adventure, avatar, first_scene_id, template_entities, entity_states
     )

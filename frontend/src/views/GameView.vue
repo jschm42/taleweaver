@@ -46,11 +46,14 @@ import { provideDialogSkin } from '@/skins/dialogSkin'
 import WorldMemoriesModal from '@/components/game/WorldMemoriesModal.vue'
 import DebugModal from '@/components/game/DebugModal.vue'
 import { api } from '@/composables/useApi'
+import { useRegionExpansion } from '@/composables/useRegionExpansion'
 import { configState, refreshConfig } from '@/store/config'
 import { useGameSocket } from '@/composables/useGameSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { useGameAutoSpeak } from '@/composables/useGameAutoSpeak'
 import { useGameAudio } from '@/composables/useGameAudio'
+import { useCutscenePlayer } from '@/composables/useCutscenePlayer'
+import CutsceneOverlay from '@/components/game/immersive/CutsceneOverlay.vue'
 import { useSessionAutoSpeakSettings } from '@/composables/useSessionAutoSpeakSettings'
 import { useGameUiFeedback } from '@/composables/useGameUiFeedback'
 import { useGameInteractionState } from '@/composables/useGameInteractionState'
@@ -84,6 +87,27 @@ const sheetInitialTab = ref<SheetTabId | null>(null)
 const sheetInitialSubject = ref<'hero' | 'companion'>('hero')
 const sheetDirty = ref(false)
 const showMap = ref(false)
+
+/** Fast travel chosen on the map: close it and walk the route as one player message. */
+async function handleFastTravel(sceneId: string, minutes?: number): Promise<void> {
+  showMap.value = false
+  const regionInfo = resolveRegionTransition(sceneId)
+  sceneTransitionTarget.value = {
+    label: 'Fast Travel',
+    targetSceneName: resolveSceneName(sceneId) || 'New Location',
+    targetSceneId: sceneId,
+    targetSceneImage: resolveSceneImage(sceneId),
+    travelMinutes: minutes && minutes > 0 ? minutes : null,
+    ...regionInfo,
+  }
+  try {
+    await sendMessage(`/fast_travel ${sceneId}`)
+  } catch (error: unknown) {
+    addNotification(error instanceof Error ? error.message : 'Failed to travel.', 'error')
+  } finally {
+    sceneTransitionTarget.value = null
+  }
+}
 const showQuests = ref(false)
 const isQuestTrackerHidden = ref(localStorage.getItem('tw_quest_tracker_hidden') === 'true')
 watch(isQuestTrackerHidden, (val) => {
@@ -150,6 +174,10 @@ const sceneTransitionTarget = ref<{
   targetSceneName: string
   targetSceneId: string
   targetSceneImage?: string | null
+  isRegionChange?: boolean
+  targetRegionName?: string | null
+  travelMinutes?: number | null
+  travelLabel?: string | null
 } | null>(null)
 
 const saveSessionNote = async (note: string) => {
@@ -245,6 +273,7 @@ const {
   inputLocked,
   pendingTerminalEpilogue,
   pendingDialog,
+  cutscene,
   audio,
   promptSuggestions,
   worldMemories,
@@ -280,7 +309,12 @@ const {
   loadOlderMessages,
 } = useGameSocket()
 
-const gameAudio = useGameAudio(audio)
+// Set from showCombatDialog further down: a lost fight is shown before the outcome cut-scene and ending.
+const combatDialogOpen = ref(false)
+// Cut-scenes (adventure intro/win/game-over, chapter intro, tw.cutscene.play): shown once; their track replaces the scene audio.
+const cutscenePlayer = useCutscenePlayer(cutscene, () => props.id, audio, combatDialogOpen)
+const gameAudio = useGameAudio(cutscenePlayer.effectiveAudio)
+const { activeSkin: cutsceneSkin, skinStyle: cutsceneSkinStyle } = useSheetSkin(() => sheet.value)
 const { muted: audioMuted, playerVolume: audioVolume, hasAudio, isGenerating: isAudioGenerating, lastError: audioError, isPlaying: isAudioPlaying } = gameAudio
 const { autoSpeakSettings, applyAutoSpeakSettings } = useSessionAutoSpeakSettings(sheet)
 
@@ -353,8 +387,6 @@ const confirmRestoreCheckpoint = async () => {
   }
 }
 
-// Set from showCombatDialog further down: a lost fight is shown before the ending is written.
-const combatDialogOpen = ref(false)
 const {
   trackedQuestId,
   clockTick,
@@ -369,7 +401,7 @@ const {
   gameSettings,
   createTerminalEpilogue,
   refreshUser,
-  holdEnding: combatDialogOpen,
+  holdEnding: computed(() => combatDialogOpen.value || cutscenePlayer.isBlocking.value),
 })
 
 const trackedQuest = computed(() => quests.value?.find(q => q.id === trackedQuestId.value))
@@ -380,10 +412,14 @@ watch(trackedQuestId, (newId) => {
   }
 })
 
+// Regions the author built after this session started are offered once.
+const regionExpansion = useRegionExpansion(() => props.id, () => connect(props.id))
+
 onMounted(() => {
   // Re-fetch config so in-game controls (e.g. TTS) reflect the latest server-side settings,
   // even if the user changed them after the initial app mount.
   void refreshConfig()
+  void regionExpansion.offer()
 })
 
 onBeforeUnmount(() => {
@@ -1201,6 +1237,17 @@ watch(
   { deep: true },
 )
 
+const resolveRegionTransition = (targetSceneId?: string | null): { isRegionChange: boolean; targetRegionName: string | null } => {
+  if (!targetSceneId) return { isRegionChange: false, targetRegionName: null }
+  const currentSectionId = mapData.value?.current_section_id || null
+  const targetSectionId = findMapNode(targetSceneId)?.section_id || null
+  if (!currentSectionId || !targetSectionId || currentSectionId === targetSectionId) {
+    return { isRegionChange: false, targetRegionName: null }
+  }
+  const targetRegionName = mapData.value?.sections?.find((s) => s.id === targetSectionId)?.label || null
+  return { isRegionChange: true, targetRegionName }
+}
+
 const traverseSceneExit = async (exit: any, exitRef: string) => {
   exitTraversalBusy.value = exitRef
   const targetId = String(exit?.target_scene_id || (exit?.direction === 'backward' ? exit?.from : exit?.to) || '').trim()
@@ -1210,11 +1257,17 @@ const traverseSceneExit = async (exit: any, exitRef: string) => {
       ? exit.target_scene_name
       : '') || knownName
   const targetSceneName = safeTargetName || 'New Location'
+  const regionInfo = resolveRegionTransition(targetId)
+  const travelMinutes = Number(exit?.travel_minutes) > 0 ? Number(exit.travel_minutes) : null
+  const travelLabel = typeof exit?.travel_label === 'string' && exit.travel_label.trim() ? exit.travel_label.trim() : null
   sceneTransitionTarget.value = {
     label: exitDisplayName(exit),
     targetSceneName,
     targetSceneId: targetId,
     targetSceneImage: exit?.target_scene_image || resolveSceneImage(targetId),
+    travelMinutes,
+    travelLabel,
+    ...regionInfo,
   }
   try {
     // Use the sendMessage pipeline so the scene transition triggers
@@ -1730,7 +1783,7 @@ const { speakLatestAssistantMessage } = useGameAutoSpeak({
   // A choice dialog no longer silences speech: it usually opens at the end of the turn whose
   // narration is still being read, and cutting that off mid-sentence felt broken.
   // The new scene's narration waits until the travel overlay is gone.
-  speechDeferred: isSceneTransitioning,
+  speechDeferred: computed(() => isSceneTransitioning.value || cutscenePlayer.isActive.value),
   // tw.audio.stop_speech(): no auto-speech until the player's next action.
   speechHeld: gameAudio.speechHeld,
   playerTravel: computed(() => Boolean(exitTraversalBusy.value)),
@@ -2261,7 +2314,23 @@ usePlayAgentAutoLoop()
       @inspect-item="handleInspectInventoryItem"
       @flip-switch="handleFlipInventorySwitch"
     />
-    <MapModal :open="showMap" :map-data="mapData" :nodes="nodes" :is-debug="!!sheet?.debug_mode" @close="showMap = false" />
+    <CutsceneOverlay
+      :cutscene="cutscenePlayer.active.value"
+      :auto-speech="audioService.autoSpeechEnabled.value && audioService.isUnlocked.value"
+      :skin="cutsceneSkin"
+      :skin-style="cutsceneSkinStyle"
+      @finished="cutscenePlayer.finish"
+    />
+
+    <MapModal
+      :open="showMap"
+      :map-data="mapData"
+      :nodes="nodes"
+      :is-debug="!!sheet?.debug_mode"
+      :game-id="props.id"
+      @close="showMap = false"
+      @travel="handleFastTravel"
+    />
     <QuestsModal 
       :is-open="showQuests" 
       :quests="quests" 

@@ -34,6 +34,10 @@ class BlueprintBlock:
     open_fields: list[str] = field(default_factory=list)
     prose: list[str] = field(default_factory=list)
     children: list[BlueprintBlock] = field(default_factory=list)
+    # The block's own text from its tag to the next top-level tag (top-level blocks only).
+    source: str = ""
+    # Dynamic exits: ids of the NPCs/items placed in the zone (blueprint/zone_entities.py).
+    zone_entity_ids: list[str] = field(default_factory=list)
 
     @property
     def description(self) -> str:
@@ -89,7 +93,17 @@ class Blueprint:
 
     def declared_ids(self) -> set[str]:
         """IDs declared by entity blocks (scenes, NPCs, items, quests, awards, scripts)."""
-        id_kinds = {"scene", "npc", "item", "sidequest", "award", "script", "audio"}
+        id_kinds = {
+            "scene",
+            "npc",
+            "item",
+            "sidequest",
+            "award",
+            "script",
+            "audio",
+            "section",
+            "cutscene",
+        }
         ids = {block.ref for block in self.blocks if block.kind in id_kinds and block.ref}
         for block in self.blocks:
             ids.update(child.ref for child in block.children if child.ref)

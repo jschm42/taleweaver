@@ -35,6 +35,7 @@ from backend.engine.media.image_prompt_context import (
     build_scene_image_prompt,
 )
 from backend.engine.media.media_engine import MediaEngine
+from backend.engine.world.dynamic_required_entities import npcs_to_persist, objects_to_persist
 from backend.engine.world.dynamic_scene_schemas import DynamicGeneratedScenePayload
 from backend.models.adventure_template import AdventureTemplate
 from backend.models.session_state import SessionState
@@ -84,6 +85,8 @@ async def _generate_tier_image(
 
     t2i = dict(getattr(user, "t2i_settings", None) or {})
     provider, model, options = _tier_options(t2i, tier)
+    if getattr(adventure, "title", None):
+        options.setdefault("session_title", adventure.title)
     if not model:
         return None
     api_keys = dict(getattr(user, "encrypted_api_keys", None) or {})
@@ -189,10 +192,10 @@ def _has_visual_generation_tasks(
     item_mode = str(dyn_cfg.get("item_image_mode") or "simple")
     return (
         scene_mode in {"simple", "hq"}
-        or (npc_mode in {"simple", "hq"} and bool(payload.npcs[:npc_limit]))
+        or (npc_mode in {"simple", "hq"} and bool(npcs_to_persist(payload, npc_limit)))
         or (
             item_mode in {"simple", "hq"}
-            and (bool(payload.objects[:5]) or bool(zone_key_prompt_args))
+            and (bool(objects_to_persist(payload)) or bool(zone_key_prompt_args))
         )
     )
 
@@ -239,7 +242,7 @@ async def generate_dynamic_visuals(
         task_keys.append(("scene", 0))
 
     _append_entity_image_tasks(
-        entities=payload.npcs[:npc_limit],
+        entities=npcs_to_persist(payload, npc_limit),
         mode=npc_mode,
         kind="npc",
         prefix_base=f"dyn_npc_{target_id.lower()}",
@@ -251,7 +254,7 @@ async def generate_dynamic_visuals(
         task_keys=task_keys,
     )
     _append_entity_image_tasks(
-        entities=payload.objects[:5],
+        entities=objects_to_persist(payload),
         mode=item_mode,
         kind="obj",
         prefix_base=f"dyn_obj_{target_id.lower()}",

@@ -25,6 +25,7 @@ from backend.engine.blueprint.converters import (
     ability_damage,
     boolean,
     choice,
+    dynamic_entity_depth,
     dynamic_entity_types,
     dynamic_instructions_scope,
     dynamic_max_depth,
@@ -46,6 +47,11 @@ from backend.engine.blueprint.converters import (
     time_amount,
     weapon_cost,
     weapon_effects,
+)
+from backend.engine.blueprint.section_converters import (
+    section_links,
+    section_position,
+    travel_duration,
 )
 
 # Stats a d20 roll can use (attack rolls, saves); "ac" is not one of them.
@@ -119,6 +125,16 @@ WORLD_KEYS: dict[str, FieldSpec] = {
     "title_audio": _ref("title_track_id"),
     "title_song": _ref("title_track_id"),
     "title_music": _ref("title_track_id"),
+    # The adventure's intro and outcome cut-scenes: [Cutscene] entries shown at start, win, or game over.
+    "intro_cutscene": _ref("intro_cutscene_id"),
+    "cutscene": _ref("intro_cutscene_id"),
+    "win_cutscene": _ref("win_cutscene_id"),
+    "victory_cutscene": _ref("win_cutscene_id"),
+    "completed_cutscene": _ref("win_cutscene_id"),
+    "game_over_cutscene": _ref("game_over_cutscene_id"),
+    "gameover_cutscene": _ref("game_over_cutscene_id"),
+    "lose_cutscene": _ref("game_over_cutscene_id"),
+    "defeat_cutscene": _ref("game_over_cutscene_id"),
     "win": FieldSpec("completed_condition"),
     "lose": FieldSpec("gameover_condition"),
     # At 0 HP: game_over (default) or respawn at the last revival point with a share of max HP.
@@ -133,6 +149,8 @@ WORLD_KEYS: dict[str, FieldSpec] = {
         choice("OFF", "RARE", "NORMAL", "LIVELY", aliases={"none": "OFF", "often": "LIVELY"}),
     ),
     "gossip": FieldSpec("npc_conversations.gossip", boolean),
+    # Fast travel to unlocked fast travel points (default yes).
+    "fast_travel": FieldSpec("fast_travel_enabled", boolean),
     "win_guard": _expr("completed_guard_expression"),
     "lose_guard": _expr("gameover_guard_expression"),
     "init_script": _script("init_script"),
@@ -258,6 +276,13 @@ SCENE_KEYS: dict[str, FieldSpec] = {
     # Revival point: in respawn mode a fallen protagonist wakes up at the last one reached.
     "respawn": FieldSpec("is_respawn_point", boolean),
     "revival_point": FieldSpec("is_respawn_point", boolean),
+    # World section ([Section: ID]) the scene belongs to.
+    "section": _ref("section_id"),
+    "region": _ref("section_id"),
+    # Fast travel point; unlocked on the first visit, or only by a script.
+    "fast_travel": FieldSpec("is_fast_travel_point", boolean),
+    "waypoint": FieldSpec("is_fast_travel_point", boolean),
+    "fast_travel_unlock": FieldSpec("fast_travel_unlock", choice("visit", "script")),
     # Scene helper block: functions/constants every script can call (like init_script).
     "helpers": _script("helpers_script"),
     "dynamic": FieldSpec("dynamic_zone.enabled", boolean),
@@ -291,6 +316,10 @@ EXIT_KEYS: dict[str, FieldSpec] = {
     # Solo passage: the protagonist's companion stays behind.
     "companions": FieldSpec("companions_allowed", boolean),
     "solo": FieldSpec("companions_allowed", one_way),
+    # Travel time of a long way ("8h", "2d") and how the journey is described.
+    "travel": FieldSpec("travel_minutes", travel_duration),
+    "travel_time": FieldSpec("travel_minutes", travel_duration),
+    "travel_label": FieldSpec("travel_label"),
 }
 _hook(EXIT_KEYS, "on_unlock", "on_unlock_success")
 _hook(EXIT_KEYS, "on_unlock_fail", "on_unlock_failure")
@@ -299,6 +328,8 @@ _hook(EXIT_KEYS, "on_use", "on_exit_used")
 
 NPC_KEYS: dict[str, FieldSpec] = {
     "in": _ref("start_scene_id"),
+    # Room depth inside a dynamic zone (``in: ZONE_ID``), see blueprint/zone_entities.py.
+    "depth": FieldSpec("dynamic_depth", dynamic_entity_depth),
     "position": FieldSpec("spatial_position"),
     "type": FieldSpec("npc_type", choice("HUMANOID", "ANIMAL", "MONSTER", "BEING")),
     "goal": FieldSpec("goal"),
@@ -381,6 +412,7 @@ ITEM_TYPES = (
 )
 ITEM_KEYS: dict[str, FieldSpec] = {
     "in": _ref("start_scene_id"),
+    "depth": FieldSpec("dynamic_depth", dynamic_entity_depth),
     "position": FieldSpec("spatial_position"),
     "type": FieldSpec("item_type", choice(*ITEM_TYPES)),
     "appearance": FieldSpec("appearance"),
@@ -469,6 +501,8 @@ SEQUENCE_KEYS: dict[str, FieldSpec] = {
     "solo": FieldSpec("companions_allowed", one_way),
     # Deadly chapter: 0 HP ends the adventure even in respawn mode.
     "respawn": FieldSpec("respawn_allowed", boolean),
+    # No fast travel while this chapter is active.
+    "fast_travel": FieldSpec("fast_travel_allowed", boolean),
 }
 for _alias in ("lore", "intro", "chapter_description"):
     SEQUENCE_KEYS[_alias] = SEQUENCE_KEYS["description"]
@@ -495,6 +529,15 @@ _hook(SEQUENCE_KEYS, "on_start", "on_start_sequence")
 _hook(SEQUENCE_KEYS, "on_end", "on_end_sequence")
 # Sequence helper block: functions/constants every script can call (like init_script).
 SEQUENCE_KEYS["helpers"] = _script("helpers_script")
+# Cut-scene shown when the chapter starts ([Cutscene] block, blueprint/cutscene_blocks.py).
+SEQUENCE_KEYS["cutscene"] = SEQUENCE_KEYS["start_cutscene"] = _ref("start_cutscene_id")
+# [Cutscene]: prose lines are the slides; `image N:` is slide N's image prompt.
+CUTSCENE_KEYS: dict[str, FieldSpec] = {
+    "style": FieldSpec("image_style"),
+    "image_style": FieldSpec("image_style"),
+    "audio": FieldSpec("audio_track_id", ident),
+    **{f"image_{n}": FieldSpec(f"image_{n}") for n in range(1, 13)},
+}
 
 RULE_KEYS: dict[str, FieldSpec] = {
     "when": FieldSpec("condition"),
@@ -515,6 +558,8 @@ SCRIPT_TRIGGERS = (
     "on_time_reached",
     "on_respawn",
     "on_conversation_heard",
+    "on_enter_section",
+    "on_leave_section",
 )
 SCRIPT_KEYS: dict[str, FieldSpec] = {
     "trigger": FieldSpec("trigger", choice(*SCRIPT_TRIGGERS)),
@@ -528,6 +573,9 @@ SIDEQUEST_KEYS: dict[str, FieldSpec] = {
     **_GOAL_KEYS,
     "goal": FieldSpec("goal"),
     "impact": FieldSpec("impact"),
+    # The region where the quest continues (a hint for the player and the Play-Agent).
+    "section": _ref("section_id"),
+    "region": _ref("section_id"),
 }
 
 AWARD_KEYS: dict[str, FieldSpec] = {
@@ -578,6 +626,18 @@ TALENT_KEYS: dict[str, FieldSpec] = {
 }
 _hook(TALENT_KEYS, "on_use", "on_use")
 
+# [Section: ID] Label - a region of the world map; the body text is its description.
+SECTION_KEYS: dict[str, FieldSpec] = {
+    "description": FieldSpec("description"),
+    "position": FieldSpec("*", section_position),
+    "status": FieldSpec(
+        "status",
+        choice("built", "stub", aliases={"planned": "stub", "ready": "built", "done": "built"}),
+    ),
+    "brief": FieldSpec("brief"),
+    "links": FieldSpec("planned_links", section_links),
+}
+
 # (tag kind, key) -> what to use instead; the parser warns but still applies the key.
 DEPRECATED_KEYS: dict[tuple[str, str], str] = {
     ("npc", "weapon"): "use main_attack (no item needed)",
@@ -597,6 +657,8 @@ KEY_TABLES: dict[str, dict[str, FieldSpec]] = {
     "sidequest": SIDEQUEST_KEYS,
     "award": AWARD_KEYS,
     "audio": AUDIO_KEYS,
+    "cutscene": CUTSCENE_KEYS,
+    "section": SECTION_KEYS,
     "ability": ABILITY_KEYS,
     "talent": TALENT_KEYS,
 }
