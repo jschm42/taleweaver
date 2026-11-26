@@ -43,3 +43,6 @@ class ServerSettings(Base, TimestampMixin):
     voice_provider_map: Mapped[Optional[dict[str, dict[str, str]]]] = mapped_column(
         JSON, nullable=True
     )
+    # MCP server configuration (enabled flag, feature toggles, safety limits);
+    # see backend/core/mcp_settings.py.
+    mcp_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)

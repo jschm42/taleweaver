@@ -5,7 +5,7 @@
 import { computed, type ComputedRef, type WritableComputedRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  AudioLines, Bot, Brain, Feather, Image, KeyRound, Mic, Music, Palette, ScrollText,
+  AudioLines, Bot, Brain, Feather, Image, KeyRound, Mic, Music, Palette, Plug, ScrollText,
   Users, UsersRound,
 } from 'lucide-vue-next'
 import type { WorkbenchNavGroup } from '@/components/workbench/WorkbenchNav.vue'
@@ -14,9 +14,9 @@ import { userService } from '@/services/userService'
 import { catalogService } from '@/services/catalogService'
 
 export type AdminSection =
-  | 'keys' | 'llm' | 'play-agent' | 't2i' | 'tts' | 'voice-map' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'users'
+  | 'keys' | 'llm' | 'play-agent' | 't2i' | 'tts' | 'voice-map' | 'stt' | 'audio' | 'styles' | 'tones' | 'voices' | 'users' | 'mcp'
 
-const SECTIONS: AdminSection[] = ['keys', 'llm', 'play-agent', 't2i', 'tts', 'voice-map', 'stt', 'audio', 'styles', 'tones', 'voices', 'users']
+const SECTIONS: AdminSection[] = ['keys', 'llm', 'play-agent', 't2i', 'tts', 'voice-map', 'stt', 'audio', 'styles', 'tones', 'voices', 'users', 'mcp']
 
 export interface AdminNavigation {
   activeSection: WritableComputedRef<AdminSection>
@@ -90,6 +90,7 @@ export function useAdminNavigation(): AdminNavigation {
       title: 'System',
       items: [
         { id: 'users', label: 'Users', icon: Users, badge: userService.usersList.value.length },
+        { id: 'mcp', label: 'MCP Server', icon: Plug },
       ],
     },
   ])

@@ -21,6 +21,7 @@ import backend.models.adventure_template
 import backend.models.avatar
 import backend.models.chat
 import backend.models.game_session
+import backend.models.mcp_token
 import backend.models.session_state
 import backend.models.user
 import backend.models.world_map
@@ -36,6 +37,7 @@ from backend.api.routes import (
     data,
     leaderboard_api,
     map_api,
+    mcp_settings_api,
     model_discovery_api,
     narrator_voices_api,
     setup_wizard_api,
@@ -214,6 +216,7 @@ app.include_router(auth_api.router, prefix="/api")
 app.include_router(users_api.router, prefix="/api")
 app.include_router(leaderboard_api.router, prefix="/api")
 app.include_router(api_keys_api.router, prefix="/api")
+app.include_router(mcp_settings_api.router, prefix="/api")
 app.include_router(tts_api.router, prefix="/api")
 app.include_router(tts_stream_api.router, prefix="/api")
 app.include_router(tts_voices_api.router, prefix="/api")

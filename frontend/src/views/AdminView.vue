@@ -17,6 +17,7 @@ import AudioSection from '@/components/admin/AudioSection.vue'
 import CatalogSection from '@/components/admin/CatalogSection.vue'
 import NarratorVoicesSection from '@/components/admin/NarratorVoicesSection.vue'
 import UserManagementSection from '@/components/admin/UserManagementSection.vue'
+import McpSection from '@/components/admin/McpSection.vue'
 import UserEditModal from '@/components/admin/UserEditModal.vue'
 import CatalogEditModal from '@/components/admin/CatalogEditModal.vue'
 import PromptInputModal from '@/components/admin/PromptInputModal.vue'
@@ -177,6 +178,11 @@ onMounted(() => {
       @add-user="users.open()"
       @edit-user="users.open"
       @remove-user="users.remove"
+    />
+
+    <McpSection
+      v-if="activeSection === 'mcp'"
+      :users-list="userService.usersList.value"
     />
 
     <UserEditModal

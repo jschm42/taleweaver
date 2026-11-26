@@ -476,3 +476,15 @@ sources = [
     "scripts/import_graph.py",
     "scripts/bundle_skill.py",
 ]
+
+[suites.mcp]
+description = "MCP server settings, access tokens, and protocol handlers"
+tests = [
+    "test_mcp_*.py",
+]
+sources = [
+    "backend/core/mcp_settings.py",
+    "backend/models/mcp_token.py",
+    "backend/api/routes/mcp_settings_api.py",
+    "backend/mcp/*",
+]
