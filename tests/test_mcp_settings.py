@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from sqlalchemy import select
 
 from backend.core.auth import create_access_token
@@ -16,8 +15,6 @@ from backend.models.server_settings import SERVER_SETTINGS_ID, ServerSettings
 from backend.models.user import User
 from tests.conftest import TestSessionLocal
 from tests.server_settings_helpers import seed_server_settings
-
-pytestmark = pytest.mark.asyncio
 
 
 def _headers(username: str) -> dict[str, str]:

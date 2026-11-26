@@ -51,6 +51,7 @@ from backend.api.routes import (
 )
 from backend.core.config import settings
 from backend.core.database import run_db_migrations
+from backend.mcp.server import mcp_router
 
 # Configure logging based on .env settings
 logging.basicConfig(
@@ -163,7 +164,14 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "X-Requested-With",
+        "MCP-Protocol-Version",
+        "Mcp-Session-Id",
+    ],
 )
 
 
@@ -222,6 +230,7 @@ app.include_router(tts_stream_api.router, prefix="/api")
 app.include_router(tts_voices_api.router, prefix="/api")
 app.include_router(tts_openai_compatible_api.router, prefix="/api")
 app.include_router(stt_api.router, prefix="/api")
+app.include_router(mcp_router)
 
 
 # Ensure storage directories exist
@@ -345,9 +354,11 @@ if FRONTEND_DIST_DIR.is_dir():
     # Catch-all for SPA client-side routing
     @app.get("/{catchall:path}")
     async def serve_spa(catchall: str):
-        # Unknown API endpoints must fail as API errors, never as the SPA's index.html
+        # Unknown API or MCP endpoints must fail cleanly, never as the SPA's index.html
         if catchall == "api" or catchall.startswith("api/"):
             raise HTTPException(status_code=404, detail="API endpoint not found")
+        if catchall == "mcp" or catchall.startswith("mcp/"):
+            raise HTTPException(status_code=404, detail="MCP endpoint not found")
 
         # Check if the specific file exists in frontend_dist (e.g. favicon.ico)
         full_path = _safe_join(str(FRONTEND_DIST_DIR), catchall)

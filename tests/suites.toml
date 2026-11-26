@@ -486,5 +486,8 @@ sources = [
     "backend/core/mcp_settings.py",
     "backend/models/mcp_token.py",
     "backend/api/routes/mcp_settings_api.py",
+    "backend/services/inspection_service.py",
+    "backend/services/session_inspection_service.py",
+    "backend/services/telemetry_service.py",
     "backend/mcp/*",
 ]

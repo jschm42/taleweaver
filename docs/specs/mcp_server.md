@@ -14,13 +14,13 @@ Expose TaleWeaver's adventure library, runtime session diagnostics, adventure au
 
 ## 2. Transport & Runtime Architecture
 
-The MCP server runs embedded inside the existing FastAPI application (`backend/main.py`) using the official Python `mcp` SDK (`FastMCP`) over **Streamable HTTP** at `/mcp`.
+The MCP server runs embedded inside the existing FastAPI application (`backend/main.py`) as a native stateless **Streamable HTTP JSON-RPC 2.0** endpoint at `/mcp` (`POST /mcp`, `405` on `GET /mcp`, `204` on `DELETE /mcp`).
 
 - **Endpoint URL**: `https://<taleweaver-host>/mcp` (or `http://localhost:8000/mcp` in local dev).
 - **Embedded lifecycle**: Shares `AsyncSessionLocal`, `ServerSettings`, background job runners, `MediaEngine`, and `WorldGenerator`. Admin updates to settings, feature toggles, or token revocations take effect immediately without a restart.
 - **Reverse proxy & routing**:
-  - `backend/main.py`: Exclude `/mcp` (and `/mcp/*`) from the SPA catch-all route and bypass GZip buffering for streaming responses on `/mcp`.
-  - `nginx/nginx.conf`: Dedicated `location /mcp` block with `proxy_buffering off;` and `proxy_read_timeout 600s;` so Streamable HTTP responses and progress notifications work cleanly behind TLS.
+  - `backend/main.py`: Exclude `/mcp` (and `/mcp/*`) from the SPA catch-all route and allow `MCP-Protocol-Version` / `Mcp-Session-Id` CORS headers.
+  - `nginx/nginx.conf`: Dedicated `location /mcp` block with `proxy_buffering off;` and `proxy_read_timeout 600s;` so Streamable HTTP responses work cleanly behind TLS.
 
 ---
 
@@ -151,14 +151,14 @@ Located under **System → MCP Server** (`?section=mcp`) in `AdminView.vue`:
 
 ## 6. Phased Implementation Roadmap
 
-- **Phase 1 — Settings, Tokens & Admin UI** *(Current)*
+- **Phase 1 — Settings, Tokens & Admin UI** *(Done)*
   - `ServerSettings.mcp_settings` + `McpToken` model & Alembic migration.
   - `backend/core/mcp_settings.py` + `backend/api/routes/mcp_settings_api.py`.
   - Admin Console `McpSection.vue`, token modals, navigation entry, tests, and UI checks.
-- **Phase 2 — MCP Core, Auth, Read Tools, Diagnostics & Resources**
-  - Add `mcp` dependency, mount `/mcp` in `backend/main.py` and `nginx/nginx.conf`.
-  - Extract shared `inspection_service.py` and `telemetry_service.py`.
-  - Implement `read_adventures`, `read_sessions`, `diagnostics`, live MCP Resources, and Prompts.
+- **Phase 2 — MCP Core, Auth, Read Tools, Diagnostics & Resources** *(Done)*
+  - Native embedded Streamable HTTP `/mcp` router mounted in `backend/main.py` and `nginx/nginx.conf`.
+  - Extracted shared `inspection_service.py`, `session_inspection_service.py`, and `telemetry_service.py`.
+  - Implemented `read_adventures`, `read_sessions`, `diagnostics`, live MCP Resources, and Prompts.
 - **Phase 3 — Adventure Editing, Validation & Import**
   - Implement `validate_blueprint`, `validate_adventure`, `apply_adventure_changes` (dry-run default, no `$file`), `import_adventure_manifest`, `manage_cutscenes`, `manage_audio_tracks`, `delete_adventure`.
 - **Phase 4 — Generation & Media Pipelines**
