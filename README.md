@@ -231,6 +231,7 @@ Full notes: [RELEASE_NOTES_v0.8.1-beta.md](RELEASE_NOTES_v0.8.1-beta.md)
 - **World-Builder Instructions** – describe a change in plain words in the editor ("make the innkeeper grumpier", "add a fisherman to the harbor") and pick one of up to three proposals; it edits existing scenes, exits, NPCs and items, can create new NPCs and items, and can attach event scripts, trigger texts and guard expressions to them ("the chest only opens after the lever was pulled"); every proposed script is syntax-checked before you see it, and proposal texts are always English while story texts follow the adventure language (scenes, exits, quests, sequences and top-level scripts stay manual)
 - **AI Optimize / AI Generate in the script editor** – every script and guard field can let the AI fix and tidy the current code (including turning placeholder comments into code) or write code from a prompt; the proposal is syntax-checked and shown as a diff you accept or discard ([details](docs/scripting_engine.md#ai-optimize--ai-generate))
 - **Dynamic Cartography** – auto-rendered hand-drawn style directed graph maps using rough.js and dagre
+- **Embedded MCP Server** – connect Claude Code, Cursor, or other Streamable HTTP MCP clients to inspect sessions and adventures, run dry-run/committed edits, or trigger generation using revocable per-scope bearer tokens ([setup guide](docs/mcp-server.md))
 
 </td>
 <td width="50%" valign="top">

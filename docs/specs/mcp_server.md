@@ -67,9 +67,11 @@ Covers Portal World-Builder generation, Region Builder, story suggestions, and A
 ### 3.5 `generate_media` — Visuals & Audio Rendering
 Covers `adventure_api.py` (`visuals`, `upload-visual`), cutscene slide images, audio rendering, and thumbnail generation. Always uses TaleWeaver's server-side `MediaEngine` and audio pipeline with `apply_global_settings(db, user)`:
 - `generate_visual`: Generate or regenerate a single visual (`cover`, `protagonist`, `scene`, `npc`, `object`, `cutscene_slide`).
-- `generate_adventure_visuals`: Batch-generate missing or selected visuals with progress tracking.
+- `generate_adventure_visuals`: Batch-generate missing or selected visuals (async by default).
+- `get_visual_job_status`: Poll progress and per-target results of a `generate_adventure_visuals` job.
 - `upload_visual`: Upload a validated image (base64 + MIME type) to a visual target.
-- `render_audio_track`: Trigger server-side audio rendering (`Lyria` or `ComfyUI`) and poll job status.
+- `render_audio_track`: Trigger server-side audio rendering (`Lyria` or `ComfyUI`).
+- `get_audio_job_status`: Poll status of a `render_audio_track` background job.
 - `regenerate_thumbnails`: Generate missing web thumbnails in `data/adventures/library/`.
 
 ### 3.6 `diagnostics` — System Health & LLM Telemetry
@@ -163,5 +165,6 @@ Located under **System → MCP Server** (`?section=mcp`) in `AdminView.vue`:
   - Implemented `validate_blueprint`, `validate_adventure`, `apply_adventure_changes` (dry-run default, no `$file`), `import_adventure_manifest`, `manage_cutscenes`, `manage_audio_tracks`, `delete_adventure`.
 - **Phase 4 — Generation & Media Pipelines** *(Done)*
   - Implemented `suggest_story_idea`, `generate_adventure`, `get_generation_status`, `cancel_generation`, `generate_region`, `ai_validate_and_suggest_fixes`, `generate_visual`, `generate_adventure_visuals`, `get_visual_job_status`, `upload_visual`, `render_audio_track`, `get_audio_job_status`, `regenerate_thumbnails`.
-- **Phase 5 — User Docs & End-to-End Verification**
-  - Add user-facing MCP setup guide and full end-to-end integration tests.
+- **Phase 5 — User Docs & End-to-End Verification** *(Done)*
+  - Added user-facing MCP setup & reference guide ([docs/mcp-server.md](../mcp-server.md)) and linked it in `README.md`.
+  - Added full-lifecycle end-to-end integration tests (`tests/test_mcp_e2e.py`).
