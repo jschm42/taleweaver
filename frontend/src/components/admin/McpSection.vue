@@ -10,6 +10,7 @@ import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiField from '@/components/ui/UiField.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSaveBar from '@/components/ui/UiSaveBar.vue'
+import UiSegmented from '@/components/ui/UiSegmented.vue'
 import UiSpinner from '@/components/ui/UiSpinner.vue'
 import UiToggle from '@/components/ui/UiToggle.vue'
 import McpTokenCreateModal from '@/components/admin/McpTokenCreateModal.vue'
@@ -45,6 +46,12 @@ const loadError = ref('')
 const isLoading = ref(true)
 const revokingId = ref<string | null>(null)
 const copiedTarget = ref<'url' | 'snippet' | null>(null)
+const snippetMode = ref<'http' | 'self-signed'>('http')
+
+const SNIPPET_MODES: { value: 'http' | 'self-signed'; label: string }[] = [
+  { value: 'http', label: 'Direct HTTP' },
+  { value: 'self-signed', label: 'Self-signed HTTPS (mcp-remote)' },
+]
 
 const isCreateOpen = ref(false)
 const isRevealOpen = ref(false)
@@ -60,23 +67,32 @@ const endpointUrl = computed(() => {
   return `${window.location.origin}${path}`
 })
 
-const clientConfigSnippet = computed(() =>
-  JSON.stringify(
-    {
-      mcpServers: {
-        taleweaver: {
+const clientConfigSnippet = computed(() => {
+  const serverConfig =
+    snippetMode.value === 'self-signed'
+      ? {
+          command: 'npx',
+          args: [
+            '-y',
+            'mcp-remote',
+            endpointUrl.value,
+            '--header',
+            'Authorization: Bearer <your-mcp-token>',
+          ],
+          env: {
+            NODE_TLS_REJECT_UNAUTHORIZED: '0',
+          },
+        }
+      : {
           type: 'http',
           url: endpointUrl.value,
           headers: {
             Authorization: 'Bearer <your-mcp-token>',
           },
-        },
-      },
-    },
-    null,
-    2,
-  ),
-)
+        }
+
+  return JSON.stringify({ mcpServers: { taleweaver: serverConfig } }, null, 2)
+})
 
 const STATUS_TONE: Record<McpTokenStatus, BadgeTone> = {
   active: 'accent',
@@ -248,8 +264,14 @@ onMounted(() => {
             </div>
           </UiField>
 
-          <UiDisclosure label="Client configuration snippet" hint="JSON example for Claude Code or Cursor">
-            <div class="space-y-2">
+          <UiDisclosure label="Client configuration snippet" hint="JSON example for Claude Code, Cursor, or Antigravity">
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <UiSegmented v-model="snippetMode" :options="SNIPPET_MODES" label="Client configuration mode" />
+                <p v-if="snippetMode === 'self-signed'" class="wb-hint">
+                  For Docker or LAN hosts using self-signed TLS certificates.
+                </p>
+              </div>
               <pre
                 class="overflow-x-auto rounded-md border border-wb-line bg-wb-raised p-3 wb-mono text-wb-body"
               >{{ clientConfigSnippet }}</pre>
