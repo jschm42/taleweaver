@@ -159,8 +159,8 @@ Located under **System → MCP Server** (`?section=mcp`) in `AdminView.vue`:
   - Native embedded Streamable HTTP `/mcp` router mounted in `backend/main.py` and `nginx/nginx.conf`.
   - Extracted shared `inspection_service.py`, `session_inspection_service.py`, and `telemetry_service.py`.
   - Implemented `read_adventures`, `read_sessions`, `diagnostics`, live MCP Resources, and Prompts.
-- **Phase 3 — Adventure Editing, Validation & Import**
-  - Implement `validate_blueprint`, `validate_adventure`, `apply_adventure_changes` (dry-run default, no `$file`), `import_adventure_manifest`, `manage_cutscenes`, `manage_audio_tracks`, `delete_adventure`.
+- **Phase 3 — Adventure Editing, Validation & Import** *(Done)*
+  - Implemented `validate_blueprint`, `validate_adventure`, `apply_adventure_changes` (dry-run default, no `$file`), `import_adventure_manifest`, `manage_cutscenes`, `manage_audio_tracks`, `delete_adventure`.
 - **Phase 4 — Generation & Media Pipelines**
   - Implement `suggest_story_idea`, `generate_adventure`, `get_generation_status`, `cancel_generation`, `generate_region`, `ai_validate_and_suggest_fixes`, `generate_visual`, `generate_adventure_visuals`, `upload_visual`, `render_audio_track`, `regenerate_thumbnails`.
 - **Phase 5 — User Docs & End-to-End Verification**
