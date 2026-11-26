@@ -332,17 +332,16 @@ Open `http://127.0.0.1:8000` in your browser. Complete the initial setup, add yo
 
 #### ⚡ Development: Uvicorn with Auto-Reload
 
-`poetry run taleweaver` does not reload on code changes. For backend development, start Uvicorn directly from the **project root** (running it inside `backend/` fails with `ModuleNotFoundError: No module named 'backend'`):
+`poetry run taleweaver` does not reload on code changes. For backend development with auto-reload on the `BACKEND_HOST` and `BACKEND_PORT` configured in `.env`, run:
+
+```bash
+poetry run taleweaver-dev
+```
+
+Alternatively, pass `TALEWEAVER_RELOAD=1` to `poetry run taleweaver`, or start Uvicorn directly from the **project root** (running it inside `backend/` fails with `ModuleNotFoundError: No module named 'backend'`):
 
 ```bash
 poetry run uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Alternatively, keep the regular entry point and enable reloading via the environment:
-
-```bash
-TALEWEAVER_RELOAD=1 poetry run taleweaver          # Linux / macOS
-$env:TALEWEAVER_RELOAD = "1"; poetry run taleweaver  # Windows (PowerShell)
 ```
 
 For frontend hot reloading, run the Vite dev server in a second terminal (`cd frontend && npm run dev`, default `http://localhost:5173`).

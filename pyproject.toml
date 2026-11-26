@@ -29,6 +29,7 @@ dependencies = [
 
 [project.scripts]
 taleweaver = "backend.main:start"
+taleweaver-dev = "backend.main:dev"
 
 [tool.poetry]
 packages = [{include = "backend"}]

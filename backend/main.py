@@ -368,19 +368,25 @@ else:
         }
 
 
-def start() -> None:
+def start(*, reload: bool | None = None) -> None:
     """Start the TaleWeaver backend server."""
     import uvicorn
 
     # On Windows, reload mode spawns a watchdog process and can produce noisy
     # KeyboardInterrupt traces on shutdown. Keep reload opt-in for local dev.
-    reload_enabled = os.getenv("TALEWEAVER_RELOAD", "0").lower() in {"1", "true", "yes", "on"}
+    if reload is None:
+        reload = os.getenv("TALEWEAVER_RELOAD", "0").lower() in {"1", "true", "yes", "on"}
     uvicorn.run(
         "backend.main:app",
         host=settings.BACKEND_HOST,
         port=settings.BACKEND_PORT,
-        reload=reload_enabled,
+        reload=reload,
     )
+
+
+def dev() -> None:
+    """Start the TaleWeaver backend server with auto-reload enabled."""
+    start(reload=True)
 
 
 if __name__ == "__main__":
