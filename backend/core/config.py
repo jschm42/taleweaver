@@ -250,6 +250,9 @@ class Settings(BaseSettings):
     # Debug / Development
     TALEWEAVER_DEBUG_ENABLED: bool = False
 
+    # Optional Ollama context window size (num_ctx). Unset = Ollama model default.
+    OLLAMA_NUM_CTX: Optional[int] = None
+
     # Password Policy
     # When True (default), passwords require >= 10 characters, lower, upper, digit, and special char.
     # When False (local dev only), passwords require >= 4 characters without complexity checks.

@@ -105,11 +105,14 @@ def apply_provider_endpoint(
     api_base: str | None,
     kimi_api_base: str,
     minimax_api_base: str,
+    ollama_num_ctx: int | None = None,
 ) -> None:
     """Sets api_key/api_base/custom_llm_provider for a non-streaming or streaming request."""
     if provider == "ollama":
         kwargs["api_base"] = api_base
         kwargs["custom_llm_provider"] = "ollama"
+        if ollama_num_ctx and ollama_num_ctx > 0:
+            kwargs["num_ctx"] = ollama_num_ctx
         return
 
     if provider == "custom_openai":

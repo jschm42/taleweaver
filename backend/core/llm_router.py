@@ -11,6 +11,7 @@ import litellm
 from pydantic import BaseModel, ValidationError
 
 from backend.core.claude_thinking import apply_claude_thinking, claude_thinking_profile
+from backend.core.config import settings
 from backend.core.llm_errors import LLMTruncatedResponseError, build_truncation_error
 from backend.core.llm_json_repair import (
     attempt_repair_truncated_json,
@@ -1030,6 +1031,7 @@ class GameMasterLLM:
             api_base=self.api_base,
             kimi_api_base=self.kimi_api_base,
             minimax_api_base=self.minimax_api_base,
+            ollama_num_ctx=settings.OLLAMA_NUM_CTX,
         )
 
         self._apply_request_routing(kwargs)
@@ -1108,6 +1110,7 @@ class GameMasterLLM:
             api_base=self.api_base,
             kimi_api_base=self.kimi_api_base,
             minimax_api_base=self.minimax_api_base,
+            ollama_num_ctx=settings.OLLAMA_NUM_CTX,
         )
 
         self._apply_request_routing(kwargs)
@@ -1193,6 +1196,7 @@ class GameMasterLLM:
             api_base=self.api_base,
             kimi_api_base=self.kimi_api_base,
             minimax_api_base=self.minimax_api_base,
+            ollama_num_ctx=settings.OLLAMA_NUM_CTX,
         )
 
         self._apply_request_routing(kwargs)
@@ -1270,6 +1274,7 @@ class GameMasterLLM:
             api_base=self.api_base,
             kimi_api_base=self.kimi_api_base,
             minimax_api_base=self.minimax_api_base,
+            ollama_num_ctx=settings.OLLAMA_NUM_CTX,
         )
         self._apply_request_routing(kwargs)
         self._prepare_cacheable_messages(kwargs, normalized_model)

@@ -3,6 +3,7 @@
 import pytest
 from pydantic import BaseModel
 
+from backend.core.config import settings
 from backend.core.llm_router import GameMasterLLM
 from backend.models.user import User
 
@@ -51,12 +52,15 @@ def test_ollama_simple_task_uses_local_base_without_api_key(monkeypatch):
         return _Resp()
 
     monkeypatch.setattr("backend.core.llm_router.litellm.completion", fake_completion)
+    monkeypatch.setattr(settings, "OLLAMA_NUM_CTX", 16384)
 
     out = router.execute_simple_task(
         system_prompt="sys",
         user_prompt="hello",
         model="llama3.2",
     )
+    assert out == "ok"
+    assert captured["num_ctx"] == 16384
 
     assert out == "ok"
     assert captured["custom_llm_provider"] == "ollama"
