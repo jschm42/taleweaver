@@ -7,7 +7,9 @@ from backend.mcp.resources import register_resources
 from backend.mcp.tools_diagnostics import register_diagnostics_tools
 from backend.mcp.tools_editor import register_editor_tools
 from backend.mcp.tools_editor_media import register_editor_media_tools
+from backend.mcp.tools_generation import register_generation_tools
 from backend.mcp.tools_library import register_library_tools
+from backend.mcp.tools_media import register_media_tools
 from backend.mcp.tools_sessions import register_session_tools
 from backend.mcp.transport import router as mcp_router
 
@@ -23,6 +25,8 @@ def init_mcp_server() -> None:
     register_diagnostics_tools()
     register_editor_tools()
     register_editor_media_tools()
+    register_generation_tools()
+    register_media_tools()
     register_resources()
     register_prompts()
     _INIT_STATE["done"] = True
