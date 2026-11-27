@@ -52,6 +52,8 @@ claude mcp add --transport http taleweaver http://127.0.0.1:8000/mcp \
 
 The bundled [`nginx/nginx.conf`](../nginx/nginx.conf) already routes `/mcp` with `proxy_buffering off;` and a `600s` read timeout. Point your client at `https://<your-taleweaver-host>/mcp`. If you deploy behind another reverse proxy, forward `Authorization` headers and avoid response buffering on `/mcp`.
 
+If your Docker or LAN deployment uses a self-signed TLS certificate that your MCP client does not trust, select **Self-signed HTTPS (mcp-remote)** in **Admin → System → MCP Server → Client configuration snippet** to copy a stdio bridge configuration (`npx -y mcp-remote` with `NODE_TLS_REJECT_UNAUTHORIZED=0`).
+
 ---
 
 ## Feature Groups, Safety Toggles & Token Scoping
