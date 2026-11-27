@@ -199,16 +199,13 @@ TaleWeaver leverages [LiteLLM](https://github.com/BerriAI/litellm) and direct pr
 
 | Role / Capability | Recommended Models | Recommended Providers | Requirements & Notes |
 |---|---|---|---|
-| **World Generation** (Pass 3) | Claude 3.7 Sonnet, GPT-4o, DeepSeek-V3 / R1, Qwen 2.5 72B | Anthropic, OpenAI, DeepSeek, OpenRouter, vLLM / Ollama | Deep reasoning and large context to synthesize valid adventure manifests |
-| **Mechanics & Rules** (Pass 1) | Gemini 2.5 Flash, GPT-4o-mini, Claude 3.5 Haiku, DeepSeek-V3 | Google Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter | Strict JSON schema compliance and fast entity resolution |
-| **Narrative & Dialogue** (Pass 2) | Claude 3.7 Sonnet / 3.5 Sonnet, GPT-4o, DeepSeek-V3, Qwen 2.5 72B | Anthropic, OpenAI, DeepSeek, OpenRouter, Ollama | Nuanced prose, narrator voice tone, and strict adherence to secret rules |
-| **Play-Agent & Memory** (Pass 4 & 5) | Gemini 2.5 Flash-Lite, GPT-4o-mini, Mistral Small 24B | Google Gemini, OpenAI, Mistral, OpenRouter | Fast decision-making and token-efficient historical summarization |
+| **World Generation** (Pass 3) | Claude 5 Opus, GPT-6 Sol/Astra, Gemini 4 Argon, DeepSeek-V4 Pro | Anthropic, OpenAI, DeepSeek, OpenRouter, vLLM / Ollama | Deep reasoning and large context to synthesize valid adventure manifests |
+| **Mechanics & Rules** (Pass 1) | Gemini 3.8 flash, GPT-6 Luna, Claude 5.5 Haiku, DeepSeek-V4 flash, gpt-oss-120b | Google Gemini, OpenAI, Anthropic, DeepSeek, OpenRouter | Strict JSON schema compliance and fast entity resolution |
+| **Narrative & Dialogue** (Pass 2) | Claude 5.5 Sonnet, GPT-6 Luna, DeepSeek-V4 Flash, Cydonia 24B, Qwen 3.8 27B | Anthropic, OpenAI, DeepSeek, OpenRouter, Ollama | Nuanced prose, narrator voice tone, and strict adherence to secret rules |
+| **Play-Agent & Memory** (Pass 4 & 5) | Gemini 3.5 Flash-Lite, gpt-oss-120b, Qwen 3.8 27B | Google Gemini, OpenAI, Mistral, OpenRouter | Fast decision-making and token-efficient historical summarization |
 | **Text-to-Speech (TTS)** | Gemini Flash TTS, ElevenLabs, Kokoro-82M (offline), Browser WebSpeech | Google Gemini, ElevenLabs, [OpenAI-compatible TTS](docs/openai-compatible-tts.md), Local Kokoro | Per-character voice mapping and cinematic storytelling |
 | **Speech-to-Text (STT)** | faster-whisper (Base / Small / Medium, int8) | Local Whisper (background thread) | Zero-latency Push-to-Talk via keyboard shortcuts (`V`, `B`, `T`, `Shift`) |
-| **Visual Scene Art** | FLUX.1 (BFL / Schnell), Stable Diffusion (SDXL / Forge / A1111), ComfyUI | Black Forest Labs, Fal.ai, Local WebUI, ComfyUI | Contextual illustrations for locations, items, and NPCs |
-
-> [!TIP]
-> **Recommended Production Pairing:** Using **Gemini 2.5 Flash** or **GPT-4o-mini** for Pass 1 (Mechanics) paired with **Claude 3.7 Sonnet** or **DeepSeek-V3** for Pass 2 (Narration) delivers immediate responsiveness with high narrative depth at low token cost. For fully local setups, **Qwen 2.5 72B** (or 32B for Pass 1) provides strong schema compliance.
+| **Visual Scene Art** | FLUX 3 (BFL / Schnell), GPT Image 2.5, Stable Diffusion, ComfyUI | Black Forest Labs, Fal.ai, Local WebUI, ComfyUI | Contextual illustrations for locations, items, and NPCs |
 
 ---
 
